@@ -3,511 +3,130 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Strictly7s</title>
+    <title>Strictly7s 2.0</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎰</text></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/shared/css/theme.css">
     <link rel="stylesheet" href="strictly7s.css">
-    <style>
-        :root {
-            --slot-bg: #0f0f0f;
-            --slot-panel: #1a1a1a;
-            --slot-border: #d7d7d7;
-            --slot-accent: #ffcc33;
-            --slot-accent-dark: #c08a00;
-            --slot-ink: #f6f6f6;
-            --slot-dim: #9a9a9a;
-            --slot-win: #7cff8b;
-            --slot-loss: #ff6a7a;
-        }
-
-        body {
-            font-family: 'Press Start 2P', monospace;
-            font-size: 12px;
-            color: var(--slot-ink);
-            background: radial-gradient(circle at top, #1c1c1c 0%, #0a0a0a 70%);
-            image-rendering: pixelated;
-        }
-
-        .page {
-            width: min(1400px, 95vw);
-            margin: 20px auto 48px;
-            padding: 24px;
-            border: 3px solid var(--slot-border);
-            background: linear-gradient(180deg, #141414 0%, #0a0a0a 100%);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
-        }
-
-        .header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            border-bottom: 2px solid #2a2a2a;
-            padding-bottom: 12px;
-            margin-bottom: 16px;
-        }
-
-        .back-link {
-            border: 2px solid var(--slot-border);
-            background: #121212;
-            color: var(--slot-ink);
-            padding: 6px 10px;
-            font-size: 9px;
-            text-decoration: none;
-            letter-spacing: 1px;
-        }
-
-        .title {
-            font-size: 24px;
-            letter-spacing: 3px;
-            text-transform: uppercase;
-            color: var(--slot-accent);
-            text-shadow: 0 2px 0 #000, 0 0 20px rgba(255, 204, 51, 0.5);
-            animation: titlePulse 2s ease-in-out infinite;
-        }
-        
-        @keyframes titlePulse {
-            0%, 100% { text-shadow: 0 2px 0 #000, 0 0 20px rgba(255, 204, 51, 0.5); }
-            50% { text-shadow: 0 2px 0 #000, 0 0 30px rgba(255, 204, 51, 0.8); }
-        }
-
-        .balance {
-            font-size: 10px;
-            color: var(--slot-dim);
-        }
-
-        .machine {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 24px;
-            background: var(--slot-panel);
-            border: 3px solid var(--slot-border);
-            padding: 24px;
-            box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
-        }
-
-        .reels {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 20px;
-            padding: 24px;
-            background: #0d0d0d;
-            border: 3px solid #2b2b2b;
-            position: relative;
-            box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.8);
-        }
-
-        .payline {
-            position: absolute;
-            left: 10px;
-            right: 10px;
-            top: 50%;
-            height: 4px;
-            background: linear-gradient(90deg, transparent 0%, var(--slot-accent) 12%, var(--slot-accent) 88%, transparent 100%);
-            opacity: 0.6;
-            transform: translateY(-50%);
-            box-shadow: 0 0 10px rgba(255, 204, 51, 0.5);
-            animation: paylinePulse 2s ease-in-out infinite;
-        }
-        
-        @keyframes paylinePulse {
-            0%, 100% { opacity: 0.4; }
-            50% { opacity: 0.7; }
-        }
-
-        .reel {
-            height: 96px;
-            border: 2px solid var(--slot-border);
-            background: linear-gradient(180deg, #101010 0%, #040404 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-            color: var(--slot-ink);
-            text-shadow: 0 2px 0 #000;
-            transition: transform 0.2s ease, filter 0.2s ease;
-            box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.6);
-        }
-
-        .reel-frame {
-            border: 2px solid var(--slot-border);
-            background: linear-gradient(180deg, #101010 0%, #040404 100%);
-            box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.6);
-        }
-
-        .reel-window {
-            height: 160px;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .reel-strip {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            will-change: transform;
-            position: relative;
-        }
-
-        .reel-item {
-            height: 160px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 56px;
-            width: 100%;
-            color: var(--slot-ink);
-            text-shadow: 0 3px 0 #000, 0 0 20px rgba(255, 204, 51, 0.3);
-        }
-
-        .reel-frame.spinning .reel-window {
-            animation: reelFlicker 0.1s steps(2) infinite, reelGlow 0.3s ease-in-out infinite alternate;
-            filter: brightness(1.4) blur(0.8px);
-        }
-        
-        .reel-frame.spinning {
-            box-shadow: 0 0 30px rgba(255, 204, 51, 0.6), inset 0 0 20px rgba(255, 204, 51, 0.3);
-            border-color: var(--slot-accent);
-        }
-
-        @keyframes reelFlicker {
-            0% { transform: translateY(0); }
-            50% { transform: translateY(-4px); }
-            100% { transform: translateY(0); }
-        }
-        
-        @keyframes reelGlow {
-            0% { box-shadow: 0 0 20px rgba(255, 204, 51, 0.4), inset 0 0 15px rgba(255, 204, 51, 0.2); }
-            100% { box-shadow: 0 0 40px rgba(255, 204, 51, 0.7), inset 0 0 25px rgba(255, 204, 51, 0.4); }
-        }
-
-        /* Win animations */
-        .reel-frame.win-flash {
-            animation: winPulse 0.4s ease 3;
-        }
-
-        @keyframes winPulse {
-            0%, 100% {
-                box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.6);
-                transform: scale(1);
-            }
-            50% {
-                box-shadow: 0 0 30px rgba(124, 255, 139, 0.8), inset 0 0 25px rgba(124, 255, 139, 0.4);
-                border-color: var(--slot-win);
-                transform: scale(1.05);
-            }
-        }
-
-        /* Jackpot animation (3x SEVEN) */
-        .reel-frame.jackpot-flash {
-            animation: jackpotPulse 0.4s ease 5;
-        }
-
-        @keyframes jackpotPulse {
-            0%, 100% {
-                box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.6);
-                transform: scale(1);
-            }
-            50% {
-                box-shadow: 0 0 50px rgba(255, 204, 51, 1), inset 0 0 40px rgba(255, 204, 51, 0.6);
-                border-color: var(--slot-accent);
-                transform: scale(1.08);
-            }
-        }
-
-        /* Loss animation */
-        .reel-frame.loss-dim {
-            animation: lossFade 0.6s ease;
-        }
-
-        @keyframes lossFade {
-            0% { filter: brightness(1); }
-            50% { filter: brightness(0.5); }
-            100% { filter: brightness(1); }
-        }
-
-        .controls {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 12px;
-        }
-
-        .bets {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-
-        .bet-btn {
-            border: 2px solid #3a3a3a;
-            background: #171717;
-            color: var(--slot-ink);
-            padding: 8px 10px;
-            font-size: 10px;
-            cursor: pointer;
-            transition: all 0.15s ease;
-        }
-
-        .bet-btn.active {
-            border-color: var(--slot-accent);
-            color: var(--slot-accent);
-            box-shadow: 0 0 0 2px rgba(255, 204, 51, 0.2);
-        }
-
-        .bet-btn.insufficient {
-            opacity: 0.4;
-            pointer-events: none;
-        }
-
-        .spin-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .spin-btn {
-            border: 3px solid var(--slot-accent);
-            background: linear-gradient(180deg, #ffdd66 0%, #d79a00 100%);
-            color: #1a1200;
-            padding: 14px 24px;
-            font-size: 14px;
-            text-transform: uppercase;
-            cursor: pointer;
-            box-shadow: 0 4px 10px rgba(255, 204, 51, 0.4);
-            transition: all 0.2s ease;
-        }
-        
-        .spin-btn:not(:disabled):hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 15px rgba(255, 204, 51, 0.6);
-        }
-        
-        .spin-btn:not(:disabled):active {
-            transform: translateY(0);
-            box-shadow: 0 2px 5px rgba(255, 204, 51, 0.4);
-        }
-
-        .spin-btn:disabled {
-            cursor: not-allowed;
-            filter: grayscale(0.8);
-            opacity: 0.6;
-        }
-
-        .sound-toggle {
-            border: 2px solid #3a3a3a;
-            background: #121212;
-            color: var(--slot-ink);
-            padding: 8px 12px;
-            font-size: 10px;
-            cursor: pointer;
-        }
-
-        .volume-control {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 10px;
-            color: var(--slot-dim);
-        }
-
-        .volume-control label {
-            white-space: nowrap;
-        }
-
-        .volume-control input[type="range"] {
-            width: 100px;
-            height: 4px;
-            background: #3a3a3a;
-            border-radius: 2px;
-            outline: none;
-            cursor: pointer;
-        }
-
-        .volume-control input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 12px;
-            height: 12px;
-            background: var(--slot-accent);
-            border-radius: 50%;
-            cursor: pointer;
-        }
-
-        .volume-control input[type="range"]::-moz-range-thumb {
-            width: 12px;
-            height: 12px;
-            background: var(--slot-accent);
-            border-radius: 50%;
-            cursor: pointer;
-            border: none;
-        }
-
-        .status {
-            min-height: 20px;
-            font-size: 10px;
-            color: var(--slot-dim);
-        }
-
-        .status[data-kind="win"] { color: var(--slot-win); }
-        .status[data-kind="loss"] { color: var(--slot-loss); }
-
-        .payouts {
-            border-top: 2px dashed #2c2c2c;
-            padding-top: 12px;
-            font-size: 9px;
-            color: var(--slot-dim);
-            display: grid;
-            gap: 6px;
-        }
-
-        .payouts h2 {
-            font-size: 10px;
-            color: var(--slot-ink);
-        }
-
-        .payout-line {
-            display: flex;
-            justify-content: space-between;
-        }
-
-        .spin-history {
-            border-top: 2px dashed #2c2c2c;
-            margin-top: 12px;
-            padding-top: 12px;
-            font-size: 8px;
-            color: var(--slot-dim);
-        }
-
-        .spin-history h2 {
-            font-size: 10px;
-            color: var(--slot-ink);
-            margin-bottom: 8px;
-        }
-
-        .history-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 4px 0;
-            border-bottom: 1px solid #1a1a1a;
-        }
-
-        .history-row:last-child {
-            border-bottom: none;
-        }
-
-        .history-reels {
-            display: flex;
-            gap: 4px;
-            font-size: 10px;
-        }
-
-        .history-result {
-            margin-left: auto;
-        }
-
-        .history-result.win {
-            color: var(--slot-win);
-        }
-
-        .history-result.loss {
-            color: var(--slot-loss);
-        }
-
-        .footer {
-            margin-top: 16px;
-            font-size: 9px;
-            color: var(--slot-dim);
-            text-align: center;
-        }
-
-        @media (min-width: 1100px) {
-            .machine {
-                grid-template-columns: 1.5fr 1fr;
-                align-items: start;
-            }
-        }
-    </style>
 </head>
 <body>
     <div class="page">
         <div class="header">
             <a class="back-link" href="/">MENU</a>
-            <div class="title">Strictly7s</div>
-            <div class="balance">Balance: <span id="balance-display">...</span> SC</div>
+            <div class="title">Strictly<span class="title-7">7</span>s 2.0</div>
+            <div class="balance">
+                Balance: <span id="balance-display">...</span> SC
+            </div>
         </div>
 
         <div class="machine">
-            <div>
-                <div class="reels">
-                    <div class="payline"></div>
-                    <div class="reel-frame" id="reel-frame-1">
+            <div class="machine-left">
+                <div class="reels" id="reels">
+                    <svg class="payline-overlay" id="payline-overlay" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+                    <div class="reel-frame" data-reel="0">
                         <div class="reel-window">
-                            <div class="reel-strip" id="reel-1"></div>
+                            <div class="reel-strip"></div>
+                            <div class="cell-overlay"><div class="cell" data-row="0"></div><div class="cell" data-row="1"></div><div class="cell" data-row="2"></div></div>
                         </div>
                     </div>
-                    <div class="reel-frame" id="reel-frame-2">
+                    <div class="reel-frame" data-reel="1">
                         <div class="reel-window">
-                            <div class="reel-strip" id="reel-2"></div>
+                            <div class="reel-strip"></div>
+                            <div class="cell-overlay"><div class="cell" data-row="0"></div><div class="cell" data-row="1"></div><div class="cell" data-row="2"></div></div>
                         </div>
                     </div>
-                    <div class="reel-frame" id="reel-frame-3">
+                    <div class="reel-frame" data-reel="2">
                         <div class="reel-window">
-                            <div class="reel-strip" id="reel-3"></div>
+                            <div class="reel-strip"></div>
+                            <div class="cell-overlay"><div class="cell" data-row="0"></div><div class="cell" data-row="1"></div><div class="cell" data-row="2"></div></div>
                         </div>
+                    </div>
+                    <div class="reel-frame" data-reel="3">
+                        <div class="reel-window">
+                            <div class="reel-strip"></div>
+                            <div class="cell-overlay"><div class="cell" data-row="0"></div><div class="cell" data-row="1"></div><div class="cell" data-row="2"></div></div>
+                        </div>
+                    </div>
+                    <div class="reel-frame" data-reel="4">
+                        <div class="reel-window">
+                            <div class="reel-strip"></div>
+                            <div class="cell-overlay"><div class="cell" data-row="0"></div><div class="cell" data-row="1"></div><div class="cell" data-row="2"></div></div>
+                        </div>
+                    </div>
+
+                    <div class="big-win-banner" id="big-win-banner" hidden>
+                        <div class="big-win-tier" id="big-win-tier">BIG WIN</div>
+                        <div class="big-win-amount" id="big-win-amount">0</div>
+                        <div class="big-win-sub">SC</div>
+                    </div>
+
+                    <div class="free-spin-intro" id="free-spin-intro" hidden>
+                        <div class="fs-intro-line">FREE</div>
+                        <div class="fs-intro-line big">SPINS!</div>
+                        <div class="fs-intro-sub" id="fs-intro-sub">10 spins · 2× multiplier</div>
+                    </div>
+
+                    <div class="fs-badge" id="fs-badge" hidden>
+                        <span class="fs-badge-label">FREE SPINS</span>
+                        <span class="fs-badge-count" id="fs-badge-count">0</span>
+                        <span class="fs-badge-mult">×2</span>
                     </div>
                 </div>
+
+                <div class="status" id="status" data-kind="info">Choose a bet and spin.</div>
             </div>
 
             <div class="controls">
-                <div>
-                    <div class="status" id="status" data-kind="info">Choose a bet and spin.</div>
-                </div>
-
-                <div>
+                <div class="bets-block">
+                    <div class="bets-label">BET</div>
                     <div class="bets" id="bet-grid">
-                        <button class="bet-btn" data-bet="2">2 SC</button>
-                        <button class="bet-btn" data-bet="5">5 SC</button>
-                        <button class="bet-btn" data-bet="10">10 SC</button>
-                        <button class="bet-btn" data-bet="15">15 SC</button>
-                        <button class="bet-btn" data-bet="20">20 SC</button>
-                        <button class="bet-btn" data-bet="50">50 SC</button>
+                        <button class="bet-btn" data-bet="2">2</button>
+                        <button class="bet-btn" data-bet="5">5</button>
+                        <button class="bet-btn" data-bet="10">10</button>
+                        <button class="bet-btn" data-bet="15">15</button>
+                        <button class="bet-btn" data-bet="20">20</button>
+                        <button class="bet-btn" data-bet="50">50</button>
                     </div>
                 </div>
 
                 <div class="spin-row">
-                    <button id="spin-btn" class="spin-btn" disabled>Spin</button>
-                    <button id="sound-toggle" class="sound-toggle" type="button">Sound: On</button>
+                    <button id="spin-btn" class="spin-btn" disabled>SPIN</button>
+                    <button id="turbo-toggle" class="aux-btn" type="button" aria-pressed="false" title="Toggle Turbo Mode">TURBO: OFF</button>
                 </div>
 
-                <div class="volume-control">
-                    <label for="ambience-volume">Ambience:</label>
-                    <input type="range" id="ambience-volume" min="0" max="100" value="30">
+                <div class="audio-row">
+                    <button id="sound-toggle" class="aux-btn" type="button">SOUND: ON</button>
+                    <div class="volume-control">
+                        <label for="music-volume">MUSIC</label>
+                        <input type="range" id="music-volume" min="0" max="100" value="35">
+                    </div>
                 </div>
 
-                    <div class="payouts">
-                        <h2>Payouts (center line)</h2>
-                        <div class="payout-line"><span>7️⃣ 7️⃣ 7️⃣</span><span>140x</span></div>
-                        <div class="payout-line"><span>🟫🟫🟫</span><span>50x</span></div>
-                        <div class="payout-line"><span>💎💎💎</span><span>29x</span></div>
-                        <div class="payout-line"><span>🔔🔔🔔</span><span>17x</span></div>
-                        <div class="payout-line"><span>🍒🍒🍒</span><span>9x</span></div>
-                        <div class="payout-line"><span>🍋🍋🍋</span><span>7x</span></div>
-                        <div class="payout-line"><span>Two 🍒 (any)</span><span>2x</span></div>
-                    </div>
+                <div class="payouts">
+                    <h2>PAYTABLE (×LINE BET)</h2>
+                    <div class="payout-line"><span>7️⃣ 7️⃣ 7️⃣ 7️⃣ 7️⃣</span><span>1000×</span></div>
+                    <div class="payout-line"><span>7️⃣ 7️⃣ 7️⃣ 7️⃣</span><span>400×</span></div>
+                    <div class="payout-line"><span>7️⃣ 7️⃣ 7️⃣</span><span>100×</span></div>
+                    <div class="payout-line"><span>💎 ×3 / ×4 / ×5</span><span>40 / 150 / 400</span></div>
+                    <div class="payout-line"><span>🟫 ×3 / ×4 / ×5</span><span>20 / 60 / 200</span></div>
+                    <div class="payout-line"><span>🔔 ×3 / ×4 / ×5</span><span>10 / 30 / 100</span></div>
+                    <div class="payout-line"><span>🍒 ×3 / ×4 / ×5</span><span>5 / 15 / 40</span></div>
+                    <div class="payout-line"><span>🍋 ×3 / ×4 / ×5</span><span>2 / 8 / 25</span></div>
+                    <div class="payout-line scatter"><span>🎰 3 / 4 / 5 (×bet)</span><span>2× / 5× / 25× + FS</span></div>
+                    <div class="payout-line wild"><span>⚡ Wild — substitutes, expands</span><span>reel 2/3/4</span></div>
+                    <div class="paytable-footnote">10 paylines · win both ways · 96% RTP</div>
+                </div>
 
-                    <div class="spin-history" id="spin-history">
-                        <h2>Recent Spins</h2>
-                        <div id="history-list"></div>
-                    </div>
+                <div class="spin-history" id="spin-history">
+                    <h2>RECENT SPINS</h2>
+                    <div id="history-list"></div>
+                </div>
             </div>
         </div>
 
-        <div class="footer">Server-side spin. House rules apply.</div>
+        <div class="footer">Server-side spin · house rules apply · play money only</div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>

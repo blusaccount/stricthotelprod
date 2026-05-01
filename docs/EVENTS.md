@@ -139,14 +139,19 @@ S->C:
 - `stock-error` - Error response
 - `balance-update` - Balance changed after trade
 
-## Strictly7s (Slot Machine)
+## Strictly7s 2.0 (Slot Machine)
 **Handler:** [server/handlers/strictly7s.js](../server/handlers/strictly7s.js)
 
+5×3 grid, 10 paylines, win-both-ways, expanding wild on reels 2/3/4, scatter pays, free spins (10 spins, 2× multiplier, retrigger). 96% RTP.
+
 C->S:
-- `strictly7s-spin` - Spin slot machine (costs 10 coins)
+- `strictly7s-spin` - Spin slot machine `{ bet }` (bet ignored during free spins; uses locked bet from trigger spin)
+- `strictly7s-state` - Request current free-spin state for the player
 
 S->C:
-- `strictly7s-result` - Spin outcome (symbols, win amount)
+- `strictly7s-spin-result` - Spin outcome `{ grid, expandedReels, wins, lineWinTotal, scatterCount, scatterPositions, scatterPay, bet, multiplier, payout, freeSpinsAwarded, freeSpinsRemaining, wasFreeSpin, balance }`
+- `strictly7s-free-spins` - Current free-spin state `{ remaining, multiplier, bet }`
+- `strictly7s-error` - Error message
 - `balance-update` - Balance changed
 
 ## Loop Machine (Step Sequencer)
