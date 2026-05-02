@@ -3,6 +3,7 @@ import { addBalance, deductBalance } from '../currency.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
 import { STANDARD_CASINO_BETS, validateCasinoBet } from '../socket-utils.js';
+import { pushActivity } from '../activity-feed.js';
 
 // ============================================================================
 // Plinko — 12-row peg field, 13 buckets, three risk levels.
@@ -103,6 +104,25 @@ export function registerPlinkoHandlers(socket, io, deps) {
             unlocks.push(...await bump(player.name, 'max_balance', Math.floor(finalBalance), 'max'));
         }
         notifyUnlocks(io, onlinePlayers, player.name, unlocks);
+
+        // Activity feed: 25× and bigger wins, plus any unlocks.
+        if (multiplier >= 25 && payout >= bet * 25) {
+            pushActivity({
+                type: 'big_win', player: player.name,
+                text: `Landed ${multiplier}× on Plinko (${risk}) for ${payout} SC`,
+                icon: '🌀', color: multiplier >= 100 ? 'magenta' : 'gold',
+                meta: { game: 'plinko', amount: payout, multiplier, risk, bucket }
+            });
+        }
+        for (const a of unlocks) {
+            pushActivity({
+                type: 'achievement', player: player.name,
+                text: `Unlocked "${a.title}"`,
+                icon: a.icon || '🏅',
+                color: a.tier === 'platinum' ? 'magenta' : a.tier === 'gold' ? 'gold' : 'cyan',
+                meta: { id: a.id, tier: a.tier }
+            });
+        }
 
         socket.emit('balance-update', { balance: finalBalance });
         socket.emit('plinko-result', {

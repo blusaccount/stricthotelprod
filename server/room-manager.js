@@ -1,5 +1,6 @@
 import { getAlivePlayers, nextAlivePlayerIndex } from './game-logic.js';
 import { addBalance } from './currency.js';
+import { pushActivity } from './activity-feed.js';
 
 // ============== ROOM MANAGEMENT ==============
 
@@ -106,6 +107,13 @@ export async function awardPotAndEndGame(io, room, winnerName, alive) {
         if (newBalance !== null && alive[0].socketId) {
             io.to(alive[0].socketId).emit('balance-update', { balance: newBalance });
         }
+        // Activity feed: Mäxchen wins are inherently social — broadcast.
+        pushActivity({
+            type: 'maexchen_win', player: alive[0].name,
+            text: `Won the Mäxchen pot for ${pot} SC`,
+            icon: '🎲', color: 'gold',
+            meta: { game: 'maexchen', amount: pot, room: room.code }
+        });
     }
 
     // Achievement bumps for every player who participated.

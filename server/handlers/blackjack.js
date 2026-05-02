@@ -3,6 +3,7 @@ import { addBalance, deductBalance, getBalance } from '../currency.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
 import { STANDARD_CASINO_BETS, validateCasinoBet } from '../socket-utils.js';
+import { pushActivity } from '../activity-feed.js';
 
 // ============================================================================
 // Blackjack — single player vs. dealer, 6-deck shoe.
@@ -292,6 +293,32 @@ async function finishGame(playerName, socket, knownBalance = null, io = null, on
         unlocks.push(...await bump(playerName, 'max_balance', Math.floor(finalBalance), 'max'));
     }
     if (io && onlinePlayers) notifyUnlocks(io, onlinePlayers, playerName, unlocks);
+
+    // Activity feed: natural blackjack at any bet, or any payout >= 250 SC.
+    if (result.outcome === 'blackjack') {
+        pushActivity({
+            type: 'big_win', player: playerName,
+            text: `Hit Blackjack on a ${g.bet} SC bet → +${result.payout - g.bet} SC`,
+            icon: '🃏', color: 'magenta',
+            meta: { game: 'blackjack', amount: result.payout - g.bet, bet: g.bet }
+        });
+    } else if (result.outcome === 'win' && result.payout - g.bet >= 250) {
+        pushActivity({
+            type: 'big_win', player: playerName,
+            text: `Won ${result.payout - g.bet} SC on Blackjack`,
+            icon: '🃏', color: 'gold',
+            meta: { game: 'blackjack', amount: result.payout - g.bet }
+        });
+    }
+    for (const a of unlocks) {
+        pushActivity({
+            type: 'achievement', player: playerName,
+            text: `Unlocked "${a.title}"`,
+            icon: a.icon || '🏅',
+            color: a.tier === 'platinum' ? 'magenta' : a.tier === 'gold' ? 'gold' : 'cyan',
+            meta: { id: a.id, tier: a.tier }
+        });
+    }
 }
 
 // Test exports

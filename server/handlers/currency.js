@@ -4,6 +4,7 @@ import { broadcastOnlinePlayers } from '../room-manager.js';
 import { saveCharacter, getCharacter } from '../character-store.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
+import { pushActivity } from '../activity-feed.js';
 
 export function registerCurrencyHandlers(socket, io, { checkRateLimit, onlinePlayers }) {
     socket.on('register-player', async (data) => { try {
@@ -131,6 +132,14 @@ export function registerCurrencyHandlers(socket, io, { checkRateLimit, onlinePla
         // Achievement
         const unlocks = await bump(player.name, 'rain_triggers', 1);
         notifyUnlocks(io, onlinePlayers, player.name, unlocks);
+
+        // Activity feed
+        pushActivity({
+            type: 'rain', player: player.name,
+            text: 'Made it rain in the lobby',
+            icon: '💸', color: 'gold',
+            meta: { cost }
+        });
 
         // Broadcast to all connected users (celebration effect visible to everyone)
         // Note: No lobby room exists; this is intentional so all users see the effect

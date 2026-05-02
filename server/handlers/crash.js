@@ -3,6 +3,7 @@ import { addBalance, deductBalance } from '../currency.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
 import { STANDARD_CASINO_BETS, validateCasinoBet } from '../socket-utils.js';
+import { pushActivity } from '../activity-feed.js';
 
 // ============================================================================
 // Crash — single global round, exponential multiplier curve, server-authoritative.
@@ -234,6 +235,26 @@ async function resolveCashout(playerName, atMultiplier, isAuto = false) {
             unlocks.push(...await bump(playerName, 'max_balance', Math.floor(updated), 'max'));
         }
         notifyUnlocks(mainLoopIo, onlinePlayersRef, playerName, unlocks);
+
+        // Activity feed: any cash-out at 10× or higher (or the rare 50/100×).
+        if (m >= 10) {
+            pushActivity({
+                type: 'big_win', player: playerName,
+                text: `Cashed out ${m.toFixed(2)}× on Crash for ${payout} SC`,
+                icon: m >= 100 ? '🪐' : m >= 50 ? '🌙' : '🚀',
+                color: m >= 100 ? 'magenta' : m >= 50 ? 'gold' : 'cyan',
+                meta: { game: 'crash', amount: payout, multiplier: m, auto: isAuto }
+            });
+        }
+        for (const a of unlocks) {
+            pushActivity({
+                type: 'achievement', player: playerName,
+                text: `Unlocked "${a.title}"`,
+                icon: a.icon || '🏅',
+                color: a.tier === 'platinum' ? 'magenta' : a.tier === 'gold' ? 'gold' : 'cyan',
+                meta: { id: a.id, tier: a.tier }
+            });
+        }
     }
     return { multiplier: m, payout, balance: updated };
 }

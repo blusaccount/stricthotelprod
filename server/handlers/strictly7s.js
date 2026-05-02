@@ -3,6 +3,7 @@ import { addBalance, deductBalance, getBalance } from '../currency.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
 import { STANDARD_CASINO_BETS, validateCasinoBet } from '../socket-utils.js';
+import { pushActivity } from '../activity-feed.js';
 
 // ============================================================================
 // Strictly7s 2.0 — 5×3 grid, 10 paylines, win-both-ways, expanding wild,
@@ -364,6 +365,34 @@ export function registerStrictly7sHandlers(socket, io, deps) {
                 unlocks.push(...u4);
             }
             notifyUnlocks(io, onlinePlayers, player.name, unlocks);
+
+            // Activity feed: jackpot or any win >= 25× bet.
+            const winMultiplier = payout / Math.max(1, bet);
+            if (isJackpot) {
+                pushActivity({
+                    type: 'big_win', player: player.name,
+                    text: `JACKPOT! Strictly7s 5×7️⃣ for ${payout} SC`,
+                    icon: '7️⃣', color: 'magenta',
+                    meta: { game: 'strictly7s', amount: payout, multiplier: winMultiplier }
+                });
+            } else if (winMultiplier >= 25) {
+                pushActivity({
+                    type: 'big_win', player: player.name,
+                    text: `Hit a ${winMultiplier.toFixed(1)}× win on Strictly7s for ${payout} SC`,
+                    icon: '🎰', color: 'gold',
+                    meta: { game: 'strictly7s', amount: payout, multiplier: winMultiplier }
+                });
+            }
+            // Achievement unlocks → activity events.
+            for (const a of unlocks) {
+                pushActivity({
+                    type: 'achievement', player: player.name,
+                    text: `Unlocked "${a.title}"`,
+                    icon: a.icon || '🏅',
+                    color: a.tier === 'platinum' ? 'magenta' : a.tier === 'gold' ? 'gold' : 'cyan',
+                    meta: { id: a.id, tier: a.tier }
+                });
+            }
         }
 
         const highestLineSingle = highestSingleLineMultiplier(outcome.wins);

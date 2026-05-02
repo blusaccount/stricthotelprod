@@ -1,6 +1,7 @@
 import { getStreakStatus, claimStreak } from '../daily-streak.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
+import { pushActivity } from '../activity-feed.js';
 
 const claimRateLimit = new Map(); // socketId -> timestamp of last claim
 
@@ -49,6 +50,27 @@ export function registerDailyStreakHandlers(socket, io, deps) {
                 ? await bump(player.name, 'max_balance', Math.floor(result.newBalance), 'max')
                 : [];
             notifyUnlocks(io, onlinePlayers, player.name, [...unlocks, ...unlocks2]);
+
+            // Activity feed: announce 7/30/100-day streak milestones; everything
+            // else stays quiet so the feed doesn't fill with daily claims.
+            const milestones = new Set([7, 30, 100, 365]);
+            if (milestones.has(result.currentStreak)) {
+                pushActivity({
+                    type: 'streak_milestone', player: player.name,
+                    text: `Hit a ${result.currentStreak}-day streak`,
+                    icon: '🔥', color: 'magenta',
+                    meta: { streak: result.currentStreak }
+                });
+            }
+            for (const a of unlocks) {
+                pushActivity({
+                    type: 'achievement', player: player.name,
+                    text: `Unlocked "${a.title}"`,
+                    icon: a.icon || '🏅',
+                    color: a.tier === 'platinum' ? 'magenta' : a.tier === 'gold' ? 'gold' : 'cyan',
+                    meta: { id: a.id, tier: a.tier }
+                });
+            }
         }
         // Refresh status in the same event so the client always converges.
         const status = await getStreakStatus(player.name);

@@ -22,6 +22,8 @@ import { registerWatchpartyHandlers } from './handlers/watchparty.js';
 import { registerTierlistHandlers, cleanupTierlistOnDisconnect } from './handlers/tierlist.js';
 import { registerDailyStreakHandlers, cleanupStreakRateLimitOnDisconnect } from './handlers/daily-streak.js';
 import { registerAchievementHandlers, makeAchievementsHelper } from './handlers/achievements.js';
+import { registerActivityFeedHandlers } from './handlers/activity-feed.js';
+import { attachActivityFeed } from './activity-feed.js';
 import { registerBlackjackHandlers } from './handlers/blackjack.js';
 import { registerRouletteHandlers, cleanupRouletteCooldown } from './handlers/roulette.js';
 
@@ -109,6 +111,8 @@ export function cleanupRateLimiters() {
 export function registerSocketHandlers(io, { fetchTickerQuotes, getYahooFinance, isStockGameEnabled = true } = {}) {
     // Start the global Crash round loop once for the entire server.
     startCrashLoop(io);
+    // Wire the activity feed broadcaster to this io instance.
+    attachActivityFeed(io);
 
     const deps = {
         checkRateLimit,
@@ -146,6 +150,7 @@ export function registerSocketHandlers(io, { fetchTickerQuotes, getYahooFinance,
         registerTierlistHandlers(socket, io, deps);
         registerDailyStreakHandlers(socket, io, deps);
         registerAchievementHandlers(socket, io, deps);
+        registerActivityFeedHandlers(socket, io, deps);
         registerBlackjackHandlers(socket, io, deps);
         registerRouletteHandlers(socket, io, deps);
 

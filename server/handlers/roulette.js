@@ -3,6 +3,7 @@ import { addBalance, deductBalance, getBalance } from '../currency.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
 import { STANDARD_CASINO_BETS, validateCasinoBet } from '../socket-utils.js';
+import { pushActivity } from '../activity-feed.js';
 
 // ============================================================================
 // Roulette — European wheel (single 0). 37 pockets: 0..36.
@@ -191,6 +192,27 @@ export function registerRouletteHandlers(socket, io, deps) {
         if (pocket === 8)  unlocks.push(...await bump(player.name, 'roulette_eight_hits', 1));
         if (pocket === 13) unlocks.push(...await bump(player.name, 'roulette_thirteen_hits', 1));
         notifyUnlocks(io, onlinePlayers, player.name, unlocks);
+
+        // Activity feed: profit ≥ 10× total stake (so a single straight-up
+        // hit on any chip qualifies, but pure red/black break-even doesn't).
+        const profit = totalPayout - totalStake;
+        if (profit >= totalStake * 10 && profit >= 100) {
+            pushActivity({
+                type: 'big_win', player: player.name,
+                text: `Roulette ${pocket} ${pocketColor(pocket).toUpperCase()} → +${profit} SC`,
+                icon: '🎯', color: 'gold',
+                meta: { game: 'roulette', amount: profit, pocket }
+            });
+        }
+        for (const a of unlocks) {
+            pushActivity({
+                type: 'achievement', player: player.name,
+                text: `Unlocked "${a.title}"`,
+                icon: a.icon || '🏅',
+                color: a.tier === 'platinum' ? 'magenta' : a.tier === 'gold' ? 'gold' : 'cyan',
+                meta: { id: a.id, tier: a.tier }
+            });
+        }
 
         socket.emit('balance-update', { balance: finalBalance });
         socket.emit('roulette-result', {
