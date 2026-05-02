@@ -10,304 +10,359 @@
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/shared/css/theme.css">
     <style>
-        /* ===== Inverted Nintendo DS Pixel Style ===== */
-        :root {
-            --ds-bg: #1a1a1a;
-            --ds-surface: #111111;
-            --ds-border: #cccccc;
-            --ds-text: #e8e8e8;
-            --ds-text-dim: #888888;
-            --ds-highlight: #333333;
-            --ds-radius: 0px;
-            --diamond-blue: #33d9ff;
-            --diamond-light: #ffffff;
-            --gold: #ffdd00;
-        }
-
         body {
             font-family: 'Press Start 2P', monospace;
             font-size: 12px;
-            color: var(--ds-text);
+            color: var(--arcade-ink);
             image-rendering: pixelated;
-            line-height: 1.8;
+            background:
+                radial-gradient(circle at 20% 0%, rgba(62, 255, 225, 0.10) 0%, transparent 45%),
+                radial-gradient(circle at 80% 100%, rgba(255, 204, 51, 0.10) 0%, transparent 45%),
+                radial-gradient(circle at top, var(--arcade-bg-1) 0%, var(--arcade-bg-2) 70%);
+            line-height: 1.6;
+            margin: 0;
+            min-height: 100vh;
         }
 
         .shop-container {
             text-align: center;
-            padding: 16px 12px 40px;
-            max-width: 800px;
+            padding: 18px 14px 60px;
+            max-width: 1100px;
             margin: 0 auto;
+            position: relative;
+            z-index: 1;
         }
 
+        /* ===== Title ===== */
         .shop-title {
-            font-size: 20px;
-            color: var(--ds-text);
-            letter-spacing: 3px;
-            margin-bottom: 12px;
-            padding-bottom: 10px;
-            border-bottom: 3px solid var(--ds-border);
+            font-size: clamp(20px, 3.5vw, 28px);
+            color: var(--arcade-cyan);
+            letter-spacing: 5px;
+            margin: 8px auto 14px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--arcade-border);
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 12px;
+            gap: 14px;
+            text-shadow: 0 2px 0 #000, 0 0 18px rgba(62, 255, 225, 0.6);
+            animation: shopTitlePulse 2.4s ease-in-out infinite;
         }
-        
+        @keyframes shopTitlePulse {
+            0%, 100% { text-shadow: 0 2px 0 #000, 0 0 16px rgba(62, 255, 225, 0.5); }
+            50%      { text-shadow: 0 2px 0 #000, 0 0 28px rgba(62, 255, 225, 0.85), 0 0 40px rgba(255, 204, 51, 0.4); }
+        }
         .title-diamond {
-            width: 28px;
-            height: 28px;
+            width: 32px;
+            height: 32px;
             image-rendering: -webkit-optimize-contrast;
             image-rendering: crisp-edges;
-            filter: drop-shadow(0 0 4px #33d9ff);
+            filter: drop-shadow(0 0 8px var(--arcade-cyan));
+            animation: diamondSpin 6s linear infinite;
+        }
+        @keyframes diamondSpin {
+            0%, 90%, 100% { transform: rotate(0); }
+            95% { transform: rotate(360deg); }
         }
 
+        /* ===== Header / balance pills ===== */
         .shop-balances {
             display: flex;
             justify-content: center;
-            gap: 20px;
+            gap: 14px;
             margin-bottom: 24px;
             flex-wrap: wrap;
         }
-
         .balance-card {
-            background: var(--ds-surface);
-            border: 2px solid var(--ds-border);
-            padding: 12px 20px;
-            border-radius: 0;
+            background: linear-gradient(180deg, var(--arcade-panel) 0%, var(--arcade-panel-2) 100%);
+            border: 2px solid var(--arcade-border);
+            padding: 14px 22px;
             display: flex;
             align-items: center;
-            gap: 10px;
-            font-size: 11px;
+            gap: 14px;
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+            transition: border-color 0.15s, box-shadow 0.15s;
         }
-
-        .balance-icon {
-            font-size: 1.5rem;
-        }
-        
+        .balance-card.coin    { border-color: var(--arcade-gold);    box-shadow: 0 0 16px rgba(255, 204, 51, 0.25); }
+        .balance-card.diamond { border-color: var(--arcade-cyan);    box-shadow: 0 0 16px rgba(62, 255, 225, 0.25); }
+        .balance-icon { font-size: 1.6rem; }
         .diamond-balance-icon img {
-            width: 24px;
-            height: 24px;
+            width: 28px; height: 28px;
             image-rendering: -webkit-optimize-contrast;
             image-rendering: crisp-edges;
-            filter: drop-shadow(0 0 3px #33d9ff);
+            filter: drop-shadow(0 0 6px var(--arcade-cyan));
         }
-
         .balance-label {
-            color: var(--ds-text-dim);
-            font-size: 9px;
+            color: var(--arcade-dim);
+            font-size: 8px;
+            letter-spacing: 2px;
             margin-bottom: 2px;
         }
+        .balance-amount { font-size: 14px; font-weight: 700; }
+        .balance-card.coin .balance-amount    { color: var(--arcade-gold); text-shadow: 0 0 8px rgba(255, 204, 51, 0.5); }
+        .balance-card.diamond .balance-amount { color: var(--arcade-cyan); text-shadow: 0 0 8px rgba(62, 255, 225, 0.5); }
 
-        .balance-amount {
-            font-size: 14px;
-            font-weight: 700;
-        }
-
+        /* ===== Item grid ===== */
         .shop-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            max-width: 800px;
-            margin: 0 auto 24px;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 18px;
+            max-width: 980px;
+            margin: 0 auto 28px;
         }
 
         .shop-item {
-            background: var(--ds-surface);
-            border: 2px solid var(--ds-border);
-            padding: 20px;
-            border-radius: 0;
-            box-shadow: 4px 4px 0 var(--ds-border);
-            transition: all 0.15s;
+            position: relative;
+            background: linear-gradient(180deg, var(--arcade-panel) 0%, var(--arcade-panel-2) 100%);
+            border: 3px solid var(--arcade-border);
+            padding: 18px 16px;
+            transition: transform 0.15s, border-color 0.15s, box-shadow 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            overflow: hidden;
         }
-
+        .shop-item::before {
+            content: "";
+            position: absolute;
+            inset: -10%;
+            background: radial-gradient(circle at center, rgba(255, 62, 165, 0.08) 0%, transparent 60%);
+            pointer-events: none;
+            transition: opacity 0.2s;
+            opacity: 0.6;
+            z-index: 0;
+        }
+        .shop-item > * { position: relative; z-index: 1; }
         .shop-item:hover {
-            box-shadow: 6px 6px 0 var(--ds-border);
-            transform: translate(-2px, -2px);
+            transform: translateY(-3px);
+            box-shadow: 0 0 0 1px rgba(255, 204, 51, 0.2), 0 10px 24px rgba(0,0,0,0.5);
         }
+        .shop-item:hover::before { opacity: 1; }
 
-        .shop-item-icon {
-            font-size: 4rem;
-            margin-bottom: 12px;
-            filter: drop-shadow(0 0 10px var(--diamond-blue));
+        /* Rarity color-coded ribbons */
+        .shop-item.common  { border-color: var(--arcade-cyan);    box-shadow: 0 0 14px rgba(62, 255, 225, 0.3); }
+        .shop-item.rare    { border-color: var(--arcade-magenta); box-shadow: 0 0 14px rgba(255, 62, 165, 0.35); }
+        .shop-item.epic    { border-color: var(--arcade-gold);    box-shadow: 0 0 16px rgba(255, 204, 51, 0.4); }
+        .shop-item.locked  { border-color: var(--arcade-border);  filter: grayscale(0.4); opacity: 0.55; }
+
+        .shop-item-badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            font-size: 7px;
+            letter-spacing: 2px;
+            padding: 3px 7px;
+            background: rgba(0, 0, 0, 0.7);
+            color: var(--arcade-ink);
+            z-index: 2;
         }
-        
+        .shop-item.common .shop-item-badge  { color: var(--arcade-cyan); border: 1px solid var(--arcade-cyan); }
+        .shop-item.rare   .shop-item-badge  { color: var(--arcade-magenta); border: 1px solid var(--arcade-magenta); }
+        .shop-item.epic   .shop-item-badge  { color: var(--arcade-gold); border: 1px solid var(--arcade-gold); }
+        .shop-item.locked .shop-item-badge  { color: var(--arcade-dim); border: 1px solid var(--arcade-border); }
+
+        .shop-item-icon-wrap {
+            width: 96px;
+            height: 96px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #050309;
+            border: 2px solid var(--arcade-frame);
+            box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.7);
+            margin-top: 4px;
+        }
+        .shop-item-icon { font-size: 3rem; line-height: 1; }
         .diamond-item-icon img {
-            width: 64px;
-            height: 64px;
+            width: 64px; height: 64px;
             image-rendering: -webkit-optimize-contrast;
             image-rendering: crisp-edges;
+            filter: drop-shadow(0 0 12px var(--arcade-cyan));
         }
 
         .shop-item-name {
-            font-size: 14px;
-            margin-bottom: 8px;
-            color: var(--ds-text);
+            font-size: 13px;
+            color: var(--arcade-ink);
+            letter-spacing: 2px;
+            text-shadow: 0 2px 0 #000;
         }
-
         .shop-item-price {
-            color: var(--gold);
-            margin-bottom: 8px;
-            font-size: 12px;
+            color: var(--arcade-gold);
+            font-size: 11px;
+            text-shadow: 0 0 6px rgba(255, 204, 51, 0.4);
         }
-
         .shop-item-owned {
-            color: var(--ds-text-dim);
-            font-size: 10px;
-            margin-bottom: 12px;
+            color: var(--arcade-dim);
+            font-size: 9px;
+            letter-spacing: 1px;
         }
 
         .shop-buy-btn {
-            background: var(--ds-bg);
-            border: 2px solid var(--ds-border);
-            color: var(--ds-text);
+            background: linear-gradient(180deg, #ffe278 0%, #d49100 100%);
+            border: 3px solid var(--arcade-gold);
+            color: #1a1200;
             font-family: 'Press Start 2P', monospace;
             font-size: 10px;
-            padding: 10px 20px;
+            padding: 10px 14px;
             cursor: pointer;
-            letter-spacing: 1px;
-            transition: all 0.15s;
-            border-radius: 0;
+            letter-spacing: 2px;
+            transition: transform 0.08s, box-shadow 0.15s, filter 0.15s;
+            box-shadow: 0 4px 0 #6a4a00, 0 0 12px rgba(255, 204, 51, 0.35);
             width: 100%;
+            margin-top: 6px;
         }
-
         .shop-buy-btn:hover:not(:disabled) {
-            background: var(--ds-border);
-            color: var(--ds-surface);
-            box-shadow: 3px 3px 0 var(--ds-text-dim);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 0 #6a4a00, 0 0 22px rgba(255, 204, 51, 0.7);
+        }
+        .shop-buy-btn:active:not(:disabled) {
+            transform: translateY(2px);
+            box-shadow: 0 2px 0 #6a4a00;
+        }
+        .shop-buy-btn:disabled {
+            cursor: not-allowed;
+            filter: grayscale(0.7);
+            opacity: 0.55;
         }
 
-        .shop-buy-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+        /* ===== Bottom panel + nav ===== */
+        .placeholder-section {
+            margin-top: 36px;
+            padding: 22px;
+            border: 2px dashed var(--arcade-border);
+            color: var(--arcade-dim);
+            font-size: 9px;
+            letter-spacing: 2px;
+            opacity: 0.7;
         }
 
         .shop-home-btn {
-            background: var(--ds-surface);
-            border: 2px solid var(--ds-border);
-            color: var(--ds-text);
+            display: inline-block;
+            margin-top: 22px;
+            background: #120a1c;
+            border: 2px solid var(--arcade-frame);
+            color: var(--arcade-ink);
             font-family: 'Press Start 2P', monospace;
             font-size: 10px;
             padding: 12px 24px;
             cursor: pointer;
-            letter-spacing: 1px;
-            transition: all 0.15s;
-            border-radius: 0;
+            letter-spacing: 2px;
             text-decoration: none;
-            display: inline-block;
-            margin-top: 20px;
+            transition: background 0.15s, color 0.15s, box-shadow 0.15s;
         }
-
         .shop-home-btn:hover {
-            background: var(--ds-border);
-            color: var(--ds-surface);
-            box-shadow: 3px 3px 0 var(--ds-text-dim);
+            background: var(--arcade-gold);
+            color: #1a1200;
+            box-shadow: 0 0 18px rgba(255, 204, 51, 0.5);
         }
 
-        .placeholder-section {
-            margin-top: 40px;
-            padding: 20px;
-            border: 2px dashed var(--ds-text-dim);
-            border-radius: 0;
-            opacity: 0.5;
-        }
-
-        .placeholder-text {
-            font-size: 10px;
-            color: var(--ds-text-dim);
-        }
-
+        /* ===== Error toast ===== */
         .error-message {
             position: fixed;
-            top: 20px;
+            top: 22px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(255, 51, 102, 0.95);
-            border: 3px solid #ff3366;
-            padding: 12px 24px;
+            background: rgba(20, 5, 12, 0.95);
+            border: 2px solid var(--arcade-loss);
+            padding: 12px 22px;
             font-family: 'Press Start 2P', monospace;
             font-size: 10px;
-            color: #ffffff;
+            letter-spacing: 1px;
+            color: var(--arcade-loss);
             z-index: 10000;
-            animation: slideDown 0.5s ease-out;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            animation: slideDown 0.4s ease-out;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6), 0 0 22px rgba(255, 56, 56, 0.45);
+            text-shadow: 0 0 10px rgba(255, 56, 56, 0.5);
         }
-
         @keyframes slideDown {
-            from {
-                transform: translateX(-50%) translateY(-100px);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(-50%) translateY(0);
-                opacity: 1;
-            }
+            from { transform: translateX(-50%) translateY(-100px); opacity: 0; }
+            to   { transform: translateX(-50%) translateY(0);     opacity: 1; }
         }
 
         @media (max-width: 768px) {
-            .shop-grid {
-                grid-template-columns: 1fr;
-            }
+            .shop-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+            .shop-item { padding: 14px 10px; }
+        }
+        @media (max-width: 480px) {
+            .shop-title { font-size: 16px; letter-spacing: 3px; }
+            .shop-grid { grid-template-columns: 1fr; }
+            .balance-card { padding: 10px 16px; }
         }
     </style>
 </head>
 <body>
     <div class="shop-container">
-        <h1 class="shop-title"><img src="/assets/diamond.png" class="title-diamond" alt="💎"> DIAMOND SHOP <img src="/assets/diamond.png" class="title-diamond" alt="💎"></h1>
+        <h1 class="shop-title">
+            <img src="/assets/diamond.png" class="title-diamond" alt="💎">
+            DIAMOND SHOP
+            <img src="/assets/diamond.png" class="title-diamond" alt="💎">
+        </h1>
 
         <div class="shop-balances">
-            <div class="balance-card">
+            <div class="balance-card coin">
                 <div class="balance-icon">🪙</div>
                 <div>
-                    <div class="balance-label">StrictCoins</div>
+                    <div class="balance-label">STRICTCOINS</div>
                     <div class="balance-amount" id="coin-balance">0</div>
                 </div>
             </div>
-            <div class="balance-card">
+            <div class="balance-card diamond">
                 <div class="balance-icon diamond-balance-icon"><img src="/assets/diamond.png" alt="💎"></div>
                 <div>
-                    <div class="balance-label">Diamonds</div>
+                    <div class="balance-label">DIAMONDS</div>
                     <div class="balance-amount" id="diamond-balance">0</div>
                 </div>
             </div>
         </div>
 
         <div class="shop-grid">
-            <div class="shop-item">
-                <div class="shop-item-icon diamond-item-icon"><img src="/assets/diamond.png" alt="💎"></div>
-                <div class="shop-item-name">Diamond</div>
-                <div class="shop-item-price">🪙 25 Coins</div>
-                <div class="shop-item-owned">Owned: <span id="diamonds-owned">0</span></div>
+            <div class="shop-item rare">
+                <div class="shop-item-badge">RARE</div>
+                <div class="shop-item-icon-wrap">
+                    <div class="shop-item-icon diamond-item-icon"><img src="/assets/diamond.png" alt="💎"></div>
+                </div>
+                <div class="shop-item-name">DIAMOND</div>
+                <div class="shop-item-price">🪙 25 COINS</div>
+                <div class="shop-item-owned">OWNED: <span id="diamonds-owned">0</span></div>
                 <button class="shop-buy-btn" id="buy-diamond-btn">BUY 1 DIAMOND</button>
             </div>
 
-            <!-- Placeholder for future items -->
-            <div class="shop-item" style="opacity: 0.5;">
-                <div class="shop-item-icon">🎨</div>
-                <div class="shop-item-name">Custom Colors</div>
-                <div class="shop-item-price">🪙 Coming Soon</div>
-                <div class="shop-item-owned">Not Available</div>
+            <div class="shop-item locked">
+                <div class="shop-item-badge">SOON</div>
+                <div class="shop-item-icon-wrap">
+                    <div class="shop-item-icon">🎨</div>
+                </div>
+                <div class="shop-item-name">CUSTOM COLORS</div>
+                <div class="shop-item-price">🪙 COMING SOON</div>
+                <div class="shop-item-owned">NOT AVAILABLE</div>
                 <button class="shop-buy-btn" disabled>COMING SOON</button>
             </div>
 
-            <div class="shop-item" style="opacity: 0.5;">
-                <div class="shop-item-icon">🎭</div>
-                <div class="shop-item-name">Special Emotes</div>
-                <div class="shop-item-price">🪙 Coming Soon</div>
-                <div class="shop-item-owned">Not Available</div>
+            <div class="shop-item locked">
+                <div class="shop-item-badge">SOON</div>
+                <div class="shop-item-icon-wrap">
+                    <div class="shop-item-icon">🎭</div>
+                </div>
+                <div class="shop-item-name">SPECIAL EMOTES</div>
+                <div class="shop-item-price">🪙 COMING SOON</div>
+                <div class="shop-item-owned">NOT AVAILABLE</div>
                 <button class="shop-buy-btn" disabled>COMING SOON</button>
             </div>
 
-            <div class="shop-item" style="opacity: 0.5;">
-                <div class="shop-item-icon">👑</div>
-                <div class="shop-item-name">VIP Badge</div>
-                <div class="shop-item-price">🪙 Coming Soon</div>
-                <div class="shop-item-owned">Not Available</div>
+            <div class="shop-item locked">
+                <div class="shop-item-badge">SOON</div>
+                <div class="shop-item-icon-wrap">
+                    <div class="shop-item-icon">👑</div>
+                </div>
+                <div class="shop-item-name">VIP BADGE</div>
+                <div class="shop-item-price">🪙 COMING SOON</div>
+                <div class="shop-item-owned">NOT AVAILABLE</div>
                 <button class="shop-buy-btn" disabled>COMING SOON</button>
             </div>
         </div>
 
-        <div class="placeholder-section">
-            <div class="placeholder-text">MORE ITEMS COMING SOON...</div>
-        </div>
+        <div class="placeholder-section">MORE ITEMS COMING SOON…</div>
 
         <a href="/" class="shop-home-btn">← ZURÜCK ZUR LOBBY</a>
     </div>

@@ -18,6 +18,25 @@
     --text-dim: #88aa88;
     --radius: 12px;
     --shadow: 0 4px 20px rgba(0,255,136,0.2);
+
+    /* ===== Neon Arcade palette =====
+       Canonical palette used by casino + lobby + shop + login. Other pages
+       (maexchen, etc.) keep using the older --accent (green) tokens above. */
+    --arcade-bg-1:        #1c0e2e;
+    --arcade-bg-2:        #07040d;
+    --arcade-panel:       #15101e;
+    --arcade-panel-2:     #08050e;
+    --arcade-frame:       #d7d7d7;
+    --arcade-border:      #2c2240;
+    --arcade-ink:         #f6f6f6;
+    --arcade-dim:         #9a8db0;
+    --arcade-gold:        #ffcc33;
+    --arcade-gold-dark:   #c08a00;
+    --arcade-magenta:     #ff3ea5;
+    --arcade-cyan:        #3effe1;
+    --arcade-win:         #7cff8b;
+    --arcade-loss:        #ff6a7a;
+    --arcade-red:         #ff3838;
 }
 
 /* ===== Starfield Background ===== */
@@ -2641,4 +2660,150 @@ h3 { font-size: 1.3rem; color: var(--text-dim); letter-spacing: 2px; text-transf
         transform: translateX(-50%) translateY(0);
         opacity: 1;
     }
+}
+
+/* ============================================================================
+ * NEON ARCADE COMPONENT LIBRARY
+ *
+ * Reusable utility classes for casino/lobby/shop pages. Pages using these
+ * classes should also load the Press Start 2P font.
+ * ========================================================================= */
+
+/* Page container — dark gradient + CRT scanlines + neon vignette. */
+.arcade-page {
+    font-family: 'Press Start 2P', monospace;
+    color: var(--arcade-ink);
+    background:
+        radial-gradient(circle at 20% 0%, rgba(255, 62, 165, 0.12) 0%, transparent 45%),
+        radial-gradient(circle at 80% 100%, rgba(62, 255, 225, 0.08) 0%, transparent 45%),
+        radial-gradient(circle at top, var(--arcade-bg-1) 0%, var(--arcade-bg-2) 70%);
+    image-rendering: pixelated;
+    min-height: 100vh;
+    margin: 0;
+}
+
+/* Outer panel border (matches the .page treatment in casino/strictly7s/etc.) */
+.arcade-frame {
+    border: 3px solid var(--arcade-frame);
+    background: linear-gradient(180deg, #1a1226 0%, #08050e 100%);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255,255,255,0.04);
+    position: relative;
+}
+.arcade-frame::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(180deg, transparent 0, transparent 2px, rgba(0,0,0,0.18) 2px, rgba(0,0,0,0.18) 3px);
+    mix-blend-mode: multiply;
+    opacity: 0.5;
+    z-index: 0;
+}
+.arcade-frame > * { position: relative; z-index: 1; }
+
+/* Pulsing gold-neon title. Optional .arcade-title--accent <span> inside for a
+ * second color (magenta). */
+.arcade-title {
+    font-size: clamp(18px, 3vw, 26px);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--arcade-gold);
+    text-shadow: 0 2px 0 #000, 0 0 18px rgba(255, 204, 51, 0.55), 0 0 32px rgba(255,62,165,0.3);
+    animation: arcadeTitlePulse 2.4s ease-in-out infinite;
+}
+.arcade-title--accent {
+    color: var(--arcade-magenta);
+    text-shadow: 0 2px 0 #000, 0 0 12px var(--arcade-magenta);
+}
+@keyframes arcadeTitlePulse {
+    0%, 100% { text-shadow: 0 2px 0 #000, 0 0 18px rgba(255, 204, 51, 0.55), 0 0 32px rgba(255, 62, 165, 0.3); }
+    50%      { text-shadow: 0 2px 0 #000, 0 0 32px rgba(255, 204, 51, 0.9),  0 0 48px rgba(255, 62, 165, 0.55); }
+}
+
+/* Neon back-link / nav button. */
+.arcade-back {
+    border: 2px solid var(--arcade-frame);
+    background: #120a1c;
+    color: var(--arcade-ink);
+    padding: 8px 12px;
+    font-family: inherit;
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.arcade-back:hover { background: var(--arcade-gold); color: #1a1200; }
+
+/* Generic neon-bordered button. Modifier classes set color theme. */
+.arcade-btn {
+    border: 2px solid var(--arcade-border);
+    background: #150d1e;
+    color: var(--arcade-ink);
+    padding: 10px 14px;
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: transform 0.1s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+.arcade-btn:hover:not(:disabled):not(.is-disabled) {
+    transform: translateY(-2px);
+    border-color: var(--arcade-gold);
+}
+.arcade-btn:disabled, .arcade-btn.is-disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.arcade-btn--gold {
+    border: 3px solid var(--arcade-gold);
+    background: linear-gradient(180deg, #ffe278 0%, #d49100 100%);
+    color: #1a1200;
+    box-shadow: 0 4px 0 #6a4a00, 0 0 14px rgba(255, 204, 51, 0.4);
+}
+.arcade-btn--gold:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 0 #6a4a00, 0 0 22px rgba(255, 204, 51, 0.7);
+}
+.arcade-btn--gold:active:not(:disabled) {
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 #6a4a00;
+}
+.arcade-btn--cyan {
+    border-color: var(--arcade-cyan);
+    color: var(--arcade-cyan);
+    box-shadow: 0 0 14px rgba(62, 255, 225, 0.25);
+}
+.arcade-btn--magenta {
+    border-color: var(--arcade-magenta);
+    color: var(--arcade-magenta);
+    box-shadow: 0 0 14px rgba(255, 62, 165, 0.3);
+}
+
+/* Neon-bordered input. */
+.arcade-input {
+    background: #150d1e;
+    border: 2px solid var(--arcade-border);
+    color: var(--arcade-ink);
+    font-family: inherit;
+    font-size: 11px;
+    padding: 10px 12px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.arcade-input:focus {
+    outline: none;
+    border-color: var(--arcade-cyan);
+    box-shadow: 0 0 0 1px var(--arcade-cyan), 0 0 18px rgba(62, 255, 225, 0.4);
+}
+
+/* Generic balance / pill display. */
+.arcade-balance {
+    font-size: 11px;
+    color: var(--arcade-dim);
+    letter-spacing: 1px;
+    white-space: nowrap;
+}
+.arcade-balance .amount {
+    color: var(--arcade-gold);
+    text-shadow: 0 0 8px rgba(255, 204, 51, 0.4);
 }

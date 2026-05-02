@@ -7,9 +7,21 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👽</text></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/shared/css/theme.css">
     <style>
+        body {
+            font-family: 'Press Start 2P', monospace;
+            color: var(--arcade-ink);
+            image-rendering: pixelated;
+            background:
+                radial-gradient(circle at 30% 10%, rgba(255, 62, 165, 0.16) 0%, transparent 50%),
+                radial-gradient(circle at 70% 90%, rgba(62, 255, 225, 0.12) 0%, transparent 50%),
+                radial-gradient(circle at top, var(--arcade-bg-1) 0%, var(--arcade-bg-2) 70%);
+            min-height: 100vh;
+            margin: 0;
+        }
+
         .login-container {
             display: flex;
             flex-direction: column;
@@ -20,105 +32,130 @@
         }
 
         .login-box {
-            background: var(--surface);
-            border: 2px solid var(--accent);
-            padding: 40px;
-            max-width: 400px;
+            background: linear-gradient(180deg, var(--arcade-panel) 0%, var(--arcade-panel-2) 100%);
+            border: 3px solid var(--arcade-frame);
+            padding: 36px 32px;
+            max-width: 420px;
             width: 100%;
             text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 30px rgba(255, 62, 165, 0.2), inset 0 0 0 1px rgba(255,255,255,0.04);
+            position: relative;
+            overflow: hidden;
         }
+        .login-box::before {
+            /* CRT scanlines */
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(180deg, transparent 0, transparent 2px, rgba(0,0,0,0.18) 2px, rgba(0,0,0,0.18) 3px);
+            mix-blend-mode: multiply;
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        .login-box > * { position: relative; z-index: 1; }
 
         .login-title {
-            font-size: 2.5rem;
-            color: var(--accent);
-            text-shadow: 0 0 30px var(--accent);
-            margin-bottom: 10px;
-            letter-spacing: 4px;
+            font-size: clamp(20px, 4vw, 28px);
+            color: var(--arcade-gold);
+            text-shadow: 0 2px 0 #000, 0 0 20px rgba(255, 204, 51, 0.7), 0 0 40px rgba(255, 62, 165, 0.45);
+            margin-bottom: 6px;
+            letter-spacing: 5px;
+            animation: titlePulse 2.4s ease-in-out infinite;
+        }
+        .login-title-accent {
+            color: var(--arcade-magenta);
+            text-shadow: 0 2px 0 #000, 0 0 16px var(--arcade-magenta);
+        }
+        @keyframes titlePulse {
+            0%, 100% { text-shadow: 0 2px 0 #000, 0 0 20px rgba(255, 204, 51, 0.6), 0 0 40px rgba(255, 62, 165, 0.4); }
+            50%      { text-shadow: 0 2px 0 #000, 0 0 32px rgba(255, 204, 51, 0.9), 0 0 56px rgba(255, 62, 165, 0.6); }
         }
 
         .login-subtitle {
-            color: var(--text-dim);
-            font-size: 1rem;
-            margin-bottom: 30px;
+            color: var(--arcade-dim);
+            font-size: 9px;
+            letter-spacing: 2px;
+            margin-bottom: 28px;
         }
 
         .login-input {
             width: 100%;
-            background: var(--bg);
-            border: 1px solid var(--accent);
-            color: var(--text);
-            font-family: 'Orbitron', monospace;
-            font-size: 1rem;
-            padding: 12px 16px;
-            border-radius: 4px;
-            margin-bottom: 20px;
+            background: #120a1c;
+            border: 2px solid var(--arcade-border);
+            color: var(--arcade-ink);
+            font-family: 'Press Start 2P', monospace;
+            font-size: 12px;
+            padding: 14px 16px;
+            margin-bottom: 18px;
             box-sizing: border-box;
+            text-align: center;
+            letter-spacing: 4px;
+            transition: border-color 0.15s, box-shadow 0.15s;
         }
-
+        .login-input::placeholder { color: var(--arcade-dim); letter-spacing: 1px; }
         .login-input:focus {
             outline: none;
-            box-shadow: 0 0 15px rgba(0,255,136,0.3);
+            border-color: var(--arcade-cyan);
+            box-shadow: 0 0 0 1px var(--arcade-cyan), 0 0 20px rgba(62, 255, 225, 0.45);
         }
 
         .login-btn {
             width: 100%;
-            background: var(--accent);
-            border: none;
-            color: #000;
-            font-family: 'Orbitron', monospace;
-            font-size: 1rem;
+            background: linear-gradient(180deg, #ffe278 0%, #d49100 100%);
+            border: 3px solid var(--arcade-gold);
+            color: #1a1200;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 12px;
             font-weight: bold;
-            padding: 12px;
+            padding: 14px;
             cursor: pointer;
-            letter-spacing: 2px;
-            transition: all 0.3s;
+            letter-spacing: 3px;
+            transition: transform 0.08s, box-shadow 0.15s;
+            box-shadow: 0 4px 0 #6a4a00, 0 0 18px rgba(255, 204, 51, 0.4);
         }
-
         .login-btn:hover {
-            box-shadow: 0 0 20px rgba(0,255,136,0.5);
-            transform: translateY(-2px);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 0 #6a4a00, 0 0 28px rgba(255, 204, 51, 0.7);
+        }
+        .login-btn:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 0 #6a4a00;
         }
 
         .error-message {
-            color: var(--danger);
-            font-size: 0.9rem;
-            margin-top: 15px;
+            color: var(--arcade-loss);
+            font-size: 9px;
+            letter-spacing: 1px;
+            margin-top: 16px;
             display: none;
+            text-shadow: 0 0 10px rgba(255, 56, 56, 0.6);
         }
-
-        .error-message.show {
-            display: block;
-        }
+        .error-message.show { display: block; }
 
         @media (max-width: 480px) {
-            .login-box {
-                padding: 30px 20px;
-            }
-
-            .login-title {
-                font-size: 2rem;
-                letter-spacing: 2px;
-            }
+            .login-box { padding: 28px 20px; }
+            .login-title { font-size: 18px; letter-spacing: 3px; }
+            .login-input, .login-btn { font-size: 11px; }
         }
     </style>
 </head>
 <body>
     <div class="login-container">
         <div class="login-box">
-            <div class="login-title">STRICT HOTEL</div>
-            <div class="login-subtitle">Password geschützt</div>
-            
+            <div class="login-title">STRICT <span class="login-title-accent">HOTEL</span></div>
+            <div class="login-subtitle">PASSWORD GESCHÜTZT</div>
+
             <form id="login-form">
-                <input 
-                    type="password" 
-                    class="login-input" 
-                    id="password" 
-                    placeholder="Passwort eingeben..." 
+                <input
+                    type="password"
+                    class="login-input"
+                    id="password"
+                    placeholder="passwort"
                     autocomplete="off"
                     autofocus
                 >
                 <button type="submit" class="login-btn">EINTRETEN</button>
-                <div class="error-message" id="error-message">❌ Falsches Passwort</div>
+                <div class="error-message" id="error-message">FALSCHES PASSWORT</div>
             </form>
         </div>
     </div>
@@ -137,24 +174,21 @@
             try {
                 const response = await fetch('/login', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ password }),
                 });
 
                 if (response.ok) {
-                    // Redirect to home page on success
                     window.location.href = '/';
                 } else {
-                    // Show error message
+                    errorMessage.textContent = 'FALSCHES PASSWORT';
                     errorMessage.classList.add('show');
                     passwordInput.value = '';
                     passwordInput.focus();
                 }
             } catch (error) {
                 console.error('Login error:', error);
-                errorMessage.textContent = '❌ Verbindungsfehler';
+                errorMessage.textContent = 'VERBINDUNGSFEHLER';
                 errorMessage.classList.add('show');
             }
         });
