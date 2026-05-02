@@ -237,11 +237,21 @@
 
         var currentTime = ytPlayer.getCurrentTime ? ytPlayer.getCurrentTime() : 0;
         var duration = ytPlayer.getDuration ? ytPlayer.getDuration() : 0;
-        var seekTime = duration > 0 ? Math.min(data.time, duration) : data.time;
+
+        // Drift correction: the leader's snapshot was taken at data.serverTime.
+        // While the message was in flight, the actual playback advanced by
+        // (Date.now() - data.serverTime) / 1000 seconds — so the corrected
+        // "true" time is data.time + that latency offset.
+        var inFlightSec = 0;
+        if (data.state === 'playing' && typeof data.serverTime === 'number') {
+            inFlightSec = Math.max(0, (Date.now() - data.serverTime) / 1000);
+        }
+        var targetTime = data.time + inFlightSec;
+        var seekTime = duration > 0 ? Math.min(targetTime, duration) : targetTime;
         var timeDiff = Math.abs(currentTime - seekTime);
 
-        // Only seek if drift > 2 seconds
-        if (timeDiff > 2) {
+        // Tighter threshold (1.5s) now that we account for network latency.
+        if (timeDiff > 1.5) {
             ytPlayer.seekTo(seekTime, true);
         }
 

@@ -41,15 +41,17 @@ export function registerWatchpartyHandlers(socket, io, deps) {
 
         const state = data.state === 'playing' ? 'playing' : 'paused';
         const time = typeof data.time === 'number' && isFinite(data.time) ? Math.max(0, data.time) : 0;
+        const now = Date.now();
 
         room.watchparty.state = state;
         room.watchparty.time = time;
-        room.watchparty.updatedAt = Date.now();
+        room.watchparty.updatedAt = now;
 
         socket.to(room.code).emit('watchparty-sync', {
             state,
             time,
-            updatedAt: room.watchparty.updatedAt
+            updatedAt: now,
+            serverTime: now
         });
 
         const player = room.players.find(p => p.socketId === socket.id);
@@ -65,13 +67,15 @@ export function registerWatchpartyHandlers(socket, io, deps) {
         if (!room || room.gameType !== 'watchparty') return;
         if (!room.watchparty || !room.watchparty.videoId) return;
 
+        const now = Date.now();
         room.watchparty.time = Math.max(0, time);
-        room.watchparty.updatedAt = Date.now();
+        room.watchparty.updatedAt = now;
 
         socket.to(room.code).emit('watchparty-sync', {
             state: room.watchparty.state,
             time: room.watchparty.time,
-            updatedAt: room.watchparty.updatedAt
+            updatedAt: now,
+            serverTime: now
         });
 
         console.log(`[WatchParty ${room.code}] Seek to ${time.toFixed(1)}s`);
