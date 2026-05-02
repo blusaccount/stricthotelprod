@@ -286,6 +286,10 @@
         }
     });
 
+    // Replace removed inline onclick="" handlers with proper listeners.
+    if (backBtn) backBtn.addEventListener('click', () => { location.href = '/nostalgiabait/'; });
+    if (replayBtn) replayBtn.addEventListener('click', () => location.reload());
+
     // Start render loop
     render();
 })();

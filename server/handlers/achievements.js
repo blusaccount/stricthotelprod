@@ -1,9 +1,4 @@
-import {
-    getCatalog,
-    listUnlocked,
-    listProgress,
-    bump
-} from '../achievements.js';
+import { getCatalog, listUnlocked, listProgress } from '../achievements.js';
 
 export function registerAchievementHandlers(socket, io, deps) {
     const { checkRateLimit, onlinePlayers } = deps;
@@ -37,7 +32,10 @@ export function registerAchievementHandlers(socket, io, deps) {
     } });
 }
 
-// Helper used by other handlers: emit unlock toasts to a player's socket(s).
+/**
+ * Broadcast unlock toasts to every connected socket of a given player. Imported
+ * by individual game handlers after they `bump()` a counter.
+ */
 export function notifyUnlocks(io, onlinePlayers, playerName, unlocks) {
     if (!unlocks || !unlocks.length) return;
     for (const [socketId, p] of onlinePlayers) {
@@ -46,35 +44,4 @@ export function notifyUnlocks(io, onlinePlayers, playerName, unlocks) {
             if (sock) sock.emit('achievement-unlocked', { unlocks });
         }
     }
-}
-
-// Factory: build the per-request achievement helper exposed via deps. Saves
-// every casino handler from importing both `bump` and `notifyUnlocks` and
-// from re-implementing the floor() rule for max_balance bumps.
-export function makeAchievementsHelper(io, onlinePlayers) {
-    return {
-        /** Bump a counter and broadcast any unlocks. Returns the unlocks array. */
-        async bumpAndNotify(playerName, counter, delta = 1, mode = 'add') {
-            if (!playerName) return [];
-            const unlocks = await bump(playerName, counter, delta, mode);
-            notifyUnlocks(io, onlinePlayers, playerName, unlocks);
-            return unlocks;
-        },
-        /** Convenience: max-balance bump with the canonical floor() rule. */
-        async bumpMaxBalance(playerName, balance) {
-            if (!playerName || typeof balance !== 'number' || !Number.isFinite(balance)) return [];
-            return this.bumpAndNotify(playerName, 'max_balance', Math.floor(balance), 'max');
-        },
-        /** Bump multiple counters and broadcast all unlocks together. */
-        async bumpManyAndNotify(playerName, bumps) {
-            if (!playerName) return [];
-            const all = [];
-            for (const [counter, delta = 1, mode = 'add'] of bumps) {
-                if (counter == null) continue;
-                all.push(...await bump(playerName, counter, delta, mode));
-            }
-            notifyUnlocks(io, onlinePlayers, playerName, all);
-            return all;
-        }
-    };
 }

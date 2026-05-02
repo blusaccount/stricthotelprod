@@ -181,6 +181,14 @@ html, body {
     outline: none;
 }
 
+/* Error-screen back button — anchor styled as ctrl-btn, with extra space
+   above the surrounding error text. */
+.ctrl-btn-error-back {
+    margin-top: 20px;
+    text-decoration: none;
+    display: inline-block;
+}
+
 /* Error fallback */
 #error-screen {
     position: fixed;

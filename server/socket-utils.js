@@ -112,6 +112,25 @@ export function emitBalanceUpdate(io, socketIdOrName, balance, opts) {
     }
 }
 
+/**
+ * Resolve the registered player object for a socket, or send `errorEvent`
+ * with `{ message: "Not logged in" }` and return null if the socket hasn't
+ * registered yet. Centralises the `if (!player || !player.name)` boilerplate
+ * that every game handler used to reinvent inconsistently.
+ *
+ * Usage:
+ *   const player = requirePlayer(socket, onlinePlayers, 'lol-bet-error');
+ *   if (!player) return;
+ */
+export function requirePlayer(socket, onlinePlayers, errorEvent = 'error') {
+    const player = onlinePlayers.get(socket.id);
+    if (!player || !player.name) {
+        socket.emit(errorEvent, { message: 'Not logged in' });
+        return null;
+    }
+    return player;
+}
+
 export function getSocketIp(socket) {
     const forwarded = socket?.handshake?.headers?.['x-forwarded-for'];
     if (typeof forwarded === 'string' && forwarded.trim()) {

@@ -15,7 +15,6 @@
     const inputName = $('input-name');
     const btnCreate = $('btn-create-character');
 
-    const STORAGE_KEY = 'stricthotel-character';
     let registered = false;
     
     // Make It Rain constants
@@ -298,18 +297,8 @@
         });
     }
 
-    // Re-fetch status when player registers (so the panel populates).
-    const _origRegister = registerPlayer;
-    function registerPlayerWithStreak() {
-        _origRegister();
-        // Slight delay so server has the player record.
-        setTimeout(fetchStreakStatus, 250);
-    }
-    // Hook into the existing register call sites by re-binding the references.
-    if (btnCreate && Creator) {
-        btnCreate.removeEventListener('click', null);
-        // Already wired, just trigger fetch on connect/load too.
-    }
+    // Pull a fresh streak snapshot whenever the socket comes online — that's
+    // the only point where the server has both auth and a registered player.
     socket.on('connect', () => { setTimeout(fetchStreakStatus, 400); });
 
     // ============= Friend-Presence Badges =============
