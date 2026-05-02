@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plinko</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌀</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/css/theme.css">
+    <link rel="stylesheet" href="plinko.css">
+</head>
+<body>
+    <div class="page">
+        <div class="header">
+            <a class="back-link" href="/games/casino/">CASINO</a>
+            <div class="title">PLINKO</div>
+            <div class="balance">Balance: <span id="balance-display">…</span> SC</div>
+        </div>
+
+        <div class="machine">
+            <div class="machine-left">
+                <div class="board-wrap">
+                    <canvas id="plinko-board" width="540" height="620"></canvas>
+                    <div class="multiplier-row" id="multiplier-row"></div>
+                    <div class="board-banner" id="board-banner" hidden>
+                        <div class="banner-mult" id="banner-mult">×0</div>
+                        <div class="banner-pay" id="banner-pay">+0 SC</div>
+                    </div>
+                </div>
+                <div class="status" id="status" data-kind="info">Choose a bet, risk, then drop.</div>
+            </div>
+
+            <div class="controls">
+                <div class="block">
+                    <div class="block-label">RISK</div>
+                    <div class="risk-row" id="risk-row">
+                        <button class="risk-btn" data-risk="low">LOW</button>
+                        <button class="risk-btn active" data-risk="medium">MEDIUM</button>
+                        <button class="risk-btn" data-risk="high">HIGH</button>
+                    </div>
+                </div>
+
+                <div class="block">
+                    <div class="block-label">BET</div>
+                    <div class="bets" id="bet-grid">
+                        <button class="bet-btn" data-bet="2">2</button>
+                        <button class="bet-btn" data-bet="5">5</button>
+                        <button class="bet-btn" data-bet="10">10</button>
+                        <button class="bet-btn" data-bet="15">15</button>
+                        <button class="bet-btn" data-bet="20">20</button>
+                        <button class="bet-btn" data-bet="50">50</button>
+                    </div>
+                </div>
+
+                <button id="drop-btn" class="drop-btn" disabled>DROP</button>
+
+                <div class="audio-row">
+                    <button id="sound-toggle" class="aux-btn" type="button">SOUND: ON</button>
+                </div>
+
+                <div class="payouts">
+                    <h2>PAYOUT MULTIPLIERS</h2>
+                    <div class="paytable-grid" id="paytable-grid"></div>
+                    <div class="paytable-footnote">12 rows · 13 buckets · ~96% RTP</div>
+                </div>
+
+                <div class="spin-history" id="spin-history">
+                    <h2>RECENT DROPS</h2>
+                    <div id="history-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">Server-side ball physics · house rules apply</div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/shared/js/socket-init.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html>

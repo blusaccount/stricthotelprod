@@ -16,6 +16,8 @@ import { registerSoundboardHandlers } from './handlers/soundboard.js';
 import { registerStrictClubHandlers, cleanupClubOnDisconnect } from './handlers/strict-club.js';
 import { registerLoopMachineHandlers, cleanupLoopOnDisconnect } from './handlers/loop-machine.js';
 import { registerStrictly7sHandlers } from './handlers/strictly7s.js';
+import { registerPlinkoHandlers } from './handlers/plinko.js';
+import { registerCrashHandlers, startCrashLoop } from './handlers/crash.js';
 import { registerWatchpartyHandlers } from './handlers/watchparty.js';
 import { registerTierlistHandlers, cleanupTierlistOnDisconnect } from './handlers/tierlist.js';
 
@@ -25,6 +27,7 @@ const rateLimiters = new Map(); // socketId -> { count, resetTime }
 const rateLimitersIp = new Map(); // ip -> { count, resetTime }
 const stockTradeCooldown = new Map(); // socketId -> timestamp
 const strictly7sSpinCooldown = new Map(); // socketId -> timestamp
+const plinkoDropCooldown = new Map(); // socketId -> timestamp
 
 function checkRateLimit(socketOrId, maxPerSecond = 10) {
     const now = Date.now();
@@ -69,6 +72,14 @@ function checkStrictly7sCooldown(socketId, minIntervalMs = 1200) {
     return true;
 }
 
+function checkPlinkoCooldown(socketId, minIntervalMs = 600) {
+    const now = Date.now();
+    const lastDropAt = plinkoDropCooldown.get(socketId) || 0;
+    if (now - lastDropAt < minIntervalMs) return false;
+    plinkoDropCooldown.set(socketId, now);
+    return true;
+}
+
 export function cleanupRateLimiters() {
     const now = Date.now();
     for (const [id, entry] of rateLimiters) {
@@ -85,14 +96,21 @@ export function cleanupRateLimiters() {
     for (const [id, timestamp] of strictly7sSpinCooldown) {
         if (timestamp < cooldownStaleThreshold) strictly7sSpinCooldown.delete(id);
     }
+    for (const [id, timestamp] of plinkoDropCooldown) {
+        if (timestamp < cooldownStaleThreshold) plinkoDropCooldown.delete(id);
+    }
     cleanupStockQuoteCache();
 }
 
 export function registerSocketHandlers(io, { fetchTickerQuotes, getYahooFinance, isStockGameEnabled = true } = {}) {
+    // Start the global Crash round loop once for the entire server.
+    startCrashLoop(io);
+
     const deps = {
         checkRateLimit,
         checkStockTradeCooldown,
         checkStrictly7sCooldown,
+        checkPlinkoCooldown,
         rooms,
         onlinePlayers,
         socketToRoom,
@@ -117,6 +135,8 @@ export function registerSocketHandlers(io, { fetchTickerQuotes, getYahooFinance,
         registerStrictClubHandlers(socket, io, deps);
         registerLoopMachineHandlers(socket, io, deps);
         registerStrictly7sHandlers(socket, io, deps);
+        registerPlinkoHandlers(socket, io, deps);
+        registerCrashHandlers(socket, io, deps);
         registerWatchpartyHandlers(socket, io, deps);
         registerTierlistHandlers(socket, io, deps);
 
@@ -124,6 +144,7 @@ export function registerSocketHandlers(io, { fetchTickerQuotes, getYahooFinance,
             rateLimiters.delete(socket.id);
             stockTradeCooldown.delete(socket.id);
             strictly7sSpinCooldown.delete(socket.id);
+            plinkoDropCooldown.delete(socket.id);
 
             cleanupPictochatOnDisconnect(socket.id, io);
             cleanupClubOnDisconnect(socket.id, io);
