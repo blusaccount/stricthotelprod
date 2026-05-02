@@ -64,6 +64,27 @@ async function getOrCreatePlayerBalance(playerName, client = null) {
     return Number(result.rows[0].balance);
 }
 
+/**
+ * Returns true if this is the player's first time being registered (no row
+ * existed before). Used by the activity feed to welcome new arrivals.
+ *
+ * Memory-mode: reports "new" when we haven't seen the name yet this process —
+ * good enough for dev/test, since memory mode loses state on restart anyway.
+ */
+const memorySeenPlayers = new Set();
+export async function isNewPlayer(playerName) {
+    if (!isDatabaseEnabled()) {
+        if (memorySeenPlayers.has(playerName)) return false;
+        memorySeenPlayers.add(playerName);
+        return true;
+    }
+    const result = await query(
+        'select 1 from players where name = $1 limit 1',
+        [playerName]
+    );
+    return result.rowCount === 0;
+}
+
 export async function getBalance(playerName, client = null) {
     if (!isDatabaseEnabled()) {
         return getBalanceMemory(playerName);
@@ -79,6 +100,7 @@ export async function addBalance(playerName, amount, reason = 'adjustment', meta
         const current = await getBalanceMemory(playerName);
         const newBalance = normalizeMoney(current + amount);
         balances.set(playerName, newBalance);
+        maybeAnnounceBalanceMilestone(playerName, current, newBalance);
         return newBalance;
     }
 
@@ -95,6 +117,14 @@ export async function addBalance(playerName, amount, reason = 'adjustment', meta
 async function _addBalanceDB(playerName, amount, reason, metadata, client) {
     await getOrCreatePlayerBalance(playerName, client);
 
+    // Read prior balance so callers can detect milestone crossings (e.g. for
+    // the activity feed). Cheap inside the same transaction.
+    const before = await client.query(
+        'select balance from players where name = $1 limit 1',
+        [playerName]
+    );
+    const previousBalance = before.rows[0] ? Number(before.rows[0].balance) : 0;
+
     const updated = await client.query(
         'update players set balance = round((balance + $1)::numeric, 2), updated_at = now() where name = $2 returning id, balance',
         [amount, playerName]
@@ -109,7 +139,29 @@ async function _addBalanceDB(playerName, amount, reason, metadata, client) {
         [row.id, amount, reason, metadata]
     );
 
-    return Number(row.balance);
+    const newBalance = Number(row.balance);
+    maybeAnnounceBalanceMilestone(playerName, previousBalance, newBalance);
+    return newBalance;
+}
+
+const BALANCE_MILESTONES = [10000, 25000, 50000, 100000, 250000, 500000, 1000000];
+function maybeAnnounceBalanceMilestone(playerName, prev, next) {
+    if (!Number.isFinite(prev) || !Number.isFinite(next) || next <= prev) return;
+    for (const m of BALANCE_MILESTONES) {
+        if (prev < m && next >= m) {
+            // Lazy import to avoid a circular dep between currency and the feed.
+            import('./activity-feed.js').then(({ pushActivity }) => {
+                pushActivity({
+                    type: 'balance_milestone', player: playerName,
+                    text: `Crossed ${m.toLocaleString('en-US')} SC in their wallet`,
+                    icon: m >= 100000 ? '💰' : '🪙',
+                    color: m >= 100000 ? 'magenta' : 'gold',
+                    meta: { milestone: m, balance: next }
+                });
+            }).catch(() => {});
+            break; // Only announce the highest crossed in one call.
+        }
+    }
 }
 
 export async function deductBalance(playerName, amount, reason = 'adjustment', metadata = null, client = null) {

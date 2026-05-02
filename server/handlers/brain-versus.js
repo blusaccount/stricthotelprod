@@ -7,6 +7,7 @@ import {
 } from '../brain-leaderboards.js';
 import { addBalance } from '../currency.js';
 import { bump } from '../achievements.js';
+import { pushActivity } from '../activity-feed.js';
 import {
     generateRoomCode,
     rooms,
@@ -138,7 +139,19 @@ export function registerBrainVersusHandlers(socket, io, deps) {
                     const s = Number(g.score);
                     const maxScore = g.gameId === 'reaction' ? 10000 : 100;
                     if (Number.isFinite(s) && s >= 0 && s <= maxScore) {
-                        await updateGameLeaderboard(g.gameId, name, s);
+                        const res = await updateGameLeaderboard(g.gameId, name, s);
+                        // Only celebrate when there's a previous score to beat — first
+                        // submissions aren't a "personal best" worth feed real estate.
+                        if (res?.isPersonalBest && res.previousBest !== null) {
+                            const isReactionMs = g.gameId === 'reaction';
+                            const formatted = isReactionMs ? `${Math.round(s)}ms` : `${Math.round(s)}`;
+                            pushActivity({
+                                type: 'brain_personal_best', player: name,
+                                text: `New personal best on Strict Brain (${g.gameId}): ${formatted}`,
+                                icon: '🧠', color: 'cyan',
+                                meta: { game: 'strictbrain', gameId: g.gameId, score: s, previousBest: res.previousBest }
+                            });
+                        }
                     }
                 }
             }

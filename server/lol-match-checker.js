@@ -5,6 +5,7 @@ import { addBalance } from './currency.js';
 import { getMatchHistory, getMatchDetails, isRiotApiEnabled, validateRiotId, getRiotApiDisabledReason } from './riot-api.js';
 import { withTransaction } from './db.js';
 import { bump } from './achievements.js';
+import { pushActivity } from './activity-feed.js';
 
 let io = null;
 let isRunning = false;
@@ -205,6 +206,16 @@ async function resolveBetAndNotify(bet, didPlayerWin, matchId) {
         // Achievement bump on win
         if (wonBet) {
             bump(bet.playerName, 'lol_wins', 1).catch(() => {});
+        }
+
+        // Activity feed: only push wins (losses would just spam the feed).
+        if (wonBet && payout > 0) {
+            pushActivity({
+                type: 'lol_bet_won', player: bet.playerName,
+                text: `Won ${payout} SC on ${bet.lolUsername}'s match`,
+                icon: '🏆', color: payout >= 1000 ? 'magenta' : 'gold',
+                meta: { game: 'lol-betting', amount: payout, lolUsername: bet.lolUsername, betOnWin: bet.betOnWin }
+            });
         }
 
         console.log(`[LoL Bet Resolved] ${bet.playerName} ${wonBet ? 'won' : 'lost'} ${wonBet ? payout : bet.amount} SC on ${bet.lolUsername} (match: ${matchId})`);

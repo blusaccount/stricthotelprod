@@ -81,33 +81,42 @@ export async function updateBrainAgeLeaderboard(playerName, brainAge) {
     });
 }
 
+/**
+ * Record a brain game score. Returns { isPersonalBest, previousBest } so callers
+ * can announce new PBs (e.g. on the activity feed). For reaction games, lower
+ * score wins; for everything else, higher wins.
+ */
 export async function updateGameLeaderboard(gameId, playerName, score) {
-    if (!VALID_BRAIN_GAME_IDS.includes(gameId)) return;
-    if (typeof playerName !== 'string' || !playerName) return;
-    if (!Number.isFinite(score)) return;
+    if (!VALID_BRAIN_GAME_IDS.includes(gameId)) return { isPersonalBest: false, previousBest: null };
+    if (typeof playerName !== 'string' || !playerName) return { isPersonalBest: false, previousBest: null };
+    if (!Number.isFinite(score)) return { isPersonalBest: false, previousBest: null };
+
+    const lowerWins = isReaction(gameId);
+    const beats = (next, prev) => prev === null || prev === undefined
+        ? true
+        : (lowerWins ? next < prev : next > prev);
 
     if (!isDatabaseEnabled()) {
         const board = gameLeaderboardsMemory[gameId];
-        const current = board.get(playerName);
-        if (current === undefined) {
-            board.set(playerName, score);
-            pruneMemoryBoard(board, gameId);
-            return;
-        }
-        if (isReaction(gameId)) {
-            if (score < current) board.set(playerName, score);
-        } else if (score > current) {
-            board.set(playerName, score);
-        }
+        const current = board.has(playerName) ? board.get(playerName) : null;
+        const isPB = beats(score, current);
+        if (isPB) board.set(playerName, score);
         pruneMemoryBoard(board, gameId);
-        return;
+        return { isPersonalBest: isPB, previousBest: current };
     }
 
-    await withTransaction(async (client) => {
+    return await withTransaction(async (client) => {
         const playerId = await getOrCreatePlayerId(playerName, client);
-        if (!playerId) return;
+        if (!playerId) return { isPersonalBest: false, previousBest: null };
 
-        if (isReaction(gameId)) {
+        const existing = await client.query(
+            `select best_score from brain_game_leaderboards where player_id = $1 and game_id = $2`,
+            [playerId, gameId]
+        );
+        const previousBest = existing.rowCount ? Number(existing.rows[0].best_score) : null;
+        const isPB = beats(score, previousBest);
+
+        if (lowerWins) {
             await client.query(
                 `insert into brain_game_leaderboards (player_id, game_id, best_score)
                  values ($1, $2, $3)
@@ -126,6 +135,7 @@ export async function updateGameLeaderboard(gameId, playerName, score) {
                 [playerId, gameId, score]
             );
         }
+        return { isPersonalBest: isPB, previousBest };
     });
 }
 

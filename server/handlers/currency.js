@@ -1,5 +1,5 @@
 import { sanitizeName, validateCharacter, validateGameType, emitBalanceUpdate, emitToUser, userRoom } from '../socket-utils.js';
-import { getBalance, addBalance, deductBalance, getDiamonds, buyDiamonds } from '../currency.js';
+import { getBalance, addBalance, deductBalance, getDiamonds, buyDiamonds, isNewPlayer } from '../currency.js';
 import { broadcastOnlinePlayers } from '../room-manager.js';
 import { saveCharacter, getCharacter } from '../character-store.js';
 import { bump } from '../achievements.js';
@@ -21,6 +21,10 @@ export function registerCurrencyHandlers(socket, io, { checkRateLimit, onlinePla
         const prev = onlinePlayers.get(socket.id);
         if (prev && prev.name && prev.name !== name) socket.leave(userRoom(prev.name));
 
+        // Detect first-ever registration BEFORE we ensure the player row exists
+        // (getBalance below auto-creates it).
+        const firstTime = await isNewPlayer(name);
+
         onlinePlayers.set(socket.id, { name, character, game });
         socket.join(userRoom(name));
         broadcastOnlinePlayers(io);
@@ -32,7 +36,16 @@ export function registerCurrencyHandlers(socket, io, { checkRateLimit, onlinePla
         // this user, so the shell + the iframe stay in sync).
         emitToUser(io, name, 'balance-update', { balance: await getBalance(name) });
 
-        console.log(`Registered: ${name} for ${game}`);
+        if (firstTime) {
+            pushActivity({
+                type: 'first_login', player: name,
+                text: 'Just checked into the hotel for the first time',
+                icon: '👋', color: 'cyan',
+                meta: { game: 'lobby' }
+            });
+        }
+
+        console.log(`Registered: ${name} for ${game}${firstTime ? ' (first time)' : ''}`);
     } catch (err) { console.error('register-player error:', err.message); } });
 
     // --- Get Player Diamonds (for contacts list, by name) ---
@@ -119,6 +132,19 @@ export function registerCurrencyHandlers(socket, io, { checkRateLimit, onlinePla
         unlocks.push(...await bump(player.name, 'diamond_purchases', count));
         unlocks.push(...await bump(player.name, 'diamonds_owned', result.diamonds, 'max'));
         notifyUnlocks(io, onlinePlayers, player.name, unlocks);
+
+        // Activity feed: only push for purchases of 5+ diamonds (≥1000 SC) to
+        // keep the feed signal-to-noise high.
+        if (count >= 5) {
+            pushActivity({
+                type: 'shop_purchase', player: player.name,
+                text: count >= 25
+                    ? `Bought a glittering ${count} diamonds`
+                    : `Bought ${count} diamonds in the shop`,
+                icon: '💎', color: count >= 25 ? 'magenta' : 'cyan',
+                meta: { game: 'shop', diamonds: count, totalDiamonds: result.diamonds }
+            });
+        }
     } catch (err) { console.error('buy-diamonds error:', err.message); } });
 
     // --- Make It Rain Effect ---
