@@ -5,7 +5,6 @@ WORKDIR /app
 RUN apk add --no-cache curl
 
 COPY package*.json ./
-COPY bot/scripts ./bot/scripts
 RUN npm ci --omit=dev
 
 COPY . .

@@ -3,7 +3,4 @@ node_modules/
 .DS_Store
 *.log
 .claude/
-yt-dlp
-yt-dlp.exe
 userinput/
-node_modules/

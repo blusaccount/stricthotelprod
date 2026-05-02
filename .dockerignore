@@ -6,8 +6,6 @@ npm-debug.log
 coverage
 *.local
 .env
-yt-dlp
-yt-dlp.exe
 userinput/
 HANDOFF.md
 PLANS.md

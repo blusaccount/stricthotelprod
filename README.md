@@ -18,7 +18,6 @@ StrictHotel is an experimental minigame collection in a **neal.fun-inspired** st
 - **Public UI**: [public](public) - Landing page, login, lobby, contacts, shop
 - **Games**: [games](games) - 9 game frontends (Mäxchen, Watchparty, Stocks, Strictly7s, Loop Machine, LoL Betting, StrictBrain, Turkish, Shopping)
 - **Shared**: [shared](shared) - Reusable client modules (chat, lobby, avatars, creator, CSS, audio)
-- **Bot**: [bot](bot) - Discord bot with voice commands (optional)
 
 ## LLM Agent Notes
 When LLM agents work in this repo, use these files:
@@ -52,7 +51,6 @@ Server runs at `http://localhost:3000`.
    ```
 
 ### Troubleshooting
-- **Bot not starting**: ensure `DISCORD_TOKEN` is set in `.env`.
 - **Database errors**: verify `DATABASE_URL` format and DB network access.
 - **Port already in use**: change host mapping in `docker-compose.yml` (left side of `3000:3000`).
 
@@ -63,10 +61,6 @@ See `.env.example` for all available options. Key variables:
 - `SESSION_SECRET` - Session encryption key (required in production)
 - `SITE_PASSWORD` - Login password (default: ADMIN)
 - `DATABASE_URL` - PostgreSQL connection string (optional, uses in-memory fallback if not set)
-
-**Discord Bot (Optional):**
-- `DISCORD_TOKEN` - Bot token for Discord integration
-- `CLIENT_ID`, `GUILD_ID` - Discord application IDs
 
 **Features:**
 - `GAME_ENABLED` (default: `true`) - Toggles stock market APIs and socket events
@@ -84,7 +78,7 @@ See `.env.example` for all available options. Key variables:
 
 **Single-Player Games:**
 - 📈 **Stock Market** - Real-time stock trading with leaderboards
-- 🎰 **Strictly7s** - Slot machine with 89.78% RTP
+- 🎰 **Strictly7s 2.0** - 5×3 slot machine, 10 paylines, expanding wilds, free spins (96% RTP)
 - 🎹 **Loop Machine** - 16-step sequencer with 14 instruments (including 808s)
 - ⚔️ **LoL Betting** - Bet on League of Legends player outcomes
 - 🇹🇷 **Türkçe** - Turkish language learning game

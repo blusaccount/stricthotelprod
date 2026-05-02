@@ -21,7 +21,7 @@ Ziel: In kleinen, risikoarmen Schritten von der aktuellen Codebase zu einem verk
 - Node Runtime + Start Command in Docker sauber definieren.
 - `docker compose up -d` als Standardpfad dokumentieren.
 - Pflicht-Variablen in `.env.example` mit Kommentaren bereitstellen:
-  - `DISCORD_BOT_TOKEN`, `DATABASE_URL`, `PORT`
+  - `DATABASE_URL`, `PORT`
   - `GAME_ENABLED`, `GAME_START_BALANCE`, `GAME_PRICE_TICK_SECONDS`
   - `LICENSE_KEY`, `LICENSE_MODE`
 - Troubleshooting-Miniblock in `README.md` (Bot offline, DB nicht erreichbar, Port belegt).

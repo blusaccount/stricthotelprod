@@ -18,7 +18,6 @@ async function getYahooFinance() {
 
 import { rooms, onlinePlayers } from './room-manager.js';
 import { registerSocketHandlers } from './socket-handlers.js';
-import { startDiscordBot } from './discord-bot.js';
 import { initSchema } from './db.js';
 import { startMatchChecker, stopMatchChecker } from './lol-match-checker.js';
 
@@ -129,13 +128,6 @@ server.listen(PORT, async () => {
         startMatchChecker(io);
     } catch (err) {
         console.error('LoL Match Checker error:', err.message);
-    }
-
-    // Discord Bot starten
-    try {
-        await startDiscordBot(rootDir);
-    } catch (err) {
-        console.error('Discord Bot Fehler:', err.message);
     }
 });
 
