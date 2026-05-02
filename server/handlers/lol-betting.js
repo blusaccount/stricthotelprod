@@ -1,3 +1,5 @@
+import { timingSafeEqual } from 'crypto';
+import { getSocketIp } from '../socket-utils.js';
 import { placeBet, getActiveBets, getPlayerBets, resolveBet } from '../lol-betting.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
@@ -6,6 +8,34 @@ import { manualCheckBetStatus, scheduleBetTimeout } from '../lol-match-checker.j
 import { getBalance, deductBalance, addBalance } from '../currency.js';
 import { emitBalanceUpdate } from '../socket-utils.js';
 import { isDatabaseEnabled, withTransaction } from '../db.js';
+
+// Per-IP backoff for the admin-resolve endpoint. Each failure doubles the
+// next-allowed timestamp (1s → 2s → 4s … capped at 5 min). Successful
+// authorisations clear the entry. Maps grow only with attackers, so memory
+// is bounded by the rate-limiter cleanup loop in socket-handlers.js.
+const adminAuthBackoff = new Map(); // ip → { nextAllowedAt, fails }
+
+function checkAdminBackoff(ip) {
+    const entry = adminAuthBackoff.get(ip);
+    if (!entry) return true;
+    return Date.now() >= entry.nextAllowedAt;
+}
+function bumpAdminBackoff(ip) {
+    const entry = adminAuthBackoff.get(ip) || { fails: 0, nextAllowedAt: 0 };
+    entry.fails += 1;
+    const delay = Math.min(300_000, 1000 * Math.pow(2, entry.fails));
+    entry.nextAllowedAt = Date.now() + delay;
+    adminAuthBackoff.set(ip, entry);
+}
+function clearAdminBackoff(ip) { adminAuthBackoff.delete(ip); }
+
+function safeStringEqual(a, b) {
+    if (typeof a !== 'string' || typeof b !== 'string') return false;
+    const ab = Buffer.from(a, 'utf8');
+    const bb = Buffer.from(b, 'utf8');
+    if (ab.length !== bb.length) return false;
+    return timingSafeEqual(ab, bb);
+}
 
 export function registerLolBettingHandlers(socket, io, deps) {
     const { checkRateLimit, onlinePlayers } = deps;
@@ -257,16 +287,24 @@ export function registerLolBettingHandlers(socket, io, deps) {
             return;
         }
 
-        // Admin permission check: require ADMIN_PASSWORD env var
+        // Admin permission check: require ADMIN_PASSWORD env var, with
+        // per-IP exponential back-off and a constant-time string compare.
         const adminPassword = process.env.ADMIN_PASSWORD;
         if (!adminPassword) {
             socket.emit('lol-bet-error', { message: 'Admin actions are not configured' });
             return;
         }
-        if (typeof data.adminPassword !== 'string' || data.adminPassword !== adminPassword) {
+        const ip = getSocketIp(socket);
+        if (!checkAdminBackoff(ip)) {
+            socket.emit('lol-bet-error', { message: 'Too many attempts, slow down' });
+            return;
+        }
+        if (!safeStringEqual(data?.adminPassword, adminPassword)) {
+            bumpAdminBackoff(ip);
             socket.emit('lol-bet-error', { message: 'Unauthorized: invalid admin credentials' });
             return;
         }
+        clearAdminBackoff(ip);
 
         const { betId, didPlayerWin } = data;
 

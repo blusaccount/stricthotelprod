@@ -39,8 +39,9 @@ function dropBall() {
 }
 
 function evaluate(bucket, risk, bet) {
+    // Floor (not round) so the house never gives away fractional SC.
     const multiplier = PAYTABLE[risk][bucket];
-    return Math.round(bet * multiplier);
+    return Math.floor(bet * multiplier);
 }
 
 export function registerPlinkoHandlers(socket, io, deps) {

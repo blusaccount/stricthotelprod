@@ -365,7 +365,7 @@
             if (p.isHost) badges += '<span class="badge badge-host">HOST</span>';
             if (p.name === state.playerName) badges += '<span class="badge badge-you">DU</span>';
 
-            item.innerHTML = `<span class="player-avatar">${avatarHtml}</span><span>${p.name}</span>${badges}`;
+            item.innerHTML = `<span class="player-avatar">${avatarHtml}</span><span>${escapeHtml(p.name)}</span>${badges}`;
             list.appendChild(item);
         });
     }

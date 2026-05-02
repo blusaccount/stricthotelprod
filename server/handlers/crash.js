@@ -203,7 +203,8 @@ async function resolveCashout(playerName, atMultiplier, isAuto = false) {
     const b = round.bets.get(playerName);
     if (!b || b.cashedAt) return null;
     const m = +atMultiplier.toFixed(4);
-    const payout = Math.round(b.bet * m);
+    // Floor (not round) so the house never gives away fractional SC.
+    const payout = Math.floor(b.bet * m);
     b.cashedAt = m;
     b.payout = payout;
     b.isAuto = isAuto;
@@ -291,9 +292,21 @@ export function registerCrashHandlers(socket, io, deps) {
             }
             autoCashout = +a.toFixed(2);
         }
+        // Capture the round id so we can detect a state transition that
+        // happened during the deductBalance await (betting → running). Without
+        // this check the bet would land in an already-running round.
+        const placedInRoundId = round.id;
+
         const balanceAfterBet = await deductBalance(player.name, bet, 'crash_bet', { bet, autoCashout });
         if (balanceAfterBet === null) {
             socket.emit('crash-error', { message: 'Not enough coins' });
+            return;
+        }
+        // Refund + bail if the round flipped while we were deducting.
+        if (round.state !== 'betting' || round.id !== placedInRoundId) {
+            await addBalance(player.name, bet, 'crash_bet_refund_state_race', { bet, originalRound: placedInRoundId });
+            socket.emit('crash-error', { message: 'Betting closed before bet was confirmed' });
+            socket.emit('balance-update', { balance: balanceAfterBet + bet });
             return;
         }
         round.bets.set(player.name, {

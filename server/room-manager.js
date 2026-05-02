@@ -191,11 +191,16 @@ export async function removePlayerFromRoom(io, socketId, room) {
         const leavingBet = room.bets[socketId] || 0;
         delete room.bets[socketId];
 
-        // Refund pre-deducted bet if game hasn't started
+        // Refund pre-deducted bet if game hasn't started. Awaited so the
+        // subsequent broadcast reflects the final state — earlier this was
+        // fire-and-forget which could leave the wallet/broadcast inconsistent
+        // when the DB write failed.
         if (leavingBet > 0 && !room.game) {
-            addBalance(playerName, leavingBet, 'maexchen_bet_refund', { roomCode: room.code }).catch(err => {
+            try {
+                await addBalance(playerName, leavingBet, 'maexchen_bet_refund', { roomCode: room.code });
+            } catch (err) {
                 console.error('bet refund error:', err.message);
-            });
+            }
         }
 
         const anyBets = room.players.some(p => (room.bets[p.socketId] || 0) > 0);

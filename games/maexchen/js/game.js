@@ -5,6 +5,13 @@
 (function() {
     const { socket, $, showScreen, state } = window.MaexchenApp;
 
+    function escapeHtml(s) {
+        const d = document.createElement('div');
+        d.textContent = String(s == null ? '' : s);
+        return d.innerHTML;
+    }
+
+
     // Game constants
     const ROLL_ORDER = [
         31, 32, 41, 42, 43, 51, 52, 53, 54, 61, 62, 63, 64, 65,
@@ -485,7 +492,7 @@
         const prevBox = $('prev-announce-box');
         if (canChallenge) {
             prevBox.style.display = 'block';
-            prevBox.innerHTML = `<span>${previousAnnouncement.playerName}</span> sagt: <strong>${previousAnnouncement.valueName}</strong>`;
+            prevBox.innerHTML = `<span>${escapeHtml(previousAnnouncement.playerName)}</span> sagt: <strong>${escapeHtml(previousAnnouncement.valueName)}</strong>`;
         } else {
             prevBox.style.display = 'none';
         }
@@ -578,7 +585,7 @@
                     ? '<span class="hearts">&#9829;</span>'
                     : '<span class="hearts heart-lost">&#9829;</span>';
             }
-            div.innerHTML = `<span class="player-avatar">${avatar}</span><span>${p.name}</span> ${hearts}`;
+            div.innerHTML = `<span class="player-avatar">${avatar}</span><span>${escapeHtml(p.name)}</span> ${hearts}`;
             container.appendChild(div);
         });
     }
