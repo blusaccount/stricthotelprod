@@ -13,7 +13,6 @@ import { registerStocksHandlers, cleanupStockQuoteCache } from './handlers/stock
 import { registerLolBettingHandlers } from './handlers/lol-betting.js';
 import { registerPictochatHandlers, cleanupPictochatOnDisconnect } from './handlers/pictochat.js';
 import { registerSoundboardHandlers } from './handlers/soundboard.js';
-import { registerStrictClubHandlers, cleanupClubOnDisconnect } from './handlers/strict-club.js';
 import { registerLoopMachineHandlers, cleanupLoopOnDisconnect } from './handlers/loop-machine.js';
 import { registerStrictly7sHandlers } from './handlers/strictly7s.js';
 import { registerPlinkoHandlers } from './handlers/plinko.js';
@@ -142,7 +141,6 @@ export function registerSocketHandlers(io, { fetchTickerQuotes, getYahooFinance,
         registerLolBettingHandlers(socket, io, deps);
         registerPictochatHandlers(socket, io, deps);
         registerSoundboardHandlers(socket, io, deps);
-        registerStrictClubHandlers(socket, io, deps);
         registerLoopMachineHandlers(socket, io, deps);
         registerStrictly7sHandlers(socket, io, deps);
         registerPlinkoHandlers(socket, io, deps);
@@ -166,7 +164,6 @@ export function registerSocketHandlers(io, { fetchTickerQuotes, getYahooFinance,
             cleanupLobbyWatchpartyOnDisconnect(socket.id);
 
             cleanupPictochatOnDisconnect(socket.id, io);
-            cleanupClubOnDisconnect(socket.id, io);
             cleanupLoopOnDisconnect(socket.id, io);
             cleanupTierlistOnDisconnect(socket.id, io);
 

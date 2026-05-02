@@ -81,7 +81,6 @@ const APP_ROUTES = [
     /^\/shop\.html$/,
     /^\/contacts\.html$/,
     /^\/achievements\.html$/,
-    /^\/strict-club\//,
     /^\/nostalgiabait/
 ];
 app.use((req, res, next) => {

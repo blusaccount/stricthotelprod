@@ -47,7 +47,6 @@
     function gameTokenFromPath(p) {
         const m = p.match(/^\/games\/([^\/?#]+)/);
         if (m) return m[1];
-        if (p.startsWith('/strict-club')) return 'strict-club';
         if (p === '/shop.html') return 'shop';
         if (p === '/achievements.html') return 'achievements';
         return null;
