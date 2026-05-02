@@ -1,0 +1,107 @@
+/* ============================================================================
+ * Neon Arcade override for legacy DS-themed game pages.
+ *
+ * Loaded AFTER a page's own stylesheet, this file remaps the page's existing
+ * `--ds-*` tokens onto the canonical `--arcade-*` palette (defined in
+ * shared/css/theme.css) and replaces the body backdrop with the dark neon
+ * gradient + CRT scanlines used by the casino games.
+ *
+ * Result: the page's existing layout, font, and structure are preserved, but
+ * colours and atmosphere match the rest of the arcade.
+ * ========================================================================= */
+
+:root,
+[data-theme="dark"] {
+    --ds-bg:            #07040d;
+    --ds-surface:       #15101e;
+    --ds-border:        #d7d7d7;
+    --ds-text:          #f6f6f6;
+    --ds-text-dim:      #9a8db0;
+    --ds-highlight:     #2c2240;
+    --ds-positive:      #7cff8b;
+    --ds-negative:      #ff6a7a;
+    --ds-accent:        #3effe1;
+    --ds-gold:          #ffcc33;
+    --ds-divider:       #2c2240;
+    --ds-divider-light: #1a1426;
+    --ds-overlay:       rgba(0, 0, 0, 0.78);
+}
+
+body {
+    background:
+        radial-gradient(circle at 20% 0%, rgba(255, 62, 165, 0.10) 0%, transparent 45%),
+        radial-gradient(circle at 80% 100%, rgba(62, 255, 225, 0.08) 0%, transparent 45%),
+        radial-gradient(circle at top, var(--arcade-bg-1, #1c0e2e) 0%, var(--arcade-bg-2, #07040d) 70%) !important;
+    color: var(--ds-text);
+    image-rendering: pixelated;
+}
+
+/* CRT scanlines on top of everything (theme.css already has a similar
+ * green-tinted overlay; this one uses the neutral dark scanline pattern
+ * the casino games use). */
+body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(180deg, transparent 0, transparent 2px, rgba(0, 0, 0, 0.18) 2px, rgba(0, 0, 0, 0.18) 3px);
+    mix-blend-mode: multiply;
+    opacity: 0.45;
+    z-index: 1000;
+    animation: none;
+}
+
+/* Generic title glow — applies to common title classes used across the
+ * legacy games. Specific pages can layer additional rules on top. */
+.stock-title,
+.brain-title,
+.lol-title,
+.shop-title,
+.game-title-bar,
+.section-title {
+    text-shadow: 0 2px 0 #000, 0 0 14px rgba(255, 204, 51, 0.4), 0 0 28px rgba(255, 62, 165, 0.25);
+}
+
+/* Gold-tinted titles — Stocks and LoL Betting feel right with gold. */
+.stock-title { color: var(--arcade-gold) !important; }
+
+/* Cyan title — Strict Brain feels educational/scientific. */
+.brain-title { color: var(--arcade-cyan) !important; }
+
+/* Magenta title — LoL Betting maps well to esports magenta. */
+.lol-title { color: var(--arcade-magenta) !important; }
+
+/* Soft outer glow on cards / panels that use --ds-surface as background. */
+.stock-card,
+.section,
+.summary-card,
+.holdings-table,
+.event-card,
+.menu-btn,
+.bet-card,
+.bet-section,
+.test-card,
+.versus-card,
+.results-card,
+.lobby-card {
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+/* Hover lift for clickable game-card-shaped elements. */
+.menu-btn:hover:not(:disabled):not([data-locked="true"]),
+.stock-card:hover {
+    border-color: var(--arcade-gold);
+    box-shadow: 0 0 0 1px rgba(255, 204, 51, 0.25), 0 10px 24px rgba(255, 204, 51, 0.25);
+}
+
+/* Back link — the ".back-link" used by lol-betting. */
+.back-link {
+    border: 2px solid var(--arcade-frame, #d7d7d7);
+    background: #120a1c;
+    color: var(--arcade-ink, #f6f6f6) !important;
+    transition: background 0.15s, color 0.15s;
+}
+.back-link:hover {
+    background: var(--arcade-gold) !important;
+    color: #1a1200 !important;
+}
