@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strict Casino</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎰</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/css/theme.css">
+    <link rel="stylesheet" href="casino.css">
+</head>
+<body>
+    <div class="page">
+        <div class="header">
+            <a class="back-link" href="/">MENU</a>
+            <div class="title">STRICT <span class="title-accent">CASINO</span></div>
+            <div class="balance">
+                Balance: <span id="balance-display">…</span> SC
+            </div>
+        </div>
+
+        <div class="hero">
+            <div class="hero-marquee">
+                <span class="hero-marquee-text">★ HIGH STAKES · BIG WINS · NO LIMITS · 24/7 OPEN · </span>
+                <span class="hero-marquee-text">★ HIGH STAKES · BIG WINS · NO LIMITS · 24/7 OPEN · </span>
+            </div>
+        </div>
+
+        <div class="games-grid">
+            <a href="/games/strictly7s/" class="casino-card" data-status="live">
+                <div class="card-frame">
+                    <div class="card-icon">🎰</div>
+                    <div class="card-glow"></div>
+                </div>
+                <div class="card-meta">
+                    <div class="card-name">Strictly<span class="card-accent">7</span>s</div>
+                    <div class="card-sub">5×3 · 10 lines · Free Spins</div>
+                    <div class="card-tag">96% RTP · MEDIUM VOL</div>
+                </div>
+            </a>
+
+            <a class="casino-card coming-soon" data-status="soon">
+                <div class="card-frame">
+                    <div class="card-icon">🃏</div>
+                    <div class="card-glow"></div>
+                </div>
+                <div class="card-meta">
+                    <div class="card-name">Blackjack</div>
+                    <div class="card-sub">1-on-1 vs. Dealer</div>
+                    <div class="card-tag soon">COMING SOON</div>
+                </div>
+            </a>
+
+            <a class="casino-card coming-soon" data-status="soon">
+                <div class="card-frame">
+                    <div class="card-icon">🎯</div>
+                    <div class="card-glow"></div>
+                </div>
+                <div class="card-meta">
+                    <div class="card-name">Roulette</div>
+                    <div class="card-sub">European · Live wheel</div>
+                    <div class="card-tag soon">COMING SOON</div>
+                </div>
+            </a>
+
+            <a class="casino-card coming-soon" data-status="soon">
+                <div class="card-frame">
+                    <div class="card-icon">🌀</div>
+                    <div class="card-glow"></div>
+                </div>
+                <div class="card-meta">
+                    <div class="card-name">Plinko</div>
+                    <div class="card-sub">Drop ball · Risk levels</div>
+                    <div class="card-tag soon">COMING SOON</div>
+                </div>
+            </a>
+
+            <a class="casino-card coming-soon" data-status="soon">
+                <div class="card-frame">
+                    <div class="card-icon">🚀</div>
+                    <div class="card-glow"></div>
+                </div>
+                <div class="card-meta">
+                    <div class="card-name">Crash</div>
+                    <div class="card-sub">Cash out before it crashes</div>
+                    <div class="card-tag soon">COMING SOON</div>
+                </div>
+            </a>
+        </div>
+
+        <div class="footer">House rules apply · play money only · server-side RNG</div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/shared/js/socket-init.js"></script>
+    <script src="js/casino.js"></script>
+</body>
+</html>
