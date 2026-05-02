@@ -6,6 +6,7 @@
     'use strict';
 
     const socket = io();
+    window.__strictAchievementSocket = socket;
 
     // ---------- Config ---------- //
     const REEL_COUNT = 5;

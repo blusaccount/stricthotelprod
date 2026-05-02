@@ -3,6 +3,7 @@
     'use strict';
 
     const socket = io();
+    window.__strictAchievementSocket = socket;
     const balanceEl = document.getElementById('balance-display');
 
     function setBalance(value) {

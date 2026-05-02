@@ -1,5 +1,7 @@
 import { randomInt } from 'crypto';
 import { addBalance, deductBalance } from '../currency.js';
+import { bump } from '../achievements.js';
+import { notifyUnlocks } from './achievements.js';
 
 // ============================================================================
 // Plinko — 12-row peg field, 13 buckets, three risk levels.
@@ -83,6 +85,18 @@ export function registerPlinkoHandlers(socket, io, deps) {
             });
             if (updated !== null) finalBalance = updated;
         }
+
+        // Achievement bumps
+        const unlocks = [];
+        unlocks.push(...await bump(player.name, 'plinko_drops', 1));
+        // Edge buckets are 0 and 12 (highest multiplier on high risk).
+        if (risk === 'high' && (bucket === 0 || bucket === 12)) {
+            unlocks.push(...await bump(player.name, 'plinko_edge_hits', 1));
+        }
+        if (typeof finalBalance === 'number') {
+            unlocks.push(...await bump(player.name, 'max_balance', Math.floor(finalBalance), 'max'));
+        }
+        notifyUnlocks(io, onlinePlayers, player.name, unlocks);
 
         socket.emit('balance-update', { balance: finalBalance });
         socket.emit('plinko-result', {

@@ -1,5 +1,7 @@
 import { randomInt } from 'crypto';
 import { addBalance, deductBalance, getBalance } from '../currency.js';
+import { bump } from '../achievements.js';
+import { notifyUnlocks } from './achievements.js';
 
 // ============================================================================
 // Strictly7s 2.0 — 5×3 grid, 10 paylines, win-both-ways, expanding wild,
@@ -340,6 +342,28 @@ export function registerStrictly7sHandlers(socket, io, deps) {
         }
 
         socket.emit('balance-update', { balance: finalBalance });
+
+        // Achievement bumps. Skip on free spins so re-triggers don't double-count.
+        if (!inFreeSpin) {
+            const unlocks = [];
+            const u1 = await bump(player.name, 'slot_spins', 1);
+            unlocks.push(...u1);
+            if (outcome.freeSpinsAwarded > 0) {
+                const u2 = await bump(player.name, 'slot_fs_triggers', 1);
+                unlocks.push(...u2);
+            }
+            // 5-of-a-kind SEVEN check
+            const isJackpot = outcome.wins.some(w => w.leftSymbol === 'SEVEN' && w.leftCount === 5);
+            if (isJackpot) {
+                const u3 = await bump(player.name, 'slot_jackpots', 1);
+                unlocks.push(...u3);
+            }
+            if (typeof finalBalance === 'number') {
+                const u4 = await bump(player.name, 'max_balance', Math.floor(finalBalance), 'max');
+                unlocks.push(...u4);
+            }
+            notifyUnlocks(io, onlinePlayers, player.name, unlocks);
+        }
 
         const highestLineSingle = highestSingleLineMultiplier(outcome.wins);
         socket.emit('strictly7s-spin-result', {

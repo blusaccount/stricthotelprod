@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Achievements - StrictHotel</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏅</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/css/theme.css">
+    <style>
+        body {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 12px;
+            color: var(--arcade-ink);
+            image-rendering: pixelated;
+            background:
+                radial-gradient(circle at 20% 0%, rgba(255, 204, 51, 0.10) 0%, transparent 45%),
+                radial-gradient(circle at 80% 100%, rgba(255, 62, 165, 0.08) 0%, transparent 45%),
+                radial-gradient(circle at top, var(--arcade-bg-1) 0%, var(--arcade-bg-2) 70%);
+            margin: 0;
+            min-height: 100vh;
+        }
+
+        .ach-container {
+            max-width: 1180px;
+            margin: 0 auto;
+            padding: 18px 14px 60px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            border-bottom: 2px solid var(--arcade-border);
+            padding-bottom: 12px;
+            margin-bottom: 18px;
+            flex-wrap: wrap;
+        }
+        .back-link {
+            border: 2px solid var(--arcade-frame);
+            background: #120a1c;
+            color: var(--arcade-ink);
+            padding: 8px 12px;
+            font-size: 9px;
+            text-decoration: none;
+            letter-spacing: 1px;
+        }
+        .back-link:hover { background: var(--arcade-gold); color: #1a1200; }
+
+        .title {
+            font-size: clamp(20px, 3.5vw, 28px);
+            color: var(--arcade-gold);
+            letter-spacing: 5px;
+            text-shadow: 0 2px 0 #000, 0 0 18px rgba(255, 204, 51, 0.55), 0 0 32px rgba(255, 62, 165, 0.3);
+            animation: titlePulse 2.6s ease-in-out infinite;
+        }
+        @keyframes titlePulse {
+            0%, 100% { text-shadow: 0 2px 0 #000, 0 0 18px rgba(255, 204, 51, 0.55), 0 0 32px rgba(255, 62, 165, 0.3); }
+            50%      { text-shadow: 0 2px 0 #000, 0 0 32px rgba(255, 204, 51, 0.9),  0 0 48px rgba(255, 62, 165, 0.55); }
+        }
+
+        .progress-summary {
+            font-size: 10px;
+            color: var(--arcade-dim);
+            letter-spacing: 1px;
+        }
+        .progress-summary .num { color: var(--arcade-gold); text-shadow: 0 0 8px rgba(255, 204, 51, 0.4); }
+
+        .filter-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
+        }
+        .filter-btn {
+            border: 2px solid var(--arcade-border);
+            background: #150d1e;
+            color: var(--arcade-ink);
+            padding: 8px 12px;
+            font-family: inherit;
+            font-size: 10px;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: border-color 0.15s, color 0.15s, box-shadow 0.15s;
+        }
+        .filter-btn.active {
+            border-color: var(--arcade-gold);
+            color: var(--arcade-gold);
+            box-shadow: 0 0 14px rgba(255, 204, 51, 0.3);
+        }
+
+        .ach-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 14px;
+        }
+
+        .ach-card {
+            background: linear-gradient(180deg, var(--arcade-panel) 0%, var(--arcade-panel-2) 100%);
+            border: 2px solid var(--arcade-border);
+            padding: 14px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            transition: transform 0.15s, border-color 0.15s, box-shadow 0.2s;
+        }
+        .ach-card.tier-bronze   { border-color: #b87333; }
+        .ach-card.tier-silver   { border-color: #c0c0c0; }
+        .ach-card.tier-gold     { border-color: var(--arcade-gold); box-shadow: 0 0 14px rgba(255, 204, 51, 0.2); }
+        .ach-card.tier-platinum { border-color: var(--arcade-magenta); box-shadow: 0 0 14px rgba(255, 62, 165, 0.3); }
+
+        .ach-card.locked {
+            filter: grayscale(0.7);
+            opacity: 0.55;
+        }
+        .ach-card.unlocked {
+            opacity: 1;
+            filter: none;
+        }
+        .ach-card.unlocked::before {
+            /* shimmer */
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 30% 30%, rgba(255, 204, 51, 0.10) 0%, transparent 60%);
+            pointer-events: none;
+        }
+        .ach-card > * { position: relative; z-index: 1; }
+
+        .ach-head {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .ach-icon {
+            font-size: 2.4rem;
+            line-height: 1;
+            width: 56px;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #050309;
+            border: 2px solid var(--arcade-frame);
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.7);
+        }
+        .ach-card.unlocked .ach-icon { filter: drop-shadow(0 0 8px rgba(255, 204, 51, 0.5)); }
+
+        .ach-meta { flex: 1; min-width: 0; }
+        .ach-title {
+            font-size: 11px;
+            letter-spacing: 1.5px;
+            color: var(--arcade-ink);
+            margin-bottom: 4px;
+        }
+        .ach-card.tier-gold .ach-title     { color: var(--arcade-gold); }
+        .ach-card.tier-platinum .ach-title { color: var(--arcade-magenta); }
+
+        .ach-tier {
+            font-size: 7px;
+            letter-spacing: 2px;
+            color: var(--arcade-dim);
+        }
+
+        .ach-desc {
+            font-size: 9px;
+            color: var(--arcade-dim);
+            line-height: 1.6;
+        }
+
+        .ach-progress-bar {
+            height: 6px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--arcade-border);
+            position: relative;
+            overflow: hidden;
+            margin-top: 4px;
+        }
+        .ach-progress-fill {
+            position: absolute;
+            top: 0; left: 0; bottom: 0;
+            background: linear-gradient(90deg, var(--arcade-cyan), var(--arcade-gold));
+            transition: width 0.3s ease;
+        }
+        .ach-card.unlocked .ach-progress-fill {
+            background: linear-gradient(90deg, var(--arcade-gold), var(--arcade-magenta));
+        }
+        .ach-progress-label {
+            font-size: 8px;
+            color: var(--arcade-dim);
+            display: flex;
+            justify-content: space-between;
+            margin-top: 2px;
+        }
+
+        .ach-reward {
+            font-size: 8px;
+            letter-spacing: 1px;
+            color: var(--arcade-gold);
+            margin-top: 4px;
+        }
+
+        .ach-card.unlocked .ach-status {
+            color: var(--arcade-win);
+            font-size: 8px;
+            letter-spacing: 1px;
+        }
+
+        @media (max-width: 480px) {
+            .title { letter-spacing: 3px; font-size: 18px; }
+            .ach-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="ach-container">
+        <div class="header">
+            <a class="back-link" href="/">← MENU</a>
+            <div class="title">ACHIEVEMENTS</div>
+            <div class="progress-summary"><span class="num" id="ach-count">0/0</span> UNLOCKED</div>
+        </div>
+
+        <div class="filter-row">
+            <button class="filter-btn active" data-filter="all">ALL</button>
+            <button class="filter-btn" data-filter="unlocked">UNLOCKED</button>
+            <button class="filter-btn" data-filter="locked">LOCKED</button>
+            <button class="filter-btn" data-filter="bronze">BRONZE</button>
+            <button class="filter-btn" data-filter="silver">SILVER</button>
+            <button class="filter-btn" data-filter="gold">GOLD</button>
+            <button class="filter-btn" data-filter="platinum">PLATINUM</button>
+        </div>
+
+        <div class="ach-grid" id="ach-grid"></div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/shared/js/socket-init.js"></script>
+    <script>
+    (() => {
+        'use strict';
+        const socket = io();
+        let catalog = [];
+        let unlockedSet = new Set();
+        let progress = {};
+        let currentFilter = 'all';
+
+        const grid = document.getElementById('ach-grid');
+        const countEl = document.getElementById('ach-count');
+        const filterBtns = document.querySelectorAll('.filter-btn');
+
+        function rewardText(reward) {
+            const parts = [];
+            if (reward.coins) parts.push(`+${reward.coins} 🪙`);
+            if (reward.diamonds) parts.push(`+${reward.diamonds} 💎`);
+            return parts.join(' · ');
+        }
+
+        function render() {
+            grid.innerHTML = '';
+            const filtered = catalog.filter(a => {
+                if (currentFilter === 'all') return true;
+                if (currentFilter === 'unlocked') return unlockedSet.has(a.id);
+                if (currentFilter === 'locked') return !unlockedSet.has(a.id);
+                return a.tier === currentFilter;
+            });
+
+            for (const a of filtered) {
+                const card = document.createElement('div');
+                const isUnlocked = unlockedSet.has(a.id);
+                card.className = `ach-card tier-${a.tier} ${isUnlocked ? 'unlocked' : 'locked'}`;
+
+                const head = document.createElement('div');
+                head.className = 'ach-head';
+
+                const icon = document.createElement('div');
+                icon.className = 'ach-icon';
+                icon.textContent = isUnlocked ? a.icon : '🔒';
+
+                const meta = document.createElement('div');
+                meta.className = 'ach-meta';
+                const title = document.createElement('div');
+                title.className = 'ach-title';
+                title.textContent = a.title.toUpperCase();
+                const tier = document.createElement('div');
+                tier.className = 'ach-tier';
+                tier.textContent = a.tier.toUpperCase();
+                meta.appendChild(title);
+                meta.appendChild(tier);
+
+                head.appendChild(icon);
+                head.appendChild(meta);
+                card.appendChild(head);
+
+                const desc = document.createElement('div');
+                desc.className = 'ach-desc';
+                desc.textContent = a.description;
+                card.appendChild(desc);
+
+                // Progress bar (counter / threshold).
+                const cur = Math.min(progress[a.counter] || 0, a.threshold);
+                const pct = Math.min(100, (cur / a.threshold) * 100);
+                if (!isUnlocked) {
+                    const bar = document.createElement('div');
+                    bar.className = 'ach-progress-bar';
+                    const fill = document.createElement('div');
+                    fill.className = 'ach-progress-fill';
+                    fill.style.width = `${pct}%`;
+                    bar.appendChild(fill);
+                    card.appendChild(bar);
+
+                    const label = document.createElement('div');
+                    label.className = 'ach-progress-label';
+                    label.innerHTML = `<span>${cur} / ${a.threshold}</span><span>${rewardText(a.reward)}</span>`;
+                    card.appendChild(label);
+                } else {
+                    const status = document.createElement('div');
+                    status.className = 'ach-status';
+                    status.textContent = `✓ UNLOCKED  ${rewardText(a.reward)}`;
+                    card.appendChild(status);
+                }
+
+                grid.appendChild(card);
+            }
+
+            countEl.textContent = `${unlockedSet.size}/${catalog.length}`;
+        }
+
+        function registerPlayer() {
+            const name = window.StrictHotelSocket?.getPlayerName?.();
+            if (!name) return;
+            window.StrictHotelSocket.registerPlayer(socket, 'achievements');
+            socket.emit('achievements-catalog');
+            socket.emit('achievements-status');
+        }
+
+        socket.on('connect', registerPlayer);
+        socket.on('achievements-catalog-result', (data) => {
+            if (data && data.catalog) { catalog = data.catalog; render(); }
+        });
+        socket.on('achievements-status-result', (data) => {
+            if (data && data.unlocked) {
+                unlockedSet = new Set(data.unlocked);
+                progress = data.progress || {};
+                render();
+            }
+        });
+        socket.on('achievement-unlocked', (data) => {
+            // Refresh list when a new unlock happens.
+            socket.emit('achievements-status');
+        });
+
+        for (const btn of filterBtns) {
+            btn.addEventListener('click', () => {
+                currentFilter = btn.getAttribute('data-filter');
+                for (const b of filterBtns) b.classList.remove('active');
+                btn.classList.add('active');
+                render();
+            });
+        }
+    })();
+    </script>
+</body>
+</html>

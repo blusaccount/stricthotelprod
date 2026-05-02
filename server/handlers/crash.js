@@ -1,5 +1,7 @@
 import { randomInt } from 'crypto';
 import { addBalance, deductBalance } from '../currency.js';
+import { bump } from '../achievements.js';
+import { notifyUnlocks } from './achievements.js';
 
 // ============================================================================
 // Crash — single global round, exponential multiplier curve, server-authoritative.
@@ -65,6 +67,7 @@ const round = {
 
 let roundTimer = null;
 let mainLoopIo = null;
+let onlinePlayersRef = null;
 
 // ---------- broadcast helpers ---------- //
 
@@ -217,11 +220,23 @@ async function resolveCashout(playerName, atMultiplier, isAuto = false) {
             auto: isAuto
         });
     }
+    // Achievement bumps for big cash-outs.
+    if (mainLoopIo && onlinePlayersRef) {
+        const unlocks = [];
+        if (m >= 10)  unlocks.push(...await bump(playerName, 'crash_cashout_10x', 1));
+        if (m >= 50)  unlocks.push(...await bump(playerName, 'crash_cashout_50x', 1));
+        if (m >= 100) unlocks.push(...await bump(playerName, 'crash_cashout_100x', 1));
+        if (typeof updated === 'number') {
+            unlocks.push(...await bump(playerName, 'max_balance', Math.floor(updated), 'max'));
+        }
+        notifyUnlocks(mainLoopIo, onlinePlayersRef, playerName, unlocks);
+    }
     return { multiplier: m, payout, balance: updated };
 }
 
 export function registerCrashHandlers(socket, io, deps) {
     const { checkRateLimit, onlinePlayers } = deps;
+    onlinePlayersRef = onlinePlayers;
 
     socket.on('crash-state', () => { try {
         // Send current state to a single subscriber on demand.
@@ -284,6 +299,10 @@ export function registerCrashHandlers(socket, io, deps) {
             cashedAt: null,
             payout: 0
         });
+        // Achievement: first bet
+        const unlocks = await bump(player.name, 'crash_bets', 1);
+        notifyUnlocks(io, onlinePlayers, player.name, unlocks);
+
         socket.emit('balance-update', { balance: balanceAfterBet });
         socket.emit('crash-bet-confirmed', {
             roundId: round.id,

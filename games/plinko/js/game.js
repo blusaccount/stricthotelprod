@@ -3,6 +3,7 @@
     'use strict';
 
     const socket = io();
+    window.__strictAchievementSocket = socket;
 
     const ROWS = 12;
     const BUCKETS = ROWS + 1;

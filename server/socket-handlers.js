@@ -21,6 +21,7 @@ import { registerCrashHandlers, startCrashLoop } from './handlers/crash.js';
 import { registerWatchpartyHandlers } from './handlers/watchparty.js';
 import { registerTierlistHandlers, cleanupTierlistOnDisconnect } from './handlers/tierlist.js';
 import { registerDailyStreakHandlers, cleanupStreakRateLimitOnDisconnect } from './handlers/daily-streak.js';
+import { registerAchievementHandlers } from './handlers/achievements.js';
 
 // ============== RATE LIMITING ==============
 
@@ -141,6 +142,7 @@ export function registerSocketHandlers(io, { fetchTickerQuotes, getYahooFinance,
         registerWatchpartyHandlers(socket, io, deps);
         registerTierlistHandlers(socket, io, deps);
         registerDailyStreakHandlers(socket, io, deps);
+        registerAchievementHandlers(socket, io, deps);
 
         socket.on('disconnect', async () => { try {
             rateLimiters.delete(socket.id);

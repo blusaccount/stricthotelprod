@@ -3,6 +3,7 @@
     'use strict';
 
     const socket = io();
+    window.__strictAchievementSocket = socket;
 
     // ---------- DOM ---------- //
     const canvas = document.getElementById('crash-curve');
