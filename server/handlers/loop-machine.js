@@ -1,3 +1,5 @@
+import { isDatabaseEnabled, query } from '../db.js';
+
 const LOOP_ROOM = 'loop-machine-room';
 const LOOP_MIN_BARS = 1;
 const LOOP_MAX_BARS = 8;
@@ -52,6 +54,74 @@ const loopState = {
         distortion: 0
     }
 };
+
+// ============================================================================
+// Persistence — singleton DB row holding the live shared state. Loads on
+// boot, saves with a debounce so the row is updated at most once a second.
+// ============================================================================
+
+let saveTimer = null;
+let lastSaveAt = 0;
+
+function snapshotState() {
+    return {
+        grid: loopState.grid,
+        bpm: loopState.bpm,
+        bars: loopState.bars,
+        isPlaying: loopState.isPlaying,
+        masterVolume: loopState.masterVolume,
+        synth: loopState.synth,
+        bass: loopState.bass
+    };
+}
+
+async function loadStateFromDB() {
+    if (!isDatabaseEnabled()) return;
+    try {
+        const result = await query('select state from loop_machine_state where id = 1');
+        if (!result.rows.length) return;
+        const saved = result.rows[0].state;
+        if (saved && typeof saved === 'object') {
+            if (saved.grid)  Object.assign(loopState.grid, saved.grid);
+            if (typeof saved.bpm === 'number')  loopState.bpm = saved.bpm;
+            if (typeof saved.bars === 'number') loopState.bars = saved.bars;
+            if (typeof saved.masterVolume === 'number') loopState.masterVolume = saved.masterVolume;
+            if (saved.synth) Object.assign(loopState.synth, saved.synth);
+            if (saved.bass)  Object.assign(loopState.bass, saved.bass);
+            console.log('[LoopMachine] Loaded persisted state.');
+        }
+    } catch (err) {
+        console.error('[LoopMachine] loadStateFromDB error:', err.message);
+    }
+}
+
+async function saveStateNow() {
+    if (!isDatabaseEnabled()) return;
+    try {
+        const state = snapshotState();
+        await query(
+            `insert into loop_machine_state (id, state, updated_at)
+             values (1, $1, now())
+             on conflict (id) do update set state = excluded.state, updated_at = now()`,
+            [JSON.stringify(state)]
+        );
+        lastSaveAt = Date.now();
+    } catch (err) {
+        console.error('[LoopMachine] saveStateNow error:', err.message);
+    }
+}
+
+function scheduleSave() {
+    // Debounce: at most one save per second.
+    if (saveTimer) return;
+    saveTimer = setTimeout(() => {
+        saveTimer = null;
+        saveStateNow().catch(() => {});
+    }, 1000);
+}
+
+// Load once at module import time.
+loadStateFromDB().catch(() => {});
 
 export function registerLoopMachineHandlers(socket, io, { checkRateLimit, onlinePlayers }) {
     socket.on('loop-join', () => { try {
@@ -121,6 +191,7 @@ export function registerLoopMachineHandlers(socket, io, { checkRateLimit, online
             step: stepNum,
             value: loopState.grid[instrument][stepNum]
         });
+        scheduleSave();
 
         console.log(`[LoopMachine] Cell toggled: ${instrument}[${stepNum}] = ${loopState.grid[instrument][stepNum]}`);
     } catch (err) { console.error('loop-toggle-cell error:', err.message); } });
@@ -137,6 +208,7 @@ export function registerLoopMachineHandlers(socket, io, { checkRateLimit, online
         io.to(LOOP_ROOM).emit('loop-bpm-updated', {
             bpm: loopState.bpm
         });
+        scheduleSave();
 
         console.log(`[LoopMachine] BPM set to ${loopState.bpm}`);
     } catch (err) { console.error('loop-set-bpm error:', err.message); } });
@@ -171,6 +243,7 @@ export function registerLoopMachineHandlers(socket, io, { checkRateLimit, online
             bass: loopState.bass,
             masterVolume: loopState.masterVolume
         });
+        scheduleSave();
 
         console.log(`[LoopMachine] Bars set to ${loopState.bars}`);
     } catch (err) { console.error('loop-set-bars error:', err.message); } });
@@ -233,6 +306,7 @@ export function registerLoopMachineHandlers(socket, io, { checkRateLimit, online
 
         // Broadcast to all listeners
         io.to(LOOP_ROOM).emit('loop-synth-updated', loopState.synth);
+        scheduleSave();
 
         console.log(`[LoopMachine] Synth settings updated: ${waveform} @ ${frequency}Hz`);
     } catch (err) { console.error('loop-set-synth error:', err.message); } });
@@ -247,6 +321,7 @@ export function registerLoopMachineHandlers(socket, io, { checkRateLimit, online
         loopState.masterVolume = volume;
 
         // Broadcast to all listeners
+        scheduleSave();
         io.to(LOOP_ROOM).emit('loop-master-volume-updated', {
             masterVolume: loopState.masterVolume
         });
@@ -299,6 +374,7 @@ export function registerLoopMachineHandlers(socket, io, { checkRateLimit, online
 
         // Broadcast to all listeners
         io.to(LOOP_ROOM).emit('loop-bass-updated', loopState.bass);
+        scheduleSave();
 
         console.log(`[LoopMachine] Bass settings updated: ${waveform} @ ${frequency.toFixed(2)}Hz`);
     } catch (err) { console.error('loop-set-bass error:', err.message); } });
@@ -344,6 +420,7 @@ export function registerLoopMachineHandlers(socket, io, { checkRateLimit, online
             bass: loopState.bass,
             masterVolume: loopState.masterVolume
         });
+        scheduleSave();
 
         console.log('[LoopMachine] Grid cleared');
     } catch (err) { console.error('loop-clear error:', err.message); } });

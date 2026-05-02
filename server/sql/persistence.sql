@@ -166,3 +166,13 @@ create table if not exists achievement_progress (
   value bigint not null default 0,
   primary key (player_id, counter_id)
 );
+
+-- ============================================================================
+-- Loop Machine — singleton row holding the live shared state (grid, bpm, etc.)
+-- ============================================================================
+create table if not exists loop_machine_state (
+  id smallint primary key,
+  state jsonb not null,
+  updated_at timestamptz not null default now(),
+  constraint loop_machine_state_singleton check (id = 1)
+);
