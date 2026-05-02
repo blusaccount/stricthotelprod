@@ -9,13 +9,13 @@ import { isDatabaseEnabled, query } from './db.js';
 import { addBalance, addDiamonds } from './currency.js';
 
 const STREAK_REWARDS = [
-    50,    // day 1
-    75,    // day 2
-    120,   // day 3
-    200,   // day 4
-    300,   // day 5
-    450,   // day 6
-    750    // day 7 (and a diamond)
+    20,    // day 1
+    35,    // day 2
+    55,    // day 3
+    75,    // day 4
+    95,    // day 5
+    120,   // day 6
+    150    // day 7 (and a diamond)
 ];
 const DIAMOND_BONUS_DAYS = new Set([7]);
 
@@ -25,14 +25,14 @@ function todayIndex() {
 }
 
 function rewardForDay(day) {
-    // Days 1-7 use the table; day 8+ wraps back into the table starting at
-    // day 1 but with a +50% bonus. Day 14 is another diamond payout.
-    if (day <= 7) return { coins: STREAK_REWARDS[day - 1], diamonds: DIAMOND_BONUS_DAYS.has(day) ? 1 : 0 };
-    const cycle = Math.floor((day - 1) / 7);
+    // Caps coin rewards at 150 (day 7). Subsequent cycles use the SAME table
+    // — no escalating bonus — so the daily ceiling stays 150 SC + 1 💎 forever.
+    if (day < 1) day = 1;
     const slot = ((day - 1) % 7) + 1;
-    const coins = Math.floor(STREAK_REWARDS[slot - 1] * (1 + 0.5 * cycle));
-    const diamonds = (slot === 7) ? 1 : 0;
-    return { coins, diamonds };
+    return {
+        coins: STREAK_REWARDS[slot - 1],
+        diamonds: (slot === 7) ? 1 : 0
+    };
 }
 
 // In-memory fallback when DB unavailable.

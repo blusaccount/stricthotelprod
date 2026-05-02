@@ -1,7 +1,9 @@
 import { validateYouTubeId } from '../socket-utils.js';
+import { bump } from '../achievements.js';
+import { notifyUnlocks } from './achievements.js';
 
 export function registerWatchpartyHandlers(socket, io, deps) {
-    const { checkRateLimit, getRoom } = deps;
+    const { checkRateLimit, getRoom, onlinePlayers } = deps;
 
     socket.on('watchparty-load', (videoId) => { try {
         if (!checkRateLimit(socket, 5)) return;
@@ -56,6 +58,12 @@ export function registerWatchpartyHandlers(socket, io, deps) {
 
         const player = room.players.find(p => p.socketId === socket.id);
         const playerName = player ? player.name : 'Unknown';
+        // Achievement: count one play action per host.
+        if (state === 'playing' && onlinePlayers && playerName !== 'Unknown') {
+            bump(playerName, 'watchparty_plays', 1).then(unlocks => {
+                notifyUnlocks(io, onlinePlayers, playerName, unlocks);
+            }).catch(() => {});
+        }
         console.log(`[WatchParty ${room.code}] ${playerName}: ${state} at ${time.toFixed(1)}s`);
     } catch (err) { console.error('watchparty-playpause error:', err.message); } });
 

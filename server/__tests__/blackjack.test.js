@@ -151,7 +151,7 @@ describe('settle', () => {
 
 describe('config', () => {
     it('exposes valid bet levels', () => {
-        expect(BLACKJACK_BETS).toContain(2);
-        expect(BLACKJACK_BETS).toContain(50);
+        expect(BLACKJACK_BETS).toContain(5);
+        expect(BLACKJACK_BETS).toContain(500);
     });
 });

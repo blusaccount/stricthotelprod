@@ -24,8 +24,8 @@ describe('Roulette config', () => {
     });
 
     it('exposes valid bet levels', () => {
-        expect(ROULETTE_BETS).toContain(2);
-        expect(ROULETTE_BETS).toContain(50);
+        expect(ROULETTE_BETS).toContain(5);
+        expect(ROULETTE_BETS).toContain(500);
     });
 });
 

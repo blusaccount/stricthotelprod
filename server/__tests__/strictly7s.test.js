@@ -64,8 +64,8 @@ describe('Strictly7s 2.0 — config sanity', () => {
     });
 
     it('exposes valid bet levels', () => {
-        expect(STRICTLY7S_BETS).toContain(2);
-        expect(STRICTLY7S_BETS).toContain(50);
+        expect(STRICTLY7S_BETS).toContain(5);
+        expect(STRICTLY7S_BETS).toContain(500);
     });
 });
 

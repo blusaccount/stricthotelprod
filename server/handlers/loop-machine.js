@@ -1,4 +1,6 @@
 import { isDatabaseEnabled, query } from '../db.js';
+import { bump } from '../achievements.js';
+import { notifyUnlocks } from './achievements.js';
 
 const LOOP_ROOM = 'loop-machine-room';
 const LOOP_MIN_BARS = 1;
@@ -168,7 +170,7 @@ export function registerLoopMachineHandlers(socket, io, { checkRateLimit, online
         console.log(`[LoopMachine] ${playerName} left (${loopState.listeners.size} listeners)`);
     } catch (err) { console.error('loop-leave error:', err.message); } });
 
-    socket.on('loop-toggle-cell', (data) => { try {
+    socket.on('loop-toggle-cell', async (data) => { try {
         if (!checkRateLimit(socket, 20)) return;
 
         const { instrument, step } = data;
@@ -192,6 +194,33 @@ export function registerLoopMachineHandlers(socket, io, { checkRateLimit, online
             value: loopState.grid[instrument][stepNum]
         });
         scheduleSave();
+
+        // Achievement: cell toggle counter + creative full-bar check.
+        const player = onlinePlayers.get(socket.id);
+        if (player?.name) {
+            const unlocks = [];
+            unlocks.push(...await bump(player.name, 'loop_cells', 1));
+            // Creative: all 14 instruments active in any single bar.
+            const stepsPerBar = LOOP_STEPS_PER_BAR;
+            const barCount = loopState.bars;
+            for (let bar = 0; bar < barCount; bar++) {
+                const start = bar * stepsPerBar;
+                const end = start + stepsPerBar;
+                let allActive = true;
+                for (const inst of Object.keys(loopState.grid)) {
+                    let any = false;
+                    for (let s = start; s < end; s++) {
+                        if (loopState.grid[inst][s] === 1) { any = true; break; }
+                    }
+                    if (!any) { allActive = false; break; }
+                }
+                if (allActive) {
+                    unlocks.push(...await bump(player.name, 'loop_full_bar', 1));
+                    break;
+                }
+            }
+            notifyUnlocks(io, onlinePlayers, player.name, unlocks);
+        }
 
         console.log(`[LoopMachine] Cell toggled: ${instrument}[${stepNum}] = ${loopState.grid[instrument][stepNum]}`);
     } catch (err) { console.error('loop-toggle-cell error:', err.message); } });

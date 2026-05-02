@@ -1,5 +1,7 @@
 import { randomInt } from 'crypto';
 import { addBalance, deductBalance, getBalance } from '../currency.js';
+import { bump } from '../achievements.js';
+import { notifyUnlocks } from './achievements.js';
 
 // ============================================================================
 // Blackjack — single player vs. dealer, 6-deck shoe.
@@ -13,7 +15,7 @@ import { addBalance, deductBalance, getBalance } from '../currency.js';
 //  - No split, no insurance (MVP).
 // ============================================================================
 
-const BLACKJACK_BETS = [2, 5, 10, 15, 20, 50];
+const BLACKJACK_BETS = [5, 10, 25, 50, 100, 500];
 const NUM_DECKS = 6;
 const RESHUFFLE_AT = 80;
 
@@ -176,7 +178,7 @@ export function registerBlackjackHandlers(socket, io, deps) {
 
         // Auto-settle on natural blackjack.
         if (isBlackjack(g.playerHand) || isBlackjack(g.dealerHand)) {
-            await finishGame(player.name, socket, balance);
+            await finishGame(player.name, socket, balance, io, onlinePlayers);
             return;
         }
         socket.emit('balance-update', { balance });
@@ -197,7 +199,7 @@ export function registerBlackjackHandlers(socket, io, deps) {
         }
         g.playerHand.push(deal());
         if (isBust(g.playerHand) || handTotal(g.playerHand).total === 21) {
-            await finishGame(player.name, socket);
+            await finishGame(player.name, socket, null, io, onlinePlayers);
             return;
         }
         socket.emit('bj-state-result', publicState(g, false));
@@ -215,7 +217,7 @@ export function registerBlackjackHandlers(socket, io, deps) {
             socket.emit('bj-error', { message: 'No active hand' });
             return;
         }
-        await finishGame(player.name, socket);
+        await finishGame(player.name, socket, null, io, onlinePlayers);
     } catch (err) {
         console.error('bj-stand error:', err.message);
         socket.emit('bj-error', { message: 'Stand failed.' });
@@ -243,14 +245,14 @@ export function registerBlackjackHandlers(socket, io, deps) {
         g.bet = g.bet * 2;
         g.playerHand.push(deal());
         socket.emit('balance-update', { balance: balanceAfterDouble });
-        await finishGame(player.name, socket);
+        await finishGame(player.name, socket, null, io, onlinePlayers);
     } catch (err) {
         console.error('bj-double error:', err.message);
         socket.emit('bj-error', { message: 'Double failed.' });
     } });
 }
 
-async function finishGame(playerName, socket, knownBalance = null) {
+async function finishGame(playerName, socket, knownBalance = null, io = null, onlinePlayers = null) {
     const g = games.get(playerName);
     if (!g) return;
 
@@ -276,6 +278,19 @@ async function finishGame(playerName, socket, knownBalance = null) {
 
     socket.emit('balance-update', { balance: finalBalance });
     socket.emit('bj-state-result', publicState(g, true));
+
+    // Achievement bumps. notifyUnlocks needs io+onlinePlayers, which the
+    // caller passes in. Bumping a few counters even without notification is
+    // harmless (the meta achievement still progresses) so we bump regardless.
+    const unlocks = [];
+    unlocks.push(...await bump(playerName, 'bj_hands', 1));
+    if (result.outcome === 'blackjack') {
+        unlocks.push(...await bump(playerName, 'bj_naturals', 1));
+    }
+    if (typeof finalBalance === 'number') {
+        unlocks.push(...await bump(playerName, 'max_balance', Math.floor(finalBalance), 'max'));
+    }
+    if (io && onlinePlayers) notifyUnlocks(io, onlinePlayers, playerName, unlocks);
 }
 
 // Test exports

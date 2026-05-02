@@ -1,4 +1,6 @@
 import { buyStock, sellStock, getPortfolioSnapshot, getAllPortfolioPlayerNames, getLeaderboardSnapshot, getTradePerformanceLeaderboard } from '../stock-game.js';
+import { bump } from '../achievements.js';
+import { notifyUnlocks } from './achievements.js';
 import { recordSnapshot, getHistory } from '../portfolio-history.js';
 import { emitStockError, emitBalanceUpdate } from '../socket-utils.js';
 import { getBalance } from '../currency.js';
@@ -102,6 +104,15 @@ export function registerStocksHandlers(socket, io, deps) {
         socket.emit('stock-portfolio', snapshot);
         recordSnapshot(player.name, snapshot.totalValue, result.newBalance);
         socket.emit('stock-portfolio-history', getHistory(player.name));
+
+        // Achievement bumps
+        const unlocks = [];
+        unlocks.push(...await bump(player.name, 'stock_buys', 1));
+        unlocks.push(...await bump(player.name, 'stock_trades', 1));
+        const netWorth = (snapshot.totalValue || 0) + (result.newBalance || 0);
+        unlocks.push(...await bump(player.name, 'stock_max_net_worth', Math.floor(netWorth), 'max'));
+        unlocks.push(...await bump(player.name, 'max_balance', Math.floor(result.newBalance), 'max'));
+        notifyUnlocks(io, onlinePlayers, player.name, unlocks);
     } catch (err) { console.error('stock-buy error:', err.message); } });
 
     // --- Stock Game: Sell ---
@@ -149,6 +160,14 @@ export function registerStocksHandlers(socket, io, deps) {
         socket.emit('stock-portfolio', snapshot);
         recordSnapshot(player.name, snapshot.totalValue, result.newBalance);
         socket.emit('stock-portfolio-history', getHistory(player.name));
+
+        // Achievement bumps (sells count toward stock_trades and max_balance)
+        const unlocks = [];
+        unlocks.push(...await bump(player.name, 'stock_trades', 1));
+        const netWorth = (snapshot.totalValue || 0) + (result.newBalance || 0);
+        unlocks.push(...await bump(player.name, 'stock_max_net_worth', Math.floor(netWorth), 'max'));
+        unlocks.push(...await bump(player.name, 'max_balance', Math.floor(result.newBalance), 'max'));
+        notifyUnlocks(io, onlinePlayers, player.name, unlocks);
     } catch (err) { console.error('stock-sell error:', err.message); } });
 
     // --- Stock Game: Get Portfolio ---

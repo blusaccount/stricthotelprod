@@ -11,7 +11,7 @@ import { notifyUnlocks } from './achievements.js';
 // Hit frequency: ~30.7 %. Free-spin trigger: ~1 in 178 base spins.
 // ============================================================================
 
-const STRICTLY7S_BETS = [2, 5, 10, 15, 20, 50];
+const STRICTLY7S_BETS = [5, 10, 25, 50, 100, 500];
 const PAYLINE_COUNT = 10;
 const FREE_SPIN_AWARD = 10;
 const FREE_SPIN_MULTIPLIER = 2;

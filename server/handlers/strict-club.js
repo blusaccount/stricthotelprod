@@ -1,4 +1,6 @@
 import { validateYouTubeId } from '../socket-utils.js';
+import { bump } from '../achievements.js';
+import { notifyUnlocks } from './achievements.js';
 
 const CLUB_ROOM = 'strict-club';
 const clubState = {
@@ -35,6 +37,14 @@ export function registerStrictClubHandlers(socket, io, { checkRateLimit, onlineP
         io.to(CLUB_ROOM).emit('club-listeners', {
             listeners: Array.from(clubState.listeners.values())
         });
+
+        // Achievement
+        const player = onlinePlayers.get(socket.id);
+        if (player?.name) {
+            bump(player.name, 'club_listens', 1).then(unlocks => {
+                notifyUnlocks(io, onlinePlayers, player.name, unlocks);
+            }).catch(() => {});
+        }
 
         console.log(`[StrictClub] ${playerName} joined (${clubState.listeners.size} listeners)`);
     } catch (err) { console.error('club-join error:', err.message); } });

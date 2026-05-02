@@ -14,7 +14,7 @@ import { notifyUnlocks } from './achievements.js';
 //   high   96.5 %   max win 200× bet
 // ============================================================================
 
-const PLINKO_BETS = [2, 5, 10, 15, 20, 50];
+const PLINKO_BETS = [5, 10, 25, 50, 100, 500];
 const ROWS = 12;
 const BUCKETS = ROWS + 1;
 const RISK_LEVELS = ['low', 'medium', 'high'];
@@ -92,6 +92,10 @@ export function registerPlinkoHandlers(socket, io, deps) {
         // Edge buckets are 0 and 12 (highest multiplier on high risk).
         if (risk === 'high' && (bucket === 0 || bucket === 12)) {
             unlocks.push(...await bump(player.name, 'plinko_edge_hits', 1));
+        }
+        // Creative: middle bucket (6) on HIGH risk — the 0.3× rug.
+        if (risk === 'high' && bucket === 6) {
+            unlocks.push(...await bump(player.name, 'plinko_high_middle', 1));
         }
         if (typeof finalBalance === 'number') {
             unlocks.push(...await bump(player.name, 'max_balance', Math.floor(finalBalance), 'max'));

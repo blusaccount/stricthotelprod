@@ -197,7 +197,7 @@
     };
 
     // ============= Daily Streak =============
-    const STREAK_REWARDS = [50, 75, 120, 200, 300, 450, 750];
+    const STREAK_REWARDS = [20, 35, 55, 75, 95, 120, 150];
 
     const streakPanel = document.getElementById('streak-panel');
     const streakCurrentEl = document.getElementById('streak-current');
@@ -215,7 +215,7 @@
         for (let slot = 1; slot <= 7; slot++) {
             const dayInCycle = slot;
             const absoluteDay = cycle * 7 + slot;
-            const reward = Math.floor(STREAK_REWARDS[slot - 1] * (1 + 0.5 * cycle));
+            const reward = STREAK_REWARDS[slot - 1];
             const isClaimed = canClaim
                 ? absoluteDay < nextDayIndex
                 : absoluteDay <= currentStreak;

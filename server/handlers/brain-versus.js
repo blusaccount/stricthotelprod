@@ -6,6 +6,7 @@ import {
     VALID_BRAIN_GAME_IDS
 } from '../brain-leaderboards.js';
 import { addBalance } from '../currency.js';
+import { bump } from '../achievements.js';
 import {
     generateRoomCode,
     rooms,
@@ -121,6 +122,8 @@ export function registerBrainVersusHandlers(socket, io, deps) {
                     socket.emit('balance-update', { balance: newBalance });
                 }
             markBrainDailyReward(name, dailyStatus.day);
+            // Achievement: count one completed brain test.
+            bump(name, 'brain_tests', 1).catch(() => {});
         } else {
             socket.emit('brain-daily-cooldown', { day: dailyStatus.day });
         }
@@ -301,6 +304,11 @@ export function registerBrainVersusHandlers(socket, io, deps) {
 
                 const newBalance = await addBalance(p.name, coins, 'brain_versus_reward', { roomCode: room.code });
                 emitBalanceUpdate(io, p.socketId, newBalance);
+            }
+
+            // Achievement: brain_versus_wins for the winner.
+            if (!isDraw && winner) {
+                bump(winner, 'brain_versus_wins', 1).catch(() => {});
             }
 
             io.to(room.code).emit('brain-versus-result', {

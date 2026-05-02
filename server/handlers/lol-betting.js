@@ -1,4 +1,6 @@
 import { placeBet, getActiveBets, getPlayerBets, resolveBet } from '../lol-betting.js';
+import { bump } from '../achievements.js';
+import { notifyUnlocks } from './achievements.js';
 import { parseRiotId, validateRiotId } from '../riot-api.js';
 import { manualCheckBetStatus, scheduleBetTimeout } from '../lol-match-checker.js';
 import { getBalance, deductBalance, addBalance } from '../currency.js';
@@ -119,6 +121,10 @@ export function registerLolBettingHandlers(socket, io, deps) {
                 throw betErr;
             }
         }
+
+        // Achievement: lol_bets counter
+        const unlocks = await bump(playerName, 'lol_bets', 1);
+        notifyUnlocks(io, onlinePlayers, playerName, unlocks);
 
         // Send confirmation to player
         socket.emit('lol-bet-placed', {

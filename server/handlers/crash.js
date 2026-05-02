@@ -21,7 +21,7 @@ const REVEAL_MS = 4_000;
 const TICK_MS = 100;                // multiplier broadcast cadence
 const MIN_BET = 2;
 const MAX_BET = 50;
-const CRASH_BETS = [2, 5, 10, 15, 20, 50];
+const CRASH_BETS = [5, 10, 25, 50, 100, 500];
 const MAX_ROUND_MS = 120_000;       // safety cap (~134000× hard ceiling)
 const MAX_AUTO_CASHOUT = 1_000_000; // sane cap for autoCashout input
 
@@ -226,6 +226,10 @@ async function resolveCashout(playerName, atMultiplier, isAuto = false) {
         if (m >= 10)  unlocks.push(...await bump(playerName, 'crash_cashout_10x', 1));
         if (m >= 50)  unlocks.push(...await bump(playerName, 'crash_cashout_50x', 1));
         if (m >= 100) unlocks.push(...await bump(playerName, 'crash_cashout_100x', 1));
+        // Creative speedrun: cash out very early (≤1.10×) and ≥50 SC profit.
+        if (m <= 1.10 && (payout - b.bet) >= 50) {
+            unlocks.push(...await bump(playerName, 'crash_speedrun', payout - b.bet));
+        }
         if (typeof updated === 'number') {
             unlocks.push(...await bump(playerName, 'max_balance', Math.floor(updated), 'max'));
         }

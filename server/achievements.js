@@ -53,15 +53,77 @@ export const ACHIEVEMENTS = [
     { id: 'brain_first_test', title: 'Brain Boot',         description: 'Complete one Brain test.',              icon: '🧠', tier: 'bronze',   counter: 'brain_tests',          threshold: 1,    reward: { coins: 50 } },
     { id: 'brain_25_versus',  title: 'Mind Games',         description: 'Win 25 Brain Versus matches.',          icon: '⚡', tier: 'gold',     counter: 'brain_versus_wins',    threshold: 25,   reward: { coins: 750, diamonds: 1 } },
 
-    // ===== Cross-game wealth =====
-    { id: 'wealth_5k',        title: 'Five-Figure Club',   description: 'Reach a balance of 5,000 SC.',         icon: '💰', tier: 'silver',   counter: 'max_balance',          threshold: 5000,   reward: { coins: 250 } },
-    { id: 'wealth_25k',       title: 'High Roller',        description: 'Reach a balance of 25,000 SC.',        icon: '🎩', tier: 'gold',     counter: 'max_balance',          threshold: 25000,  reward: { coins: 1000, diamonds: 1 } },
-    { id: 'wealth_100k',      title: 'Whale',              description: 'Reach a balance of 100,000 SC.',       icon: '🐋', tier: 'platinum', counter: 'max_balance',          threshold: 100000, reward: { coins: 5000, diamonds: 5 } },
+    // ===== Cross-game wealth (extended ladder up to 10 B SC) =====
+    { id: 'wealth_5k',        title: 'Five-Figure Club',   description: 'Reach a balance of 5,000 SC.',         icon: '💰', tier: 'silver',   counter: 'max_balance',          threshold: 5_000,         reward: { coins: 250 } },
+    { id: 'wealth_25k',       title: 'High Roller',        description: 'Reach a balance of 25,000 SC.',        icon: '🎩', tier: 'gold',     counter: 'max_balance',          threshold: 25_000,        reward: { coins: 1000, diamonds: 1 } },
+    { id: 'wealth_100k',      title: 'Whale',              description: 'Reach a balance of 100,000 SC.',       icon: '🐋', tier: 'platinum', counter: 'max_balance',          threshold: 100_000,       reward: { coins: 5000, diamonds: 5 } },
+    { id: 'wealth_250k',      title: 'Quarter Million',    description: 'Reach a balance of 250,000 SC.',       icon: '💸', tier: 'platinum', counter: 'max_balance',          threshold: 250_000,       reward: { coins: 10_000, diamonds: 5 } },
+    { id: 'wealth_500k',      title: 'Half-Mill',          description: 'Reach a balance of 500,000 SC.',       icon: '🤑', tier: 'platinum', counter: 'max_balance',          threshold: 500_000,       reward: { coins: 25_000, diamonds: 10 } },
+    { id: 'wealth_1m',        title: 'Millionaire',        description: 'Reach a balance of 1,000,000 SC.',     icon: '🏦', tier: 'platinum', counter: 'max_balance',          threshold: 1_000_000,     reward: { coins: 50_000, diamonds: 15 } },
+    { id: 'wealth_5m',        title: 'Five-Milli',         description: 'Reach a balance of 5,000,000 SC.',     icon: '🪙', tier: 'platinum', counter: 'max_balance',          threshold: 5_000_000,     reward: { coins: 100_000, diamonds: 25 } },
+    { id: 'wealth_10m',       title: 'Ten Mill Club',      description: 'Reach a balance of 10,000,000 SC.',    icon: '👑', tier: 'platinum', counter: 'max_balance',          threshold: 10_000_000,    reward: { coins: 250_000, diamonds: 35 } },
+    { id: 'wealth_50m',       title: 'Fifty Mill',         description: 'Reach a balance of 50,000,000 SC.',    icon: '🏆', tier: 'platinum', counter: 'max_balance',          threshold: 50_000_000,    reward: { coins: 500_000, diamonds: 50 } },
+    { id: 'wealth_100m',      title: 'Centurion',          description: 'Reach a balance of 100,000,000 SC.',   icon: '🦾', tier: 'platinum', counter: 'max_balance',          threshold: 100_000_000,   reward: { coins: 1_000_000, diamonds: 75 } },
+    { id: 'wealth_500m',      title: 'Half-Billion',       description: 'Reach a balance of 500,000,000 SC.',   icon: '🛸', tier: 'platinum', counter: 'max_balance',          threshold: 500_000_000,   reward: { coins: 2_500_000, diamonds: 100 } },
+    { id: 'wealth_1b',        title: 'Billionaire',        description: 'Reach a balance of 1,000,000,000 SC.', icon: '🪐', tier: 'platinum', counter: 'max_balance',          threshold: 1_000_000_000, reward: { coins: 10_000_000, diamonds: 200 } },
+    { id: 'wealth_10b',       title: 'Diamond Tycoon',     description: 'Reach a balance of 10,000,000,000 SC.', icon: '💎', tier: 'platinum', counter: 'max_balance',          threshold: 10_000_000_000, reward: { coins: 50_000_000, diamonds: 500 } },
 
     // ===== Streak =====
     { id: 'streak_3',         title: 'Hooked',             description: 'Login 3 days in a row.',                icon: '🔥', tier: 'bronze',   counter: 'streak_max',           threshold: 3,    reward: { coins: 100 } },
     { id: 'streak_7',         title: 'Weekly',             description: 'Login 7 days in a row.',                icon: '🔥', tier: 'silver',   counter: 'streak_max',           threshold: 7,    reward: { coins: 500, diamonds: 1 } },
     { id: 'streak_30',        title: 'Devoted',            description: 'Login 30 days in a row.',               icon: '🔥', tier: 'platinum', counter: 'streak_max',           threshold: 30,   reward: { coins: 5000, diamonds: 3 } },
+
+    // ===== Roulette =====
+    { id: 'roulette_first',   title: 'No More Bets',       description: 'Spin the roulette wheel once.',         icon: '🎯', tier: 'bronze',   counter: 'roulette_spins',       threshold: 1,    reward: { coins: 50 } },
+    { id: 'roulette_straight',title: 'Lucky Number',       description: 'Hit a straight-up bet (35:1).',         icon: '🎯', tier: 'gold',     counter: 'roulette_straight_hits', threshold: 1,  reward: { coins: 500, diamonds: 1 } },
+
+    // ===== Blackjack =====
+    { id: 'bj_first_deal',    title: 'Hit Me',             description: 'Play one Blackjack hand.',              icon: '🃏', tier: 'bronze',   counter: 'bj_hands',             threshold: 1,    reward: { coins: 50 } },
+    { id: 'bj_natural',       title: 'Twenty-One',         description: 'Hit a natural Blackjack (3:2 pay).',    icon: '🃏', tier: 'silver',   counter: 'bj_naturals',          threshold: 1,    reward: { coins: 200 } },
+    { id: 'bj_grinder',       title: 'Card Grinder',       description: 'Play 100 Blackjack hands.',             icon: '🃏', tier: 'gold',     counter: 'bj_hands',             threshold: 100,  reward: { coins: 1000, diamonds: 1 } },
+
+    // ===== Pictochat =====
+    { id: 'picto_first',      title: 'First Stroke',       description: 'Draw on the lobby canvas.',             icon: '✏️', tier: 'bronze',   counter: 'picto_strokes',        threshold: 1,    reward: { coins: 30 } },
+    { id: 'picto_100',        title: 'Doodle Devotee',     description: 'Place 100 strokes.',                    icon: '🎨', tier: 'silver',   counter: 'picto_strokes',        threshold: 100,  reward: { coins: 200 } },
+
+    // ===== Soundboard =====
+    { id: 'sound_first',      title: 'Drop the Beat',      description: 'Play a soundboard clip.',               icon: '🔊', tier: 'bronze',   counter: 'sound_plays',          threshold: 1,    reward: { coins: 30 } },
+
+    // ===== Loop Machine =====
+    { id: 'loop_first',       title: 'Tap In',             description: 'Toggle a Loop Machine cell.',           icon: '🎹', tier: 'bronze',   counter: 'loop_cells',           threshold: 1,    reward: { coins: 30 } },
+
+    // ===== Watch Party =====
+    { id: 'wp_first',         title: 'Co-Viewer',          description: 'Watch a video together.',               icon: '📺', tier: 'bronze',   counter: 'watchparty_plays',     threshold: 1,    reward: { coins: 50 } },
+
+    // ===== LoL Betting =====
+    { id: 'lol_first',        title: 'Riot Roulette',      description: 'Place a LoL bet.',                      icon: '⚔️', tier: 'bronze',   counter: 'lol_bets',             threshold: 1,    reward: { coins: 50 } },
+    { id: 'lol_5_wins',       title: 'Worlds Bound',       description: 'Win 5 LoL bets.',                       icon: '🏅', tier: 'silver',   counter: 'lol_wins',             threshold: 5,    reward: { coins: 500 } },
+
+    // ===== Strict Club =====
+    { id: 'club_first',       title: 'On the Floor',       description: 'Listen in Strict Club for the first time.', icon: '🎧', tier: 'bronze', counter: 'club_listens',     threshold: 1,    reward: { coins: 30 } },
+
+    // ===== Türkçe =====
+    { id: 'turkish_first',    title: 'Merhaba',            description: 'Complete your first Turkish lesson.',   icon: '🇹🇷', tier: 'bronze',  counter: 'turkish_lessons',      threshold: 1,    reward: { coins: 50 } },
+
+    // ===== Tierlist =====
+    { id: 'tier_first',       title: 'Tier Maker',         description: 'Place an item on the weekly tierlist.', icon: '🏆', tier: 'bronze',   counter: 'tierlist_placements',  threshold: 1,    reward: { coins: 50 } },
+
+    // ===== Make It Rain =====
+    { id: 'rain_first',       title: 'Make It Rain',       description: 'Trigger the lobby rain.',               icon: '💸', tier: 'bronze',   counter: 'rain_triggers',        threshold: 1,    reward: { coins: 50 } },
+
+    // ===== Shop =====
+    { id: 'shop_first_dia',   title: 'Sparkle',            description: 'Buy your first diamond.',               icon: '💎', tier: 'bronze',   counter: 'diamond_purchases',    threshold: 1,    reward: { coins: 50 } },
+    { id: 'shop_10_dia',      title: 'Bling Bling',        description: 'Own 10 diamonds.',                      icon: '💍', tier: 'silver',   counter: 'diamonds_owned',       threshold: 10,   reward: { coins: 250 } },
+
+    // ===== Achievements meta =====
+    { id: 'achievement_hunter', title: 'Achievement Hunter', description: 'Unlock 10 other achievements.',       icon: '🎖️', tier: 'gold',    counter: 'achievements_unlocked', threshold: 10,  reward: { coins: 500, diamonds: 1 } },
+
+    // ===== 5 creative achievements =====
+    { id: 'creative_sweet_spot',  title: 'Sweet Spot',          description: 'Land in the middle Plinko bucket on HIGH risk.', icon: '🎯', tier: 'silver',   counter: 'plinko_high_middle',   threshold: 1,    reward: { coins: 200 } },
+    { id: 'creative_eight_ball',  title: 'Eight Ball',          description: 'Hit number 8 on roulette.',           icon: '🎱', tier: 'silver',   counter: 'roulette_eight_hits',  threshold: 1,    reward: { coins: 200 } },
+    { id: 'creative_synesthetic', title: 'Synesthetic',         description: 'Have all 14 Loop Machine instruments active in one bar.', icon: '🌈', tier: 'gold', counter: 'loop_full_bar', threshold: 1, reward: { coins: 500, diamonds: 1 } },
+    { id: 'creative_lucky_thirteen', title: 'Lucky Thirteen',   description: 'Hit number 13 on roulette.',          icon: '☘️', tier: 'silver',   counter: 'roulette_thirteen_hits', threshold: 1,  reward: { coins: 200 } },
+    { id: 'creative_speedrunner', title: 'Speedrunner',         description: 'Win 50× bet on Crash by cashing out below 1.10×.', icon: '⚡', tier: 'gold',  counter: 'crash_speedrun',       threshold: 50,   reward: { coins: 500, diamonds: 1 } },
 ];
 
 // counter id → list of { achievement, threshold } sorted by threshold asc
@@ -231,6 +293,13 @@ export async function bump(playerName, counter, delta = 1, mode = 'add') {
             const rewards = await grantReward(playerName, a);
             newlyUnlocked.push({ ...a, rewards });
         }
+    }
+    // Recursively bump the meta "achievements_unlocked" counter so the
+    // achievement_hunter unlock fires automatically. Skip when bumping itself
+    // to avoid infinite recursion.
+    if (newlyUnlocked.length > 0 && counter !== 'achievements_unlocked') {
+        const meta = await bump(playerName, 'achievements_unlocked', newlyUnlocked.length);
+        newlyUnlocked.push(...meta);
     }
     return newlyUnlocked;
 }

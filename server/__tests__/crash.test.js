@@ -25,8 +25,8 @@ describe('Crash config', () => {
     });
 
     it('exposes valid bet levels', () => {
-        expect(CRASH_BETS).toContain(2);
-        expect(CRASH_BETS).toContain(50);
+        expect(CRASH_BETS).toContain(5);
+        expect(CRASH_BETS).toContain(500);
     });
 
     it('GROWTH_RATE is positive', () => {

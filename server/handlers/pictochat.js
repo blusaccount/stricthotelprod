@@ -1,4 +1,6 @@
 import { loadStrokes, saveStroke, deleteStroke, clearStrokes, loadMessages, saveMessage, clearMessages, PICTO_MAX_MESSAGES } from '../pictochat-store.js';
+import { bump } from '../achievements.js';
+import { notifyUnlocks } from './achievements.js';
 import { normalizePoint, sanitizeColor, sanitizeSize } from '../socket-utils.js';
 
 const PICTO_ROOM = 'lobby-picto';
@@ -198,6 +200,13 @@ export function registerPictochatHandlers(socket, io, { checkRateLimit, onlinePl
         });
 
         await saveStroke(stroke);
+
+        // Achievement bump
+        const player = onlinePlayers.get(socket.id);
+        if (player?.name) {
+            const unlocks = await bump(player.name, 'picto_strokes', 1);
+            notifyUnlocks(io, onlinePlayers, player.name, unlocks);
+        }
     } catch (err) { console.error('picto-stroke-end error:', err.message); } });
 
     // --- Pictochat Shape ---

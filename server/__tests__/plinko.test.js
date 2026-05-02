@@ -43,8 +43,8 @@ describe('Plinko config', () => {
     });
 
     it('exposes valid bet levels', () => {
-        expect(PLINKO_BETS).toContain(2);
-        expect(PLINKO_BETS).toContain(50);
+        expect(PLINKO_BETS).toContain(5);
+        expect(PLINKO_BETS).toContain(500);
     });
 });
 

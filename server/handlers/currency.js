@@ -2,6 +2,8 @@ import { sanitizeName, validateCharacter, validateGameType, emitBalanceUpdate } 
 import { getBalance, addBalance, deductBalance, getDiamonds, buyDiamonds } from '../currency.js';
 import { broadcastOnlinePlayers } from '../room-manager.js';
 import { saveCharacter, getCharacter } from '../character-store.js';
+import { bump } from '../achievements.js';
+import { notifyUnlocks } from './achievements.js';
 
 export function registerCurrencyHandlers(socket, io, { checkRateLimit, onlinePlayers }) {
     socket.on('register-player', async (data) => { try {
@@ -103,6 +105,12 @@ export function registerCurrencyHandlers(socket, io, { checkRateLimit, onlinePla
         
         socket.emit('balance-update', { balance: result.balance });
         socket.emit('diamonds-update', { diamonds: result.diamonds });
+
+        // Achievement bumps
+        const unlocks = [];
+        unlocks.push(...await bump(player.name, 'diamond_purchases', count));
+        unlocks.push(...await bump(player.name, 'diamonds_owned', result.diamonds, 'max'));
+        notifyUnlocks(io, onlinePlayers, player.name, unlocks);
     } catch (err) { console.error('buy-diamonds error:', err.message); } });
 
     // --- Make It Rain Effect ---
@@ -119,7 +127,11 @@ export function registerCurrencyHandlers(socket, io, { checkRateLimit, onlinePla
         }
         
         socket.emit('balance-update', { balance: newBalance });
-        
+
+        // Achievement
+        const unlocks = await bump(player.name, 'rain_triggers', 1);
+        notifyUnlocks(io, onlinePlayers, player.name, unlocks);
+
         // Broadcast to all connected users (celebration effect visible to everyone)
         // Note: No lobby room exists; this is intentional so all users see the effect
         io.emit('lobby-rain-effect', { playerName: player.name });

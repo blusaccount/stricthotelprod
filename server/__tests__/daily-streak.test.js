@@ -20,22 +20,17 @@ describe('daily-streak math', () => {
         expect(rewardForDay(7).diamonds).toBe(1);
     });
 
-    it('cycles wrap around at day 8 with a +50% bonus', () => {
-        const day1 = rewardForDay(1).coins;
-        const day8 = rewardForDay(8).coins;
-        expect(day8).toBe(Math.floor(day1 * 1.5));
-        const day7 = rewardForDay(7).coins;
-        const day14 = rewardForDay(14).coins;
-        expect(day14).toBe(Math.floor(day7 * 1.5));
-        // Day 14 should still grant a diamond (slot 7 of the second cycle).
-        expect(rewardForDay(14).diamonds).toBe(1);
+    it('cycles wrap with no bonus — day 8 = day 1, day 14 = day 7', () => {
+        expect(rewardForDay(8).coins).toBe(rewardForDay(1).coins);
+        expect(rewardForDay(14).coins).toBe(rewardForDay(7).coins);
+        expect(rewardForDay(14).diamonds).toBe(1); // every 7th day
     });
 
-    it('day 21 (third cycle, slot 7) grants 2x bonus and a diamond', () => {
-        const day7 = rewardForDay(7).coins;
-        const day21 = rewardForDay(21).coins;
-        expect(day21).toBe(Math.floor(day7 * 2.0));
-        expect(rewardForDay(21).diamonds).toBe(1);
+    it('coin reward is capped at 150 (day 7)', () => {
+        expect(rewardForDay(7).coins).toBe(150);
+        for (let d = 1; d <= 30; d++) {
+            expect(rewardForDay(d).coins).toBeLessThanOrEqual(150);
+        }
     });
 });
 

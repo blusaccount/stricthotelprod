@@ -108,6 +108,17 @@ export async function awardPotAndEndGame(io, room, winnerName, alive) {
         }
     }
 
+    // Achievement bumps for every player who participated.
+    try {
+        const { bump } = await import('./achievements.js');
+        for (const p of room.game.players) {
+            await bump(p.name, 'mae_rounds', 1).catch(() => {});
+        }
+        if (winnerName && winnerName !== 'Niemand') {
+            await bump(winnerName, 'mae_wins', 1).catch(() => {});
+        }
+    } catch {}
+
     io.to(room.code).emit('game-over', {
         winnerName,
         players: room.game.players.map(p => ({ name: p.name, lives: p.lives })),

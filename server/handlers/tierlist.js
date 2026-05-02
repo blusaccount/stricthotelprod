@@ -6,6 +6,8 @@ import {
     getUniqueRankerCount,
     pruneOldWeeks
 } from '../tierlist-store.js';
+import { bump } from '../achievements.js';
+import { notifyUnlocks } from './achievements.js';
 
 const TIERLIST_ROOM = 'tierlist-room';
 const VALID_TIERS = ['S', 'A', 'B', 'C', 'D', 'F'];
@@ -236,6 +238,10 @@ export function registerTierlistHandlers(socket, io, { checkRateLimit, onlinePla
             community: itemAgg,
             rankerCount: rankerCount
         });
+
+        // Achievement
+        const unlocks = await bump(playerName, 'tierlist_placements', 1);
+        notifyUnlocks(io, onlinePlayers, playerName, unlocks);
 
     } catch (err) { console.error('tierlist-place-item error:', err.message); } });
 

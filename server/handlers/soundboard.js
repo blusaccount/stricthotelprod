@@ -1,3 +1,6 @@
+import { bump } from '../achievements.js';
+import { notifyUnlocks } from './achievements.js';
+
 const SOUNDBOARD_ROOM = 'lobby-soundboard';
 const SOUNDBOARD_VALID_IDS = new Set([
     'anatolia', 'elgato', 'fahh', 'massenhausen', 'plug',
@@ -27,5 +30,13 @@ export function registerSoundboardHandlers(socket, io, deps) {
             playerName: getPlayerName(socket.id, onlinePlayers),
             timestamp: Date.now()
         });
+
+        // Achievement bump
+        const player = onlinePlayers.get(socket.id);
+        if (player?.name) {
+            bump(player.name, 'sound_plays', 1).then(unlocks => {
+                notifyUnlocks(io, onlinePlayers, player.name, unlocks);
+            }).catch(() => {});
+        }
     } catch (err) { console.error('soundboard-play error:', err.message); } });
 }

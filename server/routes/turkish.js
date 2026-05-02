@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { getDailyLesson, buildQuiz, getDailySeed } from '../turkish-lessons.js';
 import { recordDailyCompletion, getTurkishLeaderboard } from '../turkish-streaks.js';
 import { sanitizePlayerName } from './auth.js';
+import { bump } from '../achievements.js';
 
 const router = Router();
 
@@ -23,6 +24,9 @@ router.post('/api/turkish/complete', async (req, res) => {
         if (!result.ok) {
             return res.status(500).json({ ok: false, error: 'Failed to record completion' });
         }
+
+        // Achievement
+        bump(name, 'turkish_lessons', 1).catch(() => {});
 
         res.json(result);
     } catch (err) {

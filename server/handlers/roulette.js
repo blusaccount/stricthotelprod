@@ -19,7 +19,7 @@ import { notifyUnlocks } from './achievements.js';
 // Multiple bets per round are supported.
 // ============================================================================
 
-const ROULETTE_BETS = [2, 5, 10, 15, 20, 50];
+const ROULETTE_BETS = [5, 10, 25, 50, 100, 500];
 const MAX_BETS_PER_ROUND = 12;
 const POCKET_COUNT = 37;
 
@@ -177,7 +177,18 @@ export function registerRouletteHandlers(socket, io, deps) {
         if (finalBalance === null) finalBalance = await getBalance(player.name);
 
         // Achievement bumps
-        const unlocks = await bump(player.name, 'max_balance', Math.floor(finalBalance), 'max');
+        const unlocks = [];
+        unlocks.push(...await bump(player.name, 'roulette_spins', 1));
+        unlocks.push(...await bump(player.name, 'max_balance', Math.floor(finalBalance), 'max'));
+        // Did any straight bet hit?
+        for (const r of results) {
+            if (r.won && r.bet.type === 'straight') {
+                unlocks.push(...await bump(player.name, 'roulette_straight_hits', 1));
+                break;
+            }
+        }
+        if (pocket === 8)  unlocks.push(...await bump(player.name, 'roulette_eight_hits', 1));
+        if (pocket === 13) unlocks.push(...await bump(player.name, 'roulette_thirteen_hits', 1));
         notifyUnlocks(io, onlinePlayers, player.name, unlocks);
 
         socket.emit('balance-update', { balance: finalBalance });
