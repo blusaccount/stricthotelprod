@@ -39,7 +39,6 @@ export function registerStrictClubHandlers(socket, io, { checkRateLimit, onlineP
         });
 
         // Achievement
-        const player = onlinePlayers.get(socket.id);
         if (player?.name) {
             bump(player.name, 'club_listens', 1).then(unlocks => {
                 notifyUnlocks(io, onlinePlayers, player.name, unlocks);
