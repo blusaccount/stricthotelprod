@@ -11,7 +11,10 @@
     // ============== STATE ==============
 
     var player = null;
-    var isMuted = false;
+    // Default to muted so the Wii ambience doesn't fight the lobby Watch Party.
+    // Users who explicitly unmute have 'false' stored and restoreSettings()
+    // will flip this back below.
+    var isMuted = true;
     var volume = DEFAULT_VOLUME;
     var ready = false;
     var userInteracted = false;
@@ -87,7 +90,10 @@
         var saved = localStorage.getItem(STORAGE_MUTE);
         if (saved === 'true') {
             isMuted = true;
+        } else if (saved === 'false') {
+            isMuted = false;
         }
+        // If no preference saved, the default (muted) wins.
         var savedVol = localStorage.getItem(STORAGE_VOL);
         if (savedVol !== null) {
             volume = parseInt(savedVol, 10);

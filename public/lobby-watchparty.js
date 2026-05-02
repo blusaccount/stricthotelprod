@@ -1,0 +1,276 @@
+// ============================================================================
+// LOBBY WATCH PARTY — public shared YouTube player on the homepage.
+//
+// State authority: server. Anyone can paste a URL or hit play/pause; the
+// server snapshots the state and broadcasts to all lobby clients. Drift
+// correction uses the server's `serverTime` field on each state result.
+// ============================================================================
+
+(function () {
+    'use strict';
+
+    if (!window.StrictHotelLobby || !window.StrictHotelLobby.socket) return;
+    const socket = window.StrictHotelLobby.socket;
+
+    const SYNC_DRIFT_THRESHOLD_S = 1.5;     // seek if local drifts more than this
+    const HEARTBEAT_MS = 3 * 60 * 1000;     // keep server warm while video runs
+
+    let player = null;            // YT.Player instance
+    let ytReady = false;
+    let suppressEvents = false;   // ignore YT state events while applying remote state
+    let currentVideoId = null;
+    let lastServerState = null;
+    let heartbeatTimer = null;
+
+    const $ = (id) => document.getElementById(id);
+    const containerEl = $('lobby-wp-section');
+    if (!containerEl) return;
+    const playerWrap = $('lobby-wp-player-wrap');
+    const placeholder = $('lobby-wp-placeholder');
+    const urlInput = $('lobby-wp-url');
+    const loadBtn = $('lobby-wp-load');
+    const clearBtn = $('lobby-wp-clear');
+    const statusEl = $('lobby-wp-status');
+    const nowPlaying = $('lobby-wp-now');
+
+    function escapeHtml(str) {
+        return String(str == null ? '' : str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function setStatus(text, kind) {
+        if (!statusEl) return;
+        statusEl.textContent = text || '';
+        statusEl.dataset.kind = kind || '';
+    }
+
+    // --- Extract video ID from a URL or raw ID ---
+    function extractVideoId(input) {
+        if (!input || typeof input !== 'string') return '';
+        input = input.trim();
+        if (/^[a-zA-Z0-9_-]{11}$/.test(input)) return input;
+        try {
+            const url = new URL(input);
+            if (url.searchParams.has('v')) {
+                const v = url.searchParams.get('v');
+                if (/^[a-zA-Z0-9_-]{11}$/.test(v)) return v;
+            }
+            if (url.hostname === 'youtu.be') {
+                const id = url.pathname.replace(/^\//, '').split('/')[0];
+                if (/^[a-zA-Z0-9_-]{11}$/.test(id)) return id;
+            }
+            const embed = url.pathname.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
+            if (embed) return embed[1];
+            const shorts = url.pathname.match(/\/shorts\/([a-zA-Z0-9_-]{11})/);
+            if (shorts) return shorts[1];
+        } catch (_) {}
+        return '';
+    }
+
+    // --- Load YouTube IFrame API once ---
+    function loadYouTubeAPI() {
+        if (window.YT && window.YT.Player) return Promise.resolve();
+        return new Promise((resolve) => {
+            // If a previous loader is in-flight, chain onto it.
+            const existing = document.querySelector('script[src*="youtube.com/iframe_api"]');
+            if (existing) {
+                const prev = window.onYouTubeIframeAPIReady;
+                window.onYouTubeIframeAPIReady = function () {
+                    if (typeof prev === 'function') prev();
+                    resolve();
+                };
+                return;
+            }
+            const tag = document.createElement('script');
+            tag.src = 'https://www.youtube.com/iframe_api';
+            document.head.appendChild(tag);
+            const prev = window.onYouTubeIframeAPIReady;
+            window.onYouTubeIframeAPIReady = function () {
+                if (typeof prev === 'function') prev();
+                resolve();
+            };
+        });
+    }
+
+    function ensurePlayer(videoId, callback) {
+        currentVideoId = videoId;
+        if (placeholder) placeholder.style.display = 'none';
+        if (!playerWrap) return;
+        // Always tear down and rebuild on video change.
+        playerWrap.innerHTML = '<div id="lobby-wp-player"></div>';
+        loadYouTubeAPI().then(() => {
+            // eslint-disable-next-line no-undef
+            player = new YT.Player('lobby-wp-player', {
+                videoId,
+                width: '100%',
+                height: '100%',
+                playerVars: {
+                    autoplay: 0,
+                    controls: 1,
+                    modestbranding: 1,
+                    rel: 0,
+                    fs: 1,
+                    enablejsapi: 1,
+                    origin: window.location.origin
+                },
+                events: {
+                    onReady: () => {
+                        ytReady = true;
+                        // Mute the lobby ambience as soon as a video is loaded.
+                        autoMuteAmbience();
+                        if (typeof callback === 'function') callback();
+                    },
+                    onStateChange: onPlayerStateChange
+                }
+            });
+        });
+    }
+
+    function onPlayerStateChange(event) {
+        if (suppressEvents || !player) return;
+        const YTState = window.YT && window.YT.PlayerState;
+        if (!YTState) return;
+        try {
+            const time = player.getCurrentTime ? player.getCurrentTime() : 0;
+            if (event.data === YTState.PLAYING) {
+                socket.emit('lobby-wp-control', { action: 'play', time });
+                startHeartbeat();
+            } else if (event.data === YTState.PAUSED) {
+                socket.emit('lobby-wp-control', { action: 'pause', time });
+            }
+        } catch (_) {}
+    }
+
+    function expectedTime(serverState) {
+        if (!serverState || serverState.time == null) return 0;
+        if (serverState.videoState !== 'playing') return serverState.time;
+        const drift = (Date.now() - (serverState.serverTime || Date.now())) / 1000;
+        return serverState.time + Math.max(0, drift);
+    }
+
+    function applyServerState(s) {
+        lastServerState = s;
+        // No video → tear down.
+        if (!s || !s.videoId) {
+            if (placeholder) placeholder.style.display = '';
+            if (playerWrap) playerWrap.innerHTML = '';
+            player = null;
+            currentVideoId = null;
+            ytReady = false;
+            stopHeartbeat();
+            if (nowPlaying) nowPlaying.textContent = '';
+            setStatus('No video loaded — paste a YouTube link to start.', 'idle');
+            return;
+        }
+
+        // Video changed: rebuild player, then continue applying state.
+        if (s.videoId !== currentVideoId) {
+            ensurePlayer(s.videoId, () => applyPlaybackState(s));
+            if (nowPlaying && s.setBy) {
+                nowPlaying.innerHTML = `Now playing — set by <strong>${escapeHtml(s.setBy)}</strong>`;
+            }
+            setStatus('Loading video…', 'loading');
+            return;
+        }
+
+        applyPlaybackState(s);
+    }
+
+    function applyPlaybackState(s) {
+        if (!player || !ytReady) return;
+        const target = expectedTime(s);
+        try {
+            const localTime = player.getCurrentTime ? player.getCurrentTime() : 0;
+            const drift = Math.abs(localTime - target);
+            suppressEvents = true;
+            if (drift > SYNC_DRIFT_THRESHOLD_S) {
+                player.seekTo(target, true);
+            }
+            const YTState = window.YT && window.YT.PlayerState;
+            if (s.videoState === 'playing') {
+                if (YTState && player.getPlayerState && player.getPlayerState() !== YTState.PLAYING) {
+                    player.playVideo();
+                }
+                startHeartbeat();
+                setStatus(`▶ Playing · synced ±${drift.toFixed(1)}s`, 'playing');
+            } else {
+                if (YTState && player.getPlayerState && player.getPlayerState() !== YTState.PAUSED) {
+                    player.pauseVideo();
+                }
+                setStatus(`⏸ Paused at ${formatTime(s.time)}`, 'paused');
+            }
+        } finally {
+            // Release a tick later so YT events from our own programmatic calls don't echo.
+            setTimeout(() => { suppressEvents = false; }, 250);
+        }
+    }
+
+    function formatTime(s) {
+        if (!Number.isFinite(s) || s < 0) return '0:00';
+        const m = Math.floor(s / 60);
+        const sec = Math.floor(s % 60);
+        return `${m}:${sec.toString().padStart(2, '0')}`;
+    }
+
+    function startHeartbeat() {
+        if (heartbeatTimer) return;
+        heartbeatTimer = setInterval(() => {
+            if (currentVideoId) socket.emit('lobby-wp-state');
+        }, HEARTBEAT_MS);
+    }
+    function stopHeartbeat() {
+        if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+    }
+
+    // --- Auto-mute the lobby ambience when video plays ---
+    function autoMuteAmbience() {
+        try {
+            // Ambience exposes localStorage key 'ambience-muted' + a button #ambience-mute.
+            // Click the mute button only if it's not already muted, so the visual UI stays in sync.
+            if (localStorage.getItem('ambience-muted') === 'true') return;
+            const btn = document.getElementById('ambience-mute');
+            if (btn) btn.click();
+        } catch (_) {}
+    }
+
+    // --- UI wiring ---
+    if (loadBtn && urlInput) {
+        const submit = () => {
+            const id = extractVideoId(urlInput.value);
+            if (!id) {
+                setStatus('Could not parse a YouTube ID from that link.', 'error');
+                return;
+            }
+            socket.emit('lobby-wp-load', { videoId: id });
+            urlInput.value = '';
+            setStatus('Loading video…', 'loading');
+        };
+        loadBtn.addEventListener('click', submit);
+        urlInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); submit(); }
+        });
+    }
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            socket.emit('lobby-wp-clear');
+        });
+    }
+
+    // --- Server events ---
+    socket.on('lobby-wp-state-result', (s) => {
+        if (!s) return;
+        applyServerState(s);
+    });
+    socket.on('lobby-wp-error', (data) => {
+        if (data && data.message) setStatus(data.message, 'error');
+    });
+
+    // Request state on connect so a fresh tab catches up.
+    function requestState() { socket.emit('lobby-wp-state'); }
+    socket.on('connect', () => { setTimeout(requestState, 600); });
+    setTimeout(requestState, 700);
+})();

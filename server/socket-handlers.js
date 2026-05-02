@@ -19,6 +19,7 @@ import { registerStrictly7sHandlers } from './handlers/strictly7s.js';
 import { registerPlinkoHandlers } from './handlers/plinko.js';
 import { registerCrashHandlers, startCrashLoop } from './handlers/crash.js';
 import { registerWatchpartyHandlers } from './handlers/watchparty.js';
+import { registerLobbyWatchpartyHandlers, cleanupLobbyWatchpartyOnDisconnect } from './handlers/lobby-watchparty.js';
 import { registerTierlistHandlers, cleanupTierlistOnDisconnect } from './handlers/tierlist.js';
 import { registerDailyStreakHandlers, cleanupStreakRateLimitOnDisconnect } from './handlers/daily-streak.js';
 import { registerAchievementHandlers, makeAchievementsHelper } from './handlers/achievements.js';
@@ -147,6 +148,7 @@ export function registerSocketHandlers(io, { fetchTickerQuotes, getYahooFinance,
         registerPlinkoHandlers(socket, io, deps);
         registerCrashHandlers(socket, io, deps);
         registerWatchpartyHandlers(socket, io, deps);
+        registerLobbyWatchpartyHandlers(socket, io, deps);
         registerTierlistHandlers(socket, io, deps);
         registerDailyStreakHandlers(socket, io, deps);
         registerAchievementHandlers(socket, io, deps);
@@ -161,6 +163,7 @@ export function registerSocketHandlers(io, { fetchTickerQuotes, getYahooFinance,
             plinkoDropCooldown.delete(socket.id);
             cleanupStreakRateLimitOnDisconnect(socket.id);
             cleanupRouletteCooldown(socket.id);
+            cleanupLobbyWatchpartyOnDisconnect(socket.id);
 
             cleanupPictochatOnDisconnect(socket.id, io);
             cleanupClubOnDisconnect(socket.id, io);

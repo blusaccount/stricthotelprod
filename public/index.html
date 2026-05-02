@@ -191,6 +191,33 @@
         </div>
     </div>
 
+    <!-- Lobby Watch Party (public, anyone can moderate) -->
+    <div class="lobby-wp-section" id="lobby-wp-section">
+        <div class="lobby-wp-header">
+            <div>
+                <div class="lobby-wp-title">PUBLIC WATCH PARTY</div>
+                <div class="lobby-wp-subtitle">Paste any YouTube link — everyone in the lobby watches together</div>
+            </div>
+            <div class="lobby-wp-now" id="lobby-wp-now"></div>
+        </div>
+        <div class="lobby-wp-body">
+            <div class="lobby-wp-player-area">
+                <div class="lobby-wp-player-wrap" id="lobby-wp-player-wrap"></div>
+                <div class="lobby-wp-placeholder" id="lobby-wp-placeholder">
+                    <div class="lobby-wp-placeholder-icon">📺</div>
+                    <div>No video loaded yet</div>
+                    <div class="lobby-wp-placeholder-sub">Paste a YouTube link below to start the party.</div>
+                </div>
+            </div>
+            <div class="lobby-wp-controls">
+                <input id="lobby-wp-url" type="text" placeholder="https://youtube.com/watch?v=..." autocomplete="off">
+                <button id="lobby-wp-load" type="button" class="lobby-wp-btn">LOAD</button>
+                <button id="lobby-wp-clear" type="button" class="lobby-wp-btn lobby-wp-btn-ghost" title="Clear video">CLEAR</button>
+            </div>
+            <div class="lobby-wp-status" id="lobby-wp-status">Connecting…</div>
+        </div>
+    </div>
+
     <!-- Pictochat -->
     <div class="picto-section" id="pictochat-panel">
         <div class="picto-header">
@@ -271,6 +298,9 @@
 
 <!-- Lobby Logic -->
 <script src="/lobby.js"></script>
+
+<!-- Lobby Watch Party -->
+<script src="/lobby-watchparty.js"></script>
 
 <!-- Pictochat Logic -->
 <script src="/pictochat.js"></script>
