@@ -497,125 +497,118 @@ body .ticker-change.down { color: var(--arcade-loss); }
     .game-grid { max-width: 980px; }
 }
 
-/* ============= Daily Streak Panel ============= */
+/* ============= Daily Streak Pill (compact) ============= */
 
 .streak-panel {
-    max-width: 720px;
-    margin: 0 auto 24px;
-    padding: 14px 18px;
-    background: linear-gradient(180deg, var(--arcade-panel) 0%, var(--arcade-panel-2) 100%);
-    border: 2px solid var(--arcade-magenta);
-    box-shadow: 0 0 22px rgba(255, 62, 165, 0.3), inset 0 0 0 1px rgba(255,255,255,0.04);
-    position: relative;
-    overflow: hidden;
-}
-.streak-panel::before {
-    /* CRT scanlines */
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: repeating-linear-gradient(180deg, transparent 0, transparent 2px, rgba(0,0,0,0.18) 2px, rgba(0,0,0,0.18) 3px);
-    mix-blend-mode: multiply;
-    opacity: 0.4;
-    pointer-events: none;
-}
-.streak-panel > * { position: relative; z-index: 1; }
-
-.streak-row {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 14px;
-    flex-wrap: wrap;
-    margin-bottom: 10px;
+    gap: 10px;
+    margin: 0 auto 18px;
+    padding: 5px 10px 5px 8px;
+    background: linear-gradient(180deg, var(--arcade-panel) 0%, var(--arcade-panel-2) 100%);
+    border: 1px solid var(--arcade-magenta);
+    box-shadow: 0 0 10px rgba(255, 62, 165, 0.25);
+    font-size: 11px;
+    line-height: 1;
+    position: relative;
 }
-.streak-left { display: flex; align-items: center; gap: 14px; }
-.streak-right { display: flex; align-items: center; gap: 12px; }
+/* Center the inline pill in the page (since menu-container has text-align:center). */
+.streak-panel[hidden] { display: none; }
 
 .streak-flame {
-    font-size: 2.6rem;
-    filter: drop-shadow(0 0 10px rgba(255, 62, 165, 0.6));
-    animation: flamePulse 1.4s ease-in-out infinite;
+    font-size: 1.1rem;
+    filter: drop-shadow(0 0 6px rgba(255, 62, 165, 0.6));
+    animation: flamePulse 1.6s ease-in-out infinite;
+    cursor: pointer;
+    user-select: none;
 }
 @keyframes flamePulse {
-    0%, 100% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(255, 62, 165, 0.55)); }
-    50%      { transform: scale(1.1); filter: drop-shadow(0 0 18px rgba(255, 62, 165, 0.95)); }
+    0%, 100% { filter: drop-shadow(0 0 5px rgba(255, 62, 165, 0.5)); }
+    50%      { filter: drop-shadow(0 0 12px rgba(255, 62, 165, 0.95)); }
 }
 
-.streak-stats {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    text-align: left;
-}
 .streak-current {
-    font-size: 13px;
+    font-size: 11px;
     color: var(--arcade-magenta);
-    text-shadow: 0 2px 0 #000, 0 0 10px rgba(255, 62, 165, 0.55);
-    letter-spacing: 2px;
-}
-.streak-max {
-    font-size: 9px;
-    color: var(--arcade-dim);
+    text-shadow: 0 1px 0 #000, 0 0 6px rgba(255, 62, 165, 0.5);
     letter-spacing: 1px;
+    cursor: help;
+}
+
+.streak-divider {
+    width: 1px;
+    height: 14px;
+    background: var(--arcade-border);
 }
 
 .streak-reward {
-    font-size: 13px;
+    font-size: 10px;
     color: var(--arcade-gold);
-    text-shadow: 0 0 10px rgba(255, 204, 51, 0.5);
+    text-shadow: 0 0 6px rgba(255, 204, 51, 0.4);
     letter-spacing: 1px;
 }
 
 .streak-claim-btn {
     background: linear-gradient(180deg, #ffe278 0%, #d49100 100%);
-    border: 3px solid var(--arcade-gold);
+    border: 2px solid var(--arcade-gold);
     color: #1a1200;
     font-family: 'Press Start 2P', monospace;
-    font-size: 11px;
-    padding: 11px 20px;
+    font-size: 9px;
+    padding: 5px 9px;
     cursor: pointer;
-    letter-spacing: 2px;
+    letter-spacing: 1px;
     transition: transform 0.08s, box-shadow 0.15s, filter 0.15s;
-    box-shadow: 0 4px 0 #6a4a00, 0 0 14px rgba(255, 204, 51, 0.45);
+    box-shadow: 0 2px 0 #6a4a00, 0 0 8px rgba(255, 204, 51, 0.35);
 }
 .streak-claim-btn:not(:disabled):hover {
     transform: translateY(-1px);
-    box-shadow: 0 6px 0 #6a4a00, 0 0 22px rgba(255, 204, 51, 0.75);
+    box-shadow: 0 3px 0 #6a4a00, 0 0 14px rgba(255, 204, 51, 0.6);
 }
 .streak-claim-btn:not(:disabled):active {
-    transform: translateY(2px);
-    box-shadow: 0 2px 0 #6a4a00;
+    transform: translateY(1px);
+    box-shadow: 0 1px 0 #6a4a00;
 }
 .streak-claim-btn:disabled {
     cursor: not-allowed;
-    filter: grayscale(0.6);
+    filter: grayscale(0.7);
     opacity: 0.55;
 }
 
+/* 7-day calendar — collapsed by default, opens as a popover below the pill */
 .streak-days {
-    display: grid;
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
     grid-template-columns: repeat(7, 1fr);
-    gap: 6px;
-    margin-top: 4px;
+    gap: 4px;
+    background: linear-gradient(180deg, var(--arcade-panel) 0%, var(--arcade-panel-2) 100%);
+    border: 1px solid var(--arcade-magenta);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.55), 0 0 14px rgba(255, 62, 165, 0.25);
+    padding: 8px;
+    z-index: 50;
+    min-width: 320px;
 }
+.streak-panel.expanded .streak-days { display: grid; }
 .streak-day {
     text-align: center;
-    padding: 6px 4px;
+    padding: 4px 2px;
     background: rgba(0,0,0,0.35);
     border: 1px solid var(--arcade-border);
-    font-size: 8px;
+    font-size: 7px;
     color: var(--arcade-dim);
     letter-spacing: 1px;
+    min-width: 38px;
 }
 .streak-day .label { display: block; margin-bottom: 2px; }
-.streak-day .reward { color: var(--arcade-ink); font-size: 9px; }
+.streak-day .reward { color: var(--arcade-ink); font-size: 8px; }
 .streak-day.claimed {
     background: rgba(124, 255, 139, 0.10);
     border-color: var(--arcade-win);
     color: var(--arcade-win);
 }
-.streak-day.claimed .reward { color: var(--arcade-win); text-shadow: 0 0 6px rgba(124, 255, 139, 0.5); }
+.streak-day.claimed .reward { color: var(--arcade-win); text-shadow: 0 0 4px rgba(124, 255, 139, 0.5); }
 .streak-day.next {
     background: rgba(255, 62, 165, 0.12);
     border-color: var(--arcade-magenta);
@@ -624,15 +617,17 @@ body .ticker-change.down { color: var(--arcade-loss); }
 }
 @keyframes streakDayPulse {
     0%, 100% { box-shadow: 0 0 0 1px rgba(255, 62, 165, 0.0); }
-    50%      { box-shadow: 0 0 0 1px rgba(255, 62, 165, 0.55), 0 0 14px rgba(255, 62, 165, 0.4); }
+    50%      { box-shadow: 0 0 0 1px rgba(255, 62, 165, 0.55), 0 0 10px rgba(255, 62, 165, 0.4); }
 }
 .streak-day.next .reward { color: var(--arcade-magenta); }
 .streak-day.special::after { content: " 💎"; }
 
 @media (max-width: 480px) {
-    .streak-panel { padding: 10px 12px; }
-    .streak-flame { font-size: 2rem; }
+    .streak-panel { gap: 8px; padding: 4px 8px; }
     .streak-current { font-size: 10px; }
-    .streak-claim-btn { font-size: 10px; padding: 9px 14px; }
-    .streak-day { font-size: 7px; padding: 4px 2px; }
+    .streak-reward  { font-size: 9px; }
+    .streak-claim-btn { font-size: 8px; padding: 4px 7px; }
+    .streak-days { min-width: 280px; }
+    .streak-day { min-width: 32px; font-size: 6px; }
+    .streak-day .reward { font-size: 7px; }
 }

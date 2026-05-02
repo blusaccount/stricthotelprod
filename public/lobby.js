@@ -201,7 +201,6 @@
 
     const streakPanel = document.getElementById('streak-panel');
     const streakCurrentEl = document.getElementById('streak-current');
-    const streakMaxEl = document.getElementById('streak-max');
     const streakRewardEl = document.getElementById('streak-reward-text');
     const streakClaimBtn = document.getElementById('streak-claim-btn');
     const streakDaysEl = document.getElementById('streak-days');
@@ -235,18 +234,16 @@
         if (!streakPanel || !status) return;
         streakPanel.hidden = false;
         if (streakCurrentEl) {
-            streakCurrentEl.textContent = `${status.currentStreak} DAY STREAK`;
-        }
-        if (streakMaxEl) {
-            streakMaxEl.textContent = `Best: ${status.maxStreak} · Total claims: ${status.totalClaims}`;
+            streakCurrentEl.textContent = `${status.currentStreak}d`;
+            streakCurrentEl.title = `Best: ${status.maxStreak} · Total claims: ${status.totalClaims}`;
         }
         if (streakRewardEl && status.nextReward) {
             const r = status.nextReward;
-            streakRewardEl.textContent = r.diamonds > 0 ? `+${r.coins} SC + 💎` : `+${r.coins} SC`;
+            streakRewardEl.textContent = r.diamonds > 0 ? `+${r.coins}🪙💎` : `+${r.coins}🪙`;
         }
         if (streakClaimBtn) {
             streakClaimBtn.disabled = !status.canClaim;
-            streakClaimBtn.textContent = status.canClaim ? 'CLAIM' : 'CLAIMED';
+            streakClaimBtn.textContent = status.canClaim ? 'CLAIM' : '✓';
         }
         renderStreakDays(status.currentStreak, status.nextDayIndex, status.canClaim);
     }
@@ -281,6 +278,20 @@
         streakClaimBtn.addEventListener('click', () => {
             if (streakClaimBtn.disabled) return;
             socket.emit('streak-claim');
+        });
+    }
+
+    // Flame click toggles the 7-day calendar popover.
+    const streakFlameEl = document.getElementById('streak-flame');
+    if (streakFlameEl && streakPanel) {
+        streakFlameEl.addEventListener('click', () => {
+            streakPanel.classList.toggle('expanded');
+        });
+        // Close the popover when clicking outside.
+        document.addEventListener('click', (e) => {
+            if (!streakPanel.contains(e.target)) {
+                streakPanel.classList.remove('expanded');
+            }
         });
     }
 
