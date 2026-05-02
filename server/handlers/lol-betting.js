@@ -6,7 +6,7 @@ import { notifyUnlocks } from './achievements.js';
 import { parseRiotId, validateRiotId } from '../riot-api.js';
 import { manualCheckBetStatus, scheduleBetTimeout } from '../lol-match-checker.js';
 import { getBalance, deductBalance, addBalance } from '../currency.js';
-import { emitBalanceUpdate } from '../socket-utils.js';
+import { emitBalanceUpdate, emitToUser } from '../socket-utils.js';
 import { isDatabaseEnabled, withTransaction } from '../db.js';
 
 // Per-IP backoff for the admin-resolve endpoint. Each failure doubles the
@@ -260,7 +260,7 @@ export function registerLolBettingHandlers(socket, io, deps) {
             // Update player's balance
             if (result.wonBet && result.payout > 0) {
                 const newBalance = await getBalance(player.name);
-                socket.emit('balance-update', { balance: newBalance });
+                emitToUser(io, player.name, 'balance-update', { balance: newBalance });
             }
         }
     } catch (err) {

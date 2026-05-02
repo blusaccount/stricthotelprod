@@ -5,7 +5,7 @@ import {
 } from '../game-logic.js';
 import { getRoom, sendTurnStart, awardPotAndEndGame } from '../room-manager.js';
 import { getBalance, deductBalance, addBalance } from '../currency.js';
-import { emitBalanceUpdate } from '../socket-utils.js';
+import { emitBalanceUpdate, emitToUser } from '../socket-utils.js';
 
 export function registerMaexchenHandlers(socket, io, deps) {
     const { checkRateLimit, broadcastLobbies } = deps;
@@ -55,11 +55,11 @@ export function registerMaexchenHandlers(socket, io, deps) {
                 socket.emit('error', { message: 'Nicht genug Coins!' });
                 return;
             }
-            emitBalanceUpdate(io, socket.id, newBalance);
+            emitToUser(io, player.name, 'balance-update', { balance: newBalance });
         } else if (oldBet > 0) {
             // Bet removed — balance was already refunded above
             const balance = await getBalance(player.name);
-            emitBalanceUpdate(io, socket.id, balance);
+            emitToUser(io, player.name, 'balance-update', { balance });
         }
 
         room.bets[socket.id] = amount;

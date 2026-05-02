@@ -83,9 +83,33 @@ export function emitStockError(socket, code, message) {
     });
 }
 
-export function emitBalanceUpdate(io, socketId, balance) {
+// Per-user Socket.IO room name. Each socket joins this on register-player
+// (see handlers/currency.js). Lets us fan out events to every socket of the
+// same player — important since the shell + an iframe game share one user
+// but different sockets.
+export function userRoom(name) {
+    return name ? `user:${name}` : null;
+}
+
+// Emit an event to every socket of a given player (shell + iframe).
+export function emitToUser(io, playerName, event, data) {
+    const room = userRoom(playerName);
+    if (!room || !io) return;
+    io.to(room).emit(event, data);
+}
+
+// Legacy signature — still used by maexchen/lol-betting/brain-versus where
+// the caller has only the socketId. Now also fans out to the user room when
+// possible: pass an optional `playerName` (preferred) or fall back to the
+// raw socketId.
+export function emitBalanceUpdate(io, socketIdOrName, balance, opts) {
     if (balance === null || balance === undefined) return;
-    io.to(socketId).emit('balance-update', { balance });
+    const name = (opts && opts.playerName) || null;
+    if (name) {
+        io.to(userRoom(name)).emit('balance-update', { balance });
+    } else {
+        io.to(socketIdOrName).emit('balance-update', { balance });
+    }
 }
 
 export function getSocketIp(socket) {

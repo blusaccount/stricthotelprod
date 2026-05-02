@@ -2,7 +2,7 @@ import { randomInt } from 'crypto';
 import { addBalance, deductBalance } from '../currency.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
-import { STANDARD_CASINO_BETS, validateCasinoBet } from '../socket-utils.js';
+import { STANDARD_CASINO_BETS, validateCasinoBet, emitToUser } from '../socket-utils.js';
 import { pushActivity } from '../activity-feed.js';
 
 // ============================================================================
@@ -326,7 +326,7 @@ export function registerCrashHandlers(socket, io, deps) {
         if (round.state !== 'betting' || round.id !== placedInRoundId) {
             await addBalance(player.name, bet, 'crash_bet_refund_state_race', { bet, originalRound: placedInRoundId });
             socket.emit('crash-error', { message: 'Betting closed before bet was confirmed' });
-            socket.emit('balance-update', { balance: balanceAfterBet + bet });
+            emitToUser(io, player.name, 'balance-update', { balance: balanceAfterBet + bet });
             return;
         }
         round.bets.set(player.name, {
@@ -340,7 +340,7 @@ export function registerCrashHandlers(socket, io, deps) {
         const unlocks = await bump(player.name, 'crash_bets', 1);
         notifyUnlocks(io, onlinePlayers, player.name, unlocks);
 
-        socket.emit('balance-update', { balance: balanceAfterBet });
+        emitToUser(io, player.name, 'balance-update', { balance: balanceAfterBet });
         socket.emit('crash-bet-confirmed', {
             roundId: round.id,
             bet,

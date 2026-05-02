@@ -1,6 +1,7 @@
 import { getAlivePlayers, nextAlivePlayerIndex } from './game-logic.js';
 import { addBalance } from './currency.js';
 import { pushActivity } from './activity-feed.js';
+import { emitToUser } from './socket-utils.js';
 
 // ============== ROOM MANAGEMENT ==============
 
@@ -10,10 +11,23 @@ export const socketToRoom = new Map(); // socketId -> roomCode (O(1) lookup)
 // Track all online players globally
 export const onlinePlayers = new Map(); // socketId -> { name, character, game }
 
-// Broadcast online players to all clients
+// Broadcast online players to all clients.
+//
+// Each user can hold multiple sockets simultaneously (parent shell + iframe
+// game), so we dedup by player name. When two sockets share a name, the one
+// in an actual game (game !== 'lobby') wins so presence shows "Tom is in
+// Casino" rather than "Tom is in Lobby" while he's playing.
 export function broadcastOnlinePlayers(io) {
-    const players = Array.from(onlinePlayers.values());
-    io.emit('online-players', players);
+    const byName = new Map();
+    for (const p of onlinePlayers.values()) {
+        if (!p || !p.name) continue;
+        const existing = byName.get(p.name);
+        if (!existing) { byName.set(p.name, p); continue; }
+        const existingIsLobby = existing.game === 'lobby' || !existing.game;
+        const candidateIsLobby = p.game === 'lobby' || !p.game;
+        if (existingIsLobby && !candidateIsLobby) byName.set(p.name, p);
+    }
+    io.emit('online-players', Array.from(byName.values()));
 }
 
 // Get open lobbies for a specific game
@@ -104,8 +118,8 @@ export async function awardPotAndEndGame(io, room, winnerName, alive) {
 
     if (pot > 0 && alive[0]) {
         const newBalance = await addBalance(alive[0].name, pot, 'maexchen_pot_win', { roomCode: room.code });
-        if (newBalance !== null && alive[0].socketId) {
-            io.to(alive[0].socketId).emit('balance-update', { balance: newBalance });
+        if (newBalance !== null) {
+            emitToUser(io, alive[0].name, 'balance-update', { balance: newBalance });
         }
         // Activity feed: Mäxchen wins are inherently social — broadcast.
         pushActivity({

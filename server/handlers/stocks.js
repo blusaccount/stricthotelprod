@@ -2,7 +2,7 @@ import { buyStock, sellStock, getPortfolioSnapshot, getAllPortfolioPlayerNames, 
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
 import { recordSnapshot, getHistory } from '../portfolio-history.js';
-import { emitStockError, emitBalanceUpdate } from '../socket-utils.js';
+import { emitStockError, emitBalanceUpdate, emitToUser } from '../socket-utils.js';
 import { getBalance } from '../currency.js';
 import { getCharactersByNames } from '../character-store.js';
 
@@ -99,7 +99,7 @@ export function registerStocksHandlers(socket, io, deps) {
             return;
         }
 
-        socket.emit('balance-update', { balance: result.newBalance });
+        emitToUser(io, player.name, 'balance-update', { balance: result.newBalance });
         const snapshot = await getPortfolioSnapshot(player.name, quotes, fetchMissingPrice);
         socket.emit('stock-portfolio', snapshot);
         recordSnapshot(player.name, snapshot.totalValue, result.newBalance);
@@ -155,7 +155,7 @@ export function registerStocksHandlers(socket, io, deps) {
             return;
         }
 
-        socket.emit('balance-update', { balance: result.newBalance });
+        emitToUser(io, player.name, 'balance-update', { balance: result.newBalance });
         const snapshot = await getPortfolioSnapshot(player.name, quotes, fetchMissingPrice);
         socket.emit('stock-portfolio', snapshot);
         recordSnapshot(player.name, snapshot.totalValue, result.newBalance);

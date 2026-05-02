@@ -143,6 +143,9 @@
     // --- Make It Rain Effect ---
     socket.on('lobby-rain-effect', (data) => {
         if (!data || !data.playerName) return;
+        // Shell-only effect — when the lobby JS happens to load inside an
+        // iframe (it shouldn't, but defensive), don't double-render coins.
+        if (window.IS_SHELL_IFRAME) return;
         
         // Show toast notification
         const toast = document.createElement('div');
@@ -315,10 +318,14 @@
     // and render a small badge on the tile. Self is excluded.
     function updatePresenceBadges(players) {
         const myName = window.StrictHotelSocket.getPlayerName();
-        const cards = document.querySelectorAll('.game-card[data-game]');
-        cards.forEach((card) => {
-            const tag = card.getAttribute('data-game');
-            const groupAttr = card.getAttribute('data-game-group');
+        // Shell sidebar uses .shell-nav-item with the same data-game/data-game-group
+        // attributes; legacy .game-card is kept as a no-op fallback.
+        const items = document.querySelectorAll(
+            '.shell-nav-item[data-game], .game-card[data-game]'
+        );
+        items.forEach((item) => {
+            const tag = item.getAttribute('data-game');
+            const groupAttr = item.getAttribute('data-game-group');
             const matchSet = new Set();
             if (tag) matchSet.add(tag);
             if (groupAttr) {
@@ -330,11 +337,11 @@
                 if (myName && p.name === myName) continue;
                 if (matchSet.has(p.game)) count++;
             }
-            const badge = card.querySelector('.game-presence');
+            const badge = item.querySelector('.shell-nav-presence, .game-presence');
             if (!badge) return;
             if (count > 0) {
                 badge.hidden = false;
-                badge.textContent = count === 1 ? '1 online' : `${count} online`;
+                badge.textContent = count === 1 ? '1' : String(count);
             } else {
                 badge.hidden = true;
                 badge.textContent = '';

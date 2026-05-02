@@ -2,6 +2,7 @@ import { getStreakStatus, claimStreak } from '../daily-streak.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
 import { pushActivity } from '../activity-feed.js';
+import { emitToUser } from '../socket-utils.js';
 
 const claimRateLimit = new Map(); // socketId -> timestamp of last claim
 
@@ -41,7 +42,7 @@ export function registerDailyStreakHandlers(socket, io, deps) {
         const result = await claimStreak(player.name);
         socket.emit('streak-claim-result', result);
         if (result.ok && typeof result.newBalance === 'number') {
-            socket.emit('balance-update', { balance: result.newBalance });
+            emitToUser(io, player.name, 'balance-update', { balance: result.newBalance });
         }
         // Achievement bump for streak length.
         if (result.ok) {

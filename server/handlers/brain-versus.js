@@ -15,7 +15,7 @@ import {
     removePlayerFromRoom,
     socketToRoom
 } from '../room-manager.js';
-import { emitBalanceUpdate, sanitizeName, validateRoomCode } from '../socket-utils.js';
+import { emitBalanceUpdate, emitToUser, sanitizeName, validateRoomCode } from '../socket-utils.js';
 import { isDatabaseEnabled, query } from '../db.js';
 
 const brainDailyCooldown = new Map(); // name -> dayNumber
@@ -119,7 +119,7 @@ export function registerBrainVersusHandlers(socket, io, deps) {
         if (!dailyStatus.alreadyCompleted) {
                 const newBalance = await addBalance(name, coins, 'brain_daily', { day: dailyStatus.day });
                 if (newBalance !== null) {
-                    socket.emit('balance-update', { balance: newBalance });
+                    emitToUser(io, name, 'balance-update', { balance: newBalance });
                 }
             markBrainDailyReward(name, dailyStatus.day);
             // Achievement: count one completed brain test.
@@ -169,7 +169,7 @@ export function registerBrainVersusHandlers(socket, io, deps) {
                 const coins = calculateTrainingCoins(coinScore);
                 const newBalance = await addBalance(name, coins, 'brain_training');
                 if (newBalance !== null) {
-                    socket.emit('balance-update', { balance: newBalance });
+                    emitToUser(io, name, 'balance-update', { balance: newBalance });
                 }
             }
         }
@@ -303,7 +303,7 @@ export function registerBrainVersusHandlers(socket, io, deps) {
                 else { coins = loserCoins; }
 
                 const newBalance = await addBalance(p.name, coins, 'brain_versus_reward', { roomCode: room.code });
-                emitBalanceUpdate(io, p.socketId, newBalance);
+                emitToUser(io, p.name, 'balance-update', { balance: newBalance });
             }
 
             // Achievement: brain_versus_wins for the winner.
@@ -339,7 +339,7 @@ export function registerBrainVersusHandlers(socket, io, deps) {
             const opponent = room.game.players.find(p => p.socketId !== socket.id);
             if (opponent) {
                 const newBalance = await addBalance(opponent.name, 20, 'brain_versus_forfeit', { roomCode: room.code });
-                emitBalanceUpdate(io, opponent.socketId, newBalance);
+                emitToUser(io, opponent.name, 'balance-update', { balance: newBalance });
                 io.to(opponent.socketId).emit('brain-versus-result', {
                     winner: opponent.name,
                     isDraw: false,
@@ -376,7 +376,7 @@ export async function cleanupBrainVersusOnDisconnect(socket, room, io) {
         const opponent = room.game.players.find(p => p.socketId !== socket.id);
         if (opponent) {
             const newBalance = await addBalance(opponent.name, 20, 'brain_versus_forfeit', { roomCode: room.code });
-            emitBalanceUpdate(io, opponent.socketId, newBalance);
+            emitToUser(io, opponent.name, 'balance-update', { balance: newBalance });
             io.to(opponent.socketId).emit('brain-versus-result', {
                 winner: opponent.name,
                 isDraw: false,

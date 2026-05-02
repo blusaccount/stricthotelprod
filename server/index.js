@@ -71,6 +71,35 @@ app.use(express.json());
 app.use(createAuthRouter());
 app.use(authMiddleware);
 
+// Shell deep-link middleware. The lobby is now an SPA-style shell and any
+// request that targets an app page (games, shop, contacts, etc.) without
+// ?embed=1 should serve the shell HTML — the shell itself reads
+// location.pathname and mounts the right iframe (loaded with ?embed=1, which
+// bypasses this middleware and lets express.static serve the bare page).
+const APP_ROUTES = [
+    /^\/games\//,
+    /^\/shop\.html$/,
+    /^\/contacts\.html$/,
+    /^\/achievements\.html$/,
+    /^\/strict-club\//,
+    /^\/nostalgiabait/,
+    /^\/creator-test\.html$/
+];
+app.use((req, res, next) => {
+    if (req.method !== 'GET') return next();
+    if (req.query.embed === '1') return next();
+    if (!APP_ROUTES.some(re => re.test(req.path))) return next();
+    // Only redirect HTML navigation — sub-resource fetches (CSS/JS/images)
+    // come with text/css, image/*, etc. and should hit express.static.
+    const accept = req.headers.accept || '';
+    if (!accept.includes('text/html')) return next();
+    // Iframe-context navigations (Sec-Fetch-Dest: iframe) should serve the
+    // bare page directly. The iframe-helper inside the bare page handles
+    // bubbling URL changes back to the parent shell via postMessage.
+    if (req.headers['sec-fetch-dest'] === 'iframe') return next();
+    res.sendFile(path.join(rootDir, 'public', 'index.html'));
+});
+
 // Static files
 app.use(express.static(path.join(rootDir, 'public')));
 app.use('/shared', express.static(path.join(rootDir, 'shared')));

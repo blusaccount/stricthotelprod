@@ -2,7 +2,7 @@ import { randomInt } from 'crypto';
 import { addBalance, deductBalance, getBalance } from '../currency.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
-import { STANDARD_CASINO_BETS, validateCasinoBet } from '../socket-utils.js';
+import { STANDARD_CASINO_BETS, validateCasinoBet, emitToUser } from '../socket-utils.js';
 import { pushActivity } from '../activity-feed.js';
 
 // ============================================================================
@@ -214,7 +214,7 @@ export function registerRouletteHandlers(socket, io, deps) {
             });
         }
 
-        socket.emit('balance-update', { balance: finalBalance });
+        emitToUser(io, player.name, 'balance-update', { balance: finalBalance });
         socket.emit('roulette-result', {
             pocket,
             color: pocketColor(pocket),

@@ -2,7 +2,7 @@ import { randomInt } from 'crypto';
 import { addBalance, deductBalance, getBalance } from '../currency.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
-import { STANDARD_CASINO_BETS, validateCasinoBet } from '../socket-utils.js';
+import { STANDARD_CASINO_BETS, validateCasinoBet, emitToUser } from '../socket-utils.js';
 import { pushActivity } from '../activity-feed.js';
 
 // ============================================================================
@@ -183,7 +183,7 @@ export function registerBlackjackHandlers(socket, io, deps) {
             await finishGame(player.name, socket, balance, io, onlinePlayers);
             return;
         }
-        socket.emit('balance-update', { balance });
+        emitToUser(io, player.name, 'balance-update', { balance });
         socket.emit('bj-state-result', publicState(g, false));
     } catch (err) {
         console.error('bj-deal error:', err.message);
@@ -246,7 +246,7 @@ export function registerBlackjackHandlers(socket, io, deps) {
         g.doubled = true;
         g.bet = g.bet * 2;
         g.playerHand.push(deal());
-        socket.emit('balance-update', { balance: balanceAfterDouble });
+        emitToUser(io, player.name, 'balance-update', { balance: balanceAfterDouble });
         await finishGame(player.name, socket, null, io, onlinePlayers);
     } catch (err) {
         console.error('bj-double error:', err.message);
@@ -278,7 +278,8 @@ async function finishGame(playerName, socket, knownBalance = null, io = null, on
     }
     if (finalBalance === null) finalBalance = await getBalance(playerName);
 
-    socket.emit('balance-update', { balance: finalBalance });
+    if (io) emitToUser(io, playerName, 'balance-update', { balance: finalBalance });
+    else socket.emit('balance-update', { balance: finalBalance });
     socket.emit('bj-state-result', publicState(g, true));
 
     // Achievement bumps. notifyUnlocks needs io+onlinePlayers, which the

@@ -9,333 +9,295 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/shared/css/theme.css">
+    <link rel="stylesheet" href="/shell.css">
     <link rel="stylesheet" href="/lobby.css">
 </head>
-<body>
+<body class="shell-body">
 
 <!-- Hidden YouTube player for ambience audio -->
 <div class="ambience-yt-container" aria-hidden="true">
     <div id="ambience-yt-player"></div>
 </div>
 
-<!-- Ambience mute button -->
-<div class="ambience-control">
-    <div class="ambience-volume">
-        <input id="ambience-volume" type="range" min="0" max="100" value="30">
-    </div>
-    <button class="ambience-mute" id="ambience-mute" type="button" title="Toggle Ambience">
-        <span class="ambience-mute-icon">🎵</span>
-    </button>
-</div>
+<div class="shell-root">
 
-<div class="menu-container">
-    <div class="arcade-title">STRICT HOTEL</div>
+    <!-- ============= TOP BAR ============= -->
+    <header class="shell-topbar">
+        <button class="shell-menu-toggle" id="shell-menu-toggle" type="button" aria-label="Toggle menu">☰</button>
+        <a class="shell-brand" href="/" data-shell-link="/">STRICT <span class="shell-brand-accent">HOTEL</span></a>
 
-    <!-- Avatar Bar -->
-    <div class="avatar-bar">
-        <div id="avatar-display">
-            <div class="avatar-placeholder" id="avatar-placeholder">👽</div>
-            <img class="avatar-preview" id="avatar-img" src="" alt="" style="display:none;">
+        <div class="shell-topbar-spacer"></div>
+
+        <div class="shell-avatar-cluster">
+            <div class="shell-avatar" id="avatar-display">
+                <div class="avatar-placeholder" id="avatar-placeholder">👽</div>
+                <img class="avatar-preview" id="avatar-img" src="" alt="" style="display:none;">
+            </div>
+            <input type="text" class="shell-name-input avatar-name-input" id="input-name" maxlength="12" placeholder="Dein Name..." autocomplete="off">
+            <button class="shell-edit-char btn-avatar" id="btn-create-character" title="Charakter erstellen">✎</button>
         </div>
-        <input type="text" class="avatar-name-input" id="input-name" maxlength="12" placeholder="Dein Name..." autocomplete="off">
-        <div class="currency-display" id="currency-display" title="StrictCoins">
+
+        <div class="shell-pill currency-display" id="currency-display" title="StrictCoins">
             <span class="currency-icon">🪙</span>
             <span class="currency-amount" id="currency-amount">—</span>
         </div>
-        <button class="btn-avatar" id="btn-create-character">CHARAKTER ERSTELLEN</button>
-        <a class="btn-avatar-beta" href="/creator-test.html" title="Pixel-Mii Creator (BETA)">🧪 NEW</a>
-    </div>
 
-    <!-- Make It Rain Button -->
-    <div class="rain-button-container">
-        <button class="btn-make-it-rain" id="btn-make-it-rain" disabled>
-            MAKE IT RAIN 💸 (20 Coins)
+        <div class="shell-pill streak-pill" id="streak-panel" hidden>
+            <div class="streak-flame" id="streak-flame" title="Toggle details">🔥</div>
+            <div class="streak-current" id="streak-current">—</div>
+            <div class="streak-divider"></div>
+            <div class="streak-reward" id="streak-reward-text">+0</div>
+            <button class="streak-claim-btn" id="streak-claim-btn" disabled>CLAIM</button>
+            <div class="streak-days" id="streak-days"></div>
+        </div>
+
+        <button class="shell-icon-btn btn-make-it-rain" id="btn-make-it-rain" disabled title="Make It Rain (20 Coins)">💸</button>
+
+        <button class="shell-icon-btn ambience-mute" id="ambience-mute" type="button" title="Toggle Ambience">
+            <span class="ambience-mute-icon">🎵</span>
         </button>
-    </div>
+        <input class="shell-ambience-volume" id="ambience-volume" type="range" min="0" max="100" value="30" title="Ambience Volume">
+    </header>
 
-    <!-- Daily Streak Pill -->
-    <div class="streak-panel" id="streak-panel" hidden>
-        <div class="streak-flame" id="streak-flame" title="Toggle details">🔥</div>
-        <div class="streak-current" id="streak-current">—</div>
-        <div class="streak-divider"></div>
-        <div class="streak-reward" id="streak-reward-text">+0</div>
-        <button class="streak-claim-btn" id="streak-claim-btn" disabled>CLAIM</button>
-        <div class="streak-days" id="streak-days"></div>
-    </div>
+    <!-- ============= SIDEBAR ============= -->
+    <aside class="shell-sidebar" id="shell-sidebar">
+        <nav class="shell-nav">
+            <a class="shell-nav-item shell-nav-home" data-shell-link="/" data-game="lobby">
+                <span class="shell-nav-icon">🏠</span><span class="shell-nav-label">Home</span>
+                <span class="shell-nav-presence" hidden></span>
+            </a>
 
-    <div class="game-grid">
-        <a href="/games/watchparty/" class="game-card" data-game="watchparty">
-            <div class="game-icon">📺</div>
-            <div class="game-card-info">
-                <div class="game-title">Watch Party</div>
-            </div>
-            <div class="game-presence" hidden></div>
-        </a>
+            <div class="shell-nav-group">SOCIAL</div>
+            <a class="shell-nav-item" data-shell-link="/games/watchparty/" data-game="watchparty">
+                <span class="shell-nav-icon">📺</span><span class="shell-nav-label">Watch Party</span>
+                <span class="shell-nav-presence" hidden></span>
+            </a>
+            <a class="shell-nav-item" data-shell-link="/strict-club/" data-game="strict-club">
+                <span class="shell-nav-icon">🎧</span><span class="shell-nav-label">Strict Club</span>
+                <span class="shell-nav-presence" hidden></span>
+            </a>
+            <a class="shell-nav-item" data-shell-link="/contacts.html">
+                <span class="shell-nav-icon">📇</span><span class="shell-nav-label">Contacts</span>
+            </a>
 
-        <a href="/games/stocks/" class="game-card" data-game="stocks">
-            <div class="game-icon">📈</div>
-            <div class="game-card-info">
-                <div class="game-title">Stock Market</div>
-            </div>
-            <div class="game-presence" hidden></div>
-        </a>
+            <div class="shell-nav-group">CASINO</div>
+            <a class="shell-nav-item" data-shell-link="/games/casino/" data-game="casino" data-game-group="casino,strictly7s,plinko,crash,blackjack,roulette,maexchen">
+                <span class="shell-nav-icon">🎰</span><span class="shell-nav-label">Strict Casino</span>
+                <span class="shell-nav-presence" hidden></span>
+            </a>
 
-        <a href="/nostalgiabait/" class="game-card">
-            <div class="game-icon">📼</div>
-            <div class="game-card-info">
-                <div class="game-title">Nostalgiabait</div>
-            </div>
-        </a>
+            <div class="shell-nav-group">SPIELE</div>
+            <a class="shell-nav-item" data-shell-link="/games/strictbrain/" data-game="strictbrain">
+                <span class="shell-nav-icon">🧠</span><span class="shell-nav-label">Strict Brain</span>
+                <span class="shell-nav-presence" hidden></span>
+            </a>
+            <a class="shell-nav-item" data-shell-link="/games/turkish/">
+                <span class="shell-nav-icon" style="font-family:'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif">🇹🇷</span><span class="shell-nav-label">Türkçe</span>
+            </a>
+            <a class="shell-nav-item" data-shell-link="/games/lol-betting/" data-game="lol-betting">
+                <span class="shell-nav-icon">⚔️</span><span class="shell-nav-label">LoL Betting</span>
+                <span class="shell-nav-presence" hidden></span>
+            </a>
+            <a class="shell-nav-item" data-shell-link="/games/tierlist/" data-game="tierlist">
+                <span class="shell-nav-icon">🏆</span><span class="shell-nav-label">Thing of the Week</span>
+                <span class="shell-nav-presence" hidden></span>
+            </a>
+            <a class="shell-nav-item" data-shell-link="/nostalgiabait/">
+                <span class="shell-nav-icon">📼</span><span class="shell-nav-label">Nostalgiabait</span>
+            </a>
 
-        <a href="/games/strictbrain/" class="game-card" data-game="strictbrain">
-            <div class="game-icon">🧠</div>
-            <div class="game-card-info">
-                <div class="game-title">Strict Brain</div>
-            </div>
-            <div class="game-presence" hidden></div>
-        </a>
+            <div class="shell-nav-group">TOOLS</div>
+            <a class="shell-nav-item" data-shell-link="/games/stocks/" data-game="stocks">
+                <span class="shell-nav-icon">📈</span><span class="shell-nav-label">Stocks</span>
+                <span class="shell-nav-presence" hidden></span>
+            </a>
+            <a class="shell-nav-item" data-shell-link="/games/loop-machine/" data-game="loop-machine">
+                <span class="shell-nav-icon">🎹</span><span class="shell-nav-label">Loop Machine</span>
+                <span class="shell-nav-presence" hidden></span>
+            </a>
+            <a class="shell-nav-item" data-shell-link="/shop.html" data-game="shop">
+                <span class="shell-nav-icon"><img src="/assets/diamond.png" alt="" class="shell-nav-icon-img"></span><span class="shell-nav-label">Shop</span>
+            </a>
+            <a class="shell-nav-item" data-shell-link="/achievements.html" data-game="achievements">
+                <span class="shell-nav-icon">🏅</span><span class="shell-nav-label">Achievements</span>
+            </a>
+            <a class="shell-nav-item" data-shell-link="/creator-test.html">
+                <span class="shell-nav-icon">🧪</span><span class="shell-nav-label">Pixel-Mii <span class="shell-nav-tag">BETA</span></span>
+            </a>
 
-        <a href="/games/turkish/" class="game-card">
-            <div class="game-icon" style="font-family:'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif">🇹🇷</div>
-            <div class="game-card-info">
-                <div class="game-title">Türkçe</div>
-            </div>
-        </a>
+            <div class="shell-nav-group">EXTERNAL</div>
+            <a class="shell-nav-item" href="https://strict-90n4.onrender.com" target="_blank" rel="noopener">
+                <span class="shell-nav-icon">🏨</span><span class="shell-nav-label">The Hotel <span class="shell-nav-extlink">↗</span></span>
+            </a>
+        </nav>
+    </aside>
 
-        <a href="/games/lol-betting/" class="game-card" data-game="lol-betting">
-            <div class="game-icon">⚔️</div>
-            <div class="game-card-info">
-                <div class="game-title">LoL Betting</div>
-            </div>
-            <div class="game-presence" hidden></div>
-        </a>
+    <!-- ============= MAIN ============= -->
+    <main class="shell-main" id="shell-main">
 
-        <a href="/games/casino/" class="game-card" data-game="casino" data-game-group="casino,strictly7s,plinko,crash,blackjack,roulette,maexchen">
-            <div class="game-icon">🎰</div>
-            <div class="game-card-info">
-                <div class="game-title">Strict Casino</div>
-            </div>
-            <div class="game-presence" hidden></div>
-        </a>
+        <!-- Iframe slot — populated by shell.js when a route is active -->
+        <iframe class="shell-frame" id="shell-frame" name="shell-frame" hidden></iframe>
 
-        <a href="/games/loop-machine/" class="game-card" data-game="loop-machine">
-            <div class="game-icon">🎹</div>
-            <div class="game-card-info">
-                <div class="game-title">Loop Machine</div>
-            </div>
-            <div class="game-presence" hidden></div>
-        </a>
+        <!-- Home view — shown when no app is active -->
+        <section class="shell-home" id="shell-home">
+            <div class="arcade-title">STRICT HOTEL</div>
 
-        <a href="/strict-club/" class="game-card" data-game="strict-club">
-            <div class="game-icon">🎧</div>
-            <div class="game-card-info">
-                <div class="game-title">Strict Club</div>
-            </div>
-            <div class="game-presence" hidden></div>
-        </a>
-
-        <a href="/contacts.html" class="game-card">
-            <div class="game-icon">📇</div>
-            <div class="game-card-info">
-                <div class="game-title">Contacts</div>
-            </div>
-        </a>
-
-        <a href="/achievements.html" class="game-card" data-game="achievements">
-            <div class="game-icon">🏅</div>
-            <div class="game-card-info">
-                <div class="game-title">Achievements</div>
-            </div>
-            <div class="game-presence" hidden></div>
-        </a>
-
-        <a href="/shop.html" class="game-card" data-game="shop">
-            <div class="game-icon diamond-game-icon"><img src="/assets/diamond.png" alt="💎"></div>
-            <div class="game-card-info">
-                <div class="game-title">Shop</div>
-            </div>
-            <div class="game-presence" hidden></div>
-        </a>
-
-        <a href="/games/tierlist/" class="game-card" data-game="tierlist">
-            <div class="game-icon">🏆</div>
-            <div class="game-card-info">
-                <div class="game-title">Thing of the Week</div>
-            </div>
-            <div class="game-presence" hidden></div>
-        </a>
-
-        <a href="https://strict-90n4.onrender.com" class="game-card" target="_blank">
-            <div class="game-icon">🏨</div>
-            <div class="game-card-info">
-                <div class="game-title">The Hotel</div>
-            </div>
-        </a>
-    </div>
-
-    <!-- Activity Feed (floating bottom-right widget) -->
-    <div class="activity-feed" id="activity-feed">
-        <button class="activity-feed-toggle" id="activity-feed-toggle" type="button" aria-expanded="false" title="Activity">
-            <span class="activity-feed-toggle-icon">📰</span>
-            <span class="activity-feed-toggle-label">FEED</span>
-            <span class="activity-feed-badge" id="activity-feed-badge" hidden>0</span>
-        </button>
-        <div class="activity-feed-panel" id="activity-feed-panel" hidden>
-            <div class="activity-feed-header">
-                <span class="activity-feed-title">RECENT ACTIVITY</span>
-                <button class="activity-feed-close" id="activity-feed-close" type="button" title="Close">×</button>
-            </div>
-            <div class="activity-feed-list" id="activity-feed-list">
-                <div class="activity-feed-empty">No activity yet — start a game!</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Lobby Watch Party (public, anyone can moderate) -->
-    <div class="lobby-wp-section" id="lobby-wp-section">
-        <div class="lobby-wp-header">
-            <div>
-                <div class="lobby-wp-title">PUBLIC WATCH PARTY</div>
-                <div class="lobby-wp-subtitle">Paste any YouTube link — everyone in the lobby watches together</div>
-            </div>
-            <div class="lobby-wp-now" id="lobby-wp-now"></div>
-        </div>
-        <div class="lobby-wp-body">
-            <div class="lobby-wp-player-area">
-                <div class="lobby-wp-player-wrap" id="lobby-wp-player-wrap"></div>
-                <div class="lobby-wp-placeholder" id="lobby-wp-placeholder">
-                    <div class="lobby-wp-placeholder-icon">📺</div>
-                    <div>No video loaded yet</div>
-                    <div class="lobby-wp-placeholder-sub">Paste a YouTube link below to start the party.</div>
-                </div>
-            </div>
-            <div class="lobby-wp-controls">
-                <input id="lobby-wp-url" type="text" placeholder="https://youtube.com/watch?v=..." autocomplete="off">
-                <button id="lobby-wp-load" type="button" class="lobby-wp-btn">LOAD</button>
-                <button id="lobby-wp-clear" type="button" class="lobby-wp-btn lobby-wp-btn-ghost" title="Clear video">CLEAR</button>
-            </div>
-            <div class="lobby-wp-status" id="lobby-wp-status">Connecting…</div>
-        </div>
-    </div>
-
-    <!-- Pictochat -->
-    <div class="picto-section" id="pictochat-panel">
-        <div class="picto-header">
-            <div>
-                <div class="picto-title">PICTOCHAT</div>
-                <div class="picto-subtitle">Shared doodles in the lobby</div>
-            </div>
-        </div>
-        <div class="picto-body">
-            <div class="picto-canvas-area">
-                <div class="picto-canvas-wrap">
-                    <canvas id="picto-canvas"></canvas>
-                    <canvas id="picto-preview"></canvas>
-                    <div id="picto-cursors"></div>
-                </div>
-                <div class="picto-tools">
-                    <div class="picto-tool-group">
-                        <button class="picto-tool active" data-tool="pen" type="button" title="Pen">✏️</button>
-                        <button class="picto-tool" data-tool="eraser" type="button" title="Eraser">🧹</button>
-                        <button class="picto-tool" data-tool="line" type="button" title="Line">📏</button>
-                        <button class="picto-tool" data-tool="rect" type="button" title="Rect">⬜</button>
-                        <button class="picto-tool" data-tool="circle" type="button" title="Circle">⭕</button>
+            <!-- Public Watch Party (hub centerpiece) -->
+            <div class="lobby-wp-section" id="lobby-wp-section">
+                <div class="lobby-wp-header">
+                    <div>
+                        <div class="lobby-wp-title">PUBLIC WATCH PARTY</div>
+                        <div class="lobby-wp-subtitle">Paste any YouTube link — everyone in the lobby watches together</div>
                     </div>
-                    <div class="picto-tool-group">
-                        <button class="picto-tool" data-action="undo" type="button" title="Undo">↩️</button>
-                        <button class="picto-tool" data-action="redo" type="button" title="Redo">↪️</button>
-                        <button class="picto-tool" data-action="clear" type="button" title="Clear">🗑️</button>
+                    <div class="lobby-wp-now" id="lobby-wp-now"></div>
+                </div>
+                <div class="lobby-wp-body">
+                    <div class="lobby-wp-player-area">
+                        <div class="lobby-wp-player-wrap" id="lobby-wp-player-wrap"></div>
+                        <div class="lobby-wp-placeholder" id="lobby-wp-placeholder">
+                            <div class="lobby-wp-placeholder-icon">📺</div>
+                            <div>No video loaded yet</div>
+                            <div class="lobby-wp-placeholder-sub">Paste a YouTube link below to start the party.</div>
+                        </div>
                     </div>
-                    <div class="picto-size">
-                        <input id="picto-size" type="range" min="1" max="18" value="4" title="Brush Size">
+                    <div class="lobby-wp-controls">
+                        <input id="lobby-wp-url" type="text" placeholder="https://youtube.com/watch?v=..." autocomplete="off">
+                        <button id="lobby-wp-load" type="button" class="lobby-wp-btn">LOAD</button>
+                        <button id="lobby-wp-clear" type="button" class="lobby-wp-btn lobby-wp-btn-ghost" title="Clear video">CLEAR</button>
                     </div>
-                    <div class="picto-palette" id="picto-palette"></div>
-                </div>
-                <div class="picto-status" id="picto-status">Connecting...</div>
-            </div>
-            <div class="picto-chat">
-                <div class="picto-chat-messages" id="picto-chat-messages"></div>
-                <div class="picto-chat-input">
-                    <input id="picto-chat-input" type="text" maxlength="200" placeholder="Say something...">
-                    <button id="picto-chat-send" class="picto-send" type="button">Send</button>
+                    <div class="lobby-wp-status" id="lobby-wp-status">Connecting…</div>
                 </div>
             </div>
-        </div>
-    </div>
+        </section>
+    </main>
 
-    <!-- Soundboard -->
-    <div class="soundboard-section" id="soundboard-panel">
-        <div class="soundboard-header">
-            <div>
-                <div class="soundboard-title">SOUNDBOARD</div>
-                <div class="soundboard-subtitle">Shared sounds in the lobby</div>
+    <!-- ============= RIGHT RAIL ============= -->
+    <aside class="shell-rail" id="shell-rail">
+        <!-- Soundboard -->
+        <div class="soundboard-section" id="soundboard-panel">
+            <div class="soundboard-header">
+                <div>
+                    <div class="soundboard-title">SOUNDBOARD</div>
+                    <div class="soundboard-subtitle">Shared lobby sounds</div>
+                </div>
+                <div class="soundboard-controls">
+                    <button class="soundboard-mute" id="soundboard-mute" type="button">
+                        <span class="soundboard-mute-icon">&#x1F50A;</span>
+                    </button>
+                    <div class="soundboard-volume">
+                        <input id="soundboard-volume" type="range" min="0" max="100" value="70">
+                    </div>
+                </div>
             </div>
-            <div class="soundboard-controls">
-                <button class="soundboard-mute" id="soundboard-mute" type="button">
-                    <span class="soundboard-mute-icon">&#x1F50A;</span>
-                </button>
-                <div class="soundboard-volume">
-                    <input id="soundboard-volume" type="range" min="0" max="100" value="70">
+            <div class="soundboard-body">
+                <div class="soundboard-grid" id="soundboard-grid"></div>
+            </div>
+            <div class="soundboard-toast-area" id="soundboard-toasts"></div>
+        </div>
+
+        <!-- Pictochat -->
+        <div class="picto-section" id="pictochat-panel">
+            <div class="picto-header">
+                <div>
+                    <div class="picto-title">PICTOCHAT</div>
+                    <div class="picto-subtitle">Shared doodles</div>
+                </div>
+            </div>
+            <div class="picto-body">
+                <div class="picto-canvas-area">
+                    <div class="picto-canvas-wrap">
+                        <canvas id="picto-canvas"></canvas>
+                        <canvas id="picto-preview"></canvas>
+                        <div id="picto-cursors"></div>
+                    </div>
+                    <div class="picto-tools">
+                        <div class="picto-tool-group">
+                            <button class="picto-tool active" data-tool="pen" type="button" title="Pen">✏️</button>
+                            <button class="picto-tool" data-tool="eraser" type="button" title="Eraser">🧹</button>
+                            <button class="picto-tool" data-tool="line" type="button" title="Line">📏</button>
+                            <button class="picto-tool" data-tool="rect" type="button" title="Rect">⬜</button>
+                            <button class="picto-tool" data-tool="circle" type="button" title="Circle">⭕</button>
+                        </div>
+                        <div class="picto-tool-group">
+                            <button class="picto-tool" data-action="undo" type="button" title="Undo">↩️</button>
+                            <button class="picto-tool" data-action="redo" type="button" title="Redo">↪️</button>
+                            <button class="picto-tool" data-action="clear" type="button" title="Clear">🗑️</button>
+                        </div>
+                        <div class="picto-size">
+                            <input id="picto-size" type="range" min="1" max="18" value="4" title="Brush Size">
+                        </div>
+                        <div class="picto-palette" id="picto-palette"></div>
+                    </div>
+                    <div class="picto-status" id="picto-status">Connecting...</div>
+                </div>
+                <div class="picto-chat">
+                    <div class="picto-chat-messages" id="picto-chat-messages"></div>
+                    <div class="picto-chat-input">
+                        <input id="picto-chat-input" type="text" maxlength="200" placeholder="Say something...">
+                        <button id="picto-chat-send" class="picto-send" type="button">Send</button>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="soundboard-body">
-            <div class="soundboard-grid" id="soundboard-grid"></div>
-        </div>
-        <div class="soundboard-toast-area" id="soundboard-toasts"></div>
-    </div>
+    </aside>
 
+    <!-- Mobile rail toggle -->
+    <button class="shell-rail-toggle" id="shell-rail-toggle" type="button" aria-label="Toggle social rail">💬</button>
 </div>
 
+<!-- Activity Feed (floating widget, shell-level) -->
+<div class="activity-feed" id="activity-feed">
+    <button class="activity-feed-toggle" id="activity-feed-toggle" type="button" aria-expanded="false" title="Activity">
+        <span class="activity-feed-toggle-icon">📰</span>
+        <span class="activity-feed-toggle-label">FEED</span>
+        <span class="activity-feed-badge" id="activity-feed-badge" hidden>0</span>
+    </button>
+    <div class="activity-feed-panel" id="activity-feed-panel" hidden>
+        <div class="activity-feed-header">
+            <span class="activity-feed-title">RECENT ACTIVITY</span>
+            <button class="activity-feed-close" id="activity-feed-close" type="button" title="Close">×</button>
+        </div>
+        <div class="activity-feed-list" id="activity-feed-list">
+            <div class="activity-feed-empty">No activity yet — start a game!</div>
+        </div>
+    </div>
+</div>
+
+<!-- ============= SCRIPTS ============= -->
 <!-- Socket.io -->
 <script src="/socket.io/socket.io.js"></script>
 
 <!-- Socket initialization helpers -->
 <script src="/shared/js/socket-init.js"></script>
 
-<!-- Character Creator (standalone, no MaexchenApp needed) -->
+<!-- Character Creator -->
 <script src="/shared/js/creator.js"></script>
 
-<!-- Lobby Logic -->
+<!-- Shell routing + sidebar logic (must run BEFORE lobby.js so sidebar links wire up first) -->
+<script src="/shell.js"></script>
+
+<!-- Lobby Logic (avatar, currency, streak, presence badges, activity feed, make-it-rain) -->
 <script src="/lobby.js"></script>
 
 <!-- Lobby Watch Party -->
 <script src="/lobby-watchparty.js"></script>
 
-<!-- Pictochat Logic -->
+<!-- Pictochat -->
 <script src="/pictochat.js"></script>
 
-<!-- Soundboard Logic -->
+<!-- Soundboard -->
 <script src="/soundboard.js"></script>
 
-<!-- Stock Ticker -->
-<script src="/shared/js/stock-ticker.js"></script>
+<!-- Stock Ticker (top bar variant on shell) — disabled here, lives in stocks app only -->
 
 <!-- Ambience Background Audio -->
 <script src="/ambience.js"></script>
 
-<!-- Starfield Parallax (cursor-tracking background) -->
+<!-- Starfield Parallax -->
 <script src="/shared/js/starfield-parallax.js"></script>
 
 <!-- Achievement unlock toasts -->
 <script src="/shared/js/achievement-toast.js"></script>
-
-<!-- Switch Sound on Game Card Click -->
-<script>
-(function () {
-    var switchSound = new Audio('/userinput/switch.mp3');
-    switchSound.preload = 'auto';
-    switchSound.volume = 0.25;
-    document.querySelectorAll('.game-card:not(.coming-soon)').forEach(function (card) {
-        card.addEventListener('click', function (e) {
-            e.preventDefault();
-            var href = card.getAttribute('href');
-            try { switchSound.currentTime = 0; switchSound.play().catch(function(){}); } catch(ex) {}
-            setTimeout(function () { window.location.href = href; }, 250);
-        });
-    });
-})();
-</script>
 
 </body>
 </html>

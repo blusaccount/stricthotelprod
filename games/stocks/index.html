@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+        <script src="/shared/js/iframe-helper.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StrictHotel – Stock Market</title>
@@ -154,6 +155,16 @@
 <script>
 (function () {
     'use strict';
+
+    // Inside the shell, the parent already runs an ambience YT player and
+    // owns the audio mix. Skip our own and hide the mute button.
+    if (window.IS_SHELL_IFRAME) {
+        var ctrl = document.querySelector('.ambience-control');
+        if (ctrl) ctrl.style.display = 'none';
+        var ytc = document.querySelector('.ambience-yt-container');
+        if (ytc) ytc.style.display = 'none';
+        return;
+    }
 
     // https://www.youtube.com/watch?v=WwB8SQMyfls
     var VIDEO_ID = 'WwB8SQMyfls';

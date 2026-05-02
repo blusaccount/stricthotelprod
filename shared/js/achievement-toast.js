@@ -9,6 +9,9 @@
     'use strict';
     if (window.__strictAchievementToastInstalled) return;
     window.__strictAchievementToastInstalled = true;
+    // Inside the shell iframe, the parent shell already shows the toast.
+    // Skip here to avoid double-rendering.
+    if (window.IS_SHELL_IFRAME) return;
 
     // Inject CSS once.
     const css = `

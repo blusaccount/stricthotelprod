@@ -1,4 +1,4 @@
-import { sanitizeName, validateCharacter, validateGameType, emitBalanceUpdate } from '../socket-utils.js';
+import { sanitizeName, validateCharacter, validateGameType, emitBalanceUpdate, emitToUser, userRoom } from '../socket-utils.js';
 import { getBalance, addBalance, deductBalance, getDiamonds, buyDiamonds } from '../currency.js';
 import { broadcastOnlinePlayers } from '../room-manager.js';
 import { saveCharacter, getCharacter } from '../character-store.js';
@@ -16,14 +16,21 @@ export function registerCurrencyHandlers(socket, io, { checkRateLimit, onlinePla
         const character = validateCharacter(data.character);
         const game = validateGameType(data.game);
 
+        // Leave any prior user-room (in case the socket re-registers under a
+        // new name) so balance updates don't leak between players.
+        const prev = onlinePlayers.get(socket.id);
+        if (prev && prev.name && prev.name !== name) socket.leave(userRoom(prev.name));
+
         onlinePlayers.set(socket.id, { name, character, game });
+        socket.join(userRoom(name));
         broadcastOnlinePlayers(io);
 
         // Persist character portrait to database
         if (character) await saveCharacter(name, character);
 
-        // Send currency balance to the player
-        socket.emit('balance-update', { balance: await getBalance(name) });
+        // Send currency balance to the player (fans out to all sockets of
+        // this user, so the shell + the iframe stay in sync).
+        emitToUser(io, name, 'balance-update', { balance: await getBalance(name) });
 
         console.log(`Registered: ${name} for ${game}`);
     } catch (err) { console.error('register-player error:', err.message); } });
@@ -73,7 +80,7 @@ export function registerCurrencyHandlers(socket, io, { checkRateLimit, onlinePla
         if (!checkRateLimit(socket)) return;
         const player = onlinePlayers.get(socket.id);
         if (!player) return;
-        socket.emit('balance-update', { balance: await getBalance(player.name) });
+        emitToUser(io, player.name, 'balance-update', { balance: await getBalance(player.name) });
     } catch (err) { console.error('get-balance error:', err.message); } });
 
     // --- Get My Diamonds (for the logged-in socket's own balance) ---
@@ -104,8 +111,8 @@ export function registerCurrencyHandlers(socket, io, { checkRateLimit, onlinePla
             return;
         }
         
-        socket.emit('balance-update', { balance: result.balance });
-        socket.emit('diamonds-update', { diamonds: result.diamonds });
+        emitToUser(io, player.name, 'balance-update', { balance: result.balance });
+        emitToUser(io, player.name, 'diamonds-update', { diamonds: result.diamonds });
 
         // Achievement bumps
         const unlocks = [];
@@ -127,7 +134,7 @@ export function registerCurrencyHandlers(socket, io, { checkRateLimit, onlinePla
             return;
         }
         
-        socket.emit('balance-update', { balance: newBalance });
+        emitToUser(io, player.name, 'balance-update', { balance: newBalance });
 
         // Achievement
         const unlocks = await bump(player.name, 'rain_triggers', 1);
