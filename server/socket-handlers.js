@@ -23,6 +23,7 @@ import { registerTierlistHandlers, cleanupTierlistOnDisconnect } from './handler
 import { registerDailyStreakHandlers, cleanupStreakRateLimitOnDisconnect } from './handlers/daily-streak.js';
 import { registerAchievementHandlers } from './handlers/achievements.js';
 import { registerBlackjackHandlers } from './handlers/blackjack.js';
+import { registerRouletteHandlers, cleanupRouletteCooldown } from './handlers/roulette.js';
 
 // ============== RATE LIMITING ==============
 
@@ -145,6 +146,7 @@ export function registerSocketHandlers(io, { fetchTickerQuotes, getYahooFinance,
         registerDailyStreakHandlers(socket, io, deps);
         registerAchievementHandlers(socket, io, deps);
         registerBlackjackHandlers(socket, io, deps);
+        registerRouletteHandlers(socket, io, deps);
 
         socket.on('disconnect', async () => { try {
             rateLimiters.delete(socket.id);
@@ -152,6 +154,7 @@ export function registerSocketHandlers(io, { fetchTickerQuotes, getYahooFinance,
             strictly7sSpinCooldown.delete(socket.id);
             plinkoDropCooldown.delete(socket.id);
             cleanupStreakRateLimitOnDisconnect(socket.id);
+            cleanupRouletteCooldown(socket.id);
 
             cleanupPictochatOnDisconnect(socket.id, io);
             cleanupClubOnDisconnect(socket.id, io);
