@@ -196,6 +196,109 @@
         }, 5000);
     };
 
+    // ============= Daily Streak =============
+    const STREAK_REWARDS = [50, 75, 120, 200, 300, 450, 750];
+
+    const streakPanel = document.getElementById('streak-panel');
+    const streakCurrentEl = document.getElementById('streak-current');
+    const streakMaxEl = document.getElementById('streak-max');
+    const streakRewardEl = document.getElementById('streak-reward-text');
+    const streakClaimBtn = document.getElementById('streak-claim-btn');
+    const streakDaysEl = document.getElementById('streak-days');
+
+    function renderStreakDays(currentStreak, nextDayIndex, canClaim) {
+        if (!streakDaysEl) return;
+        streakDaysEl.innerHTML = '';
+        // Render the current 7-day cycle. Day numbers shown are 1..7 of the
+        // active cycle, where the active cycle is the one containing nextDayIndex.
+        const cycle = Math.floor((nextDayIndex - 1) / 7);
+        for (let slot = 1; slot <= 7; slot++) {
+            const dayInCycle = slot;
+            const absoluteDay = cycle * 7 + slot;
+            const reward = Math.floor(STREAK_REWARDS[slot - 1] * (1 + 0.5 * cycle));
+            const isClaimed = canClaim
+                ? absoluteDay < nextDayIndex
+                : absoluteDay <= currentStreak;
+            const isNext = canClaim && absoluteDay === nextDayIndex;
+            const isSpecial = slot === 7;
+            const div = document.createElement('div');
+            div.className = 'streak-day';
+            if (isClaimed) div.classList.add('claimed');
+            if (isNext) div.classList.add('next');
+            if (isSpecial) div.classList.add('special');
+            div.innerHTML = `<span class="label">DAY ${dayInCycle}</span><span class="reward">+${reward}</span>`;
+            streakDaysEl.appendChild(div);
+        }
+    }
+
+    function updateStreakUI(status) {
+        if (!streakPanel || !status) return;
+        streakPanel.hidden = false;
+        if (streakCurrentEl) {
+            streakCurrentEl.textContent = `${status.currentStreak} DAY STREAK`;
+        }
+        if (streakMaxEl) {
+            streakMaxEl.textContent = `Best: ${status.maxStreak} · Total claims: ${status.totalClaims}`;
+        }
+        if (streakRewardEl && status.nextReward) {
+            const r = status.nextReward;
+            streakRewardEl.textContent = r.diamonds > 0 ? `+${r.coins} SC + 💎` : `+${r.coins} SC`;
+        }
+        if (streakClaimBtn) {
+            streakClaimBtn.disabled = !status.canClaim;
+            streakClaimBtn.textContent = status.canClaim ? 'CLAIM' : 'CLAIMED';
+        }
+        renderStreakDays(status.currentStreak, status.nextDayIndex, status.canClaim);
+    }
+
+    function fetchStreakStatus() {
+        socket.emit('streak-status');
+    }
+
+    socket.on('streak-status-result', (status) => {
+        if (status && !status.error) updateStreakUI(status);
+    });
+
+    socket.on('streak-claim-result', (result) => {
+        if (!result || !result.ok) return;
+        // Tiny celebration: pulse the flame and show a quick reward toast.
+        const flame = document.getElementById('streak-flame');
+        if (flame) {
+            flame.animate(
+                [{ transform: 'scale(1)' }, { transform: 'scale(1.6)' }, { transform: 'scale(1)' }],
+                { duration: 600, easing: 'cubic-bezier(0.2, 1.4, 0.4, 1)' }
+            );
+        }
+        const r = result.reward;
+        const toast = document.createElement('div');
+        toast.className = 'rain-toast';
+        toast.textContent = `Streak day ${result.day}: +${r.coins} SC${r.diamonds ? ' + 💎' : ''}`;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 4000);
+    });
+
+    if (streakClaimBtn) {
+        streakClaimBtn.addEventListener('click', () => {
+            if (streakClaimBtn.disabled) return;
+            socket.emit('streak-claim');
+        });
+    }
+
+    // Re-fetch status when player registers (so the panel populates).
+    const _origRegister = registerPlayer;
+    function registerPlayerWithStreak() {
+        _origRegister();
+        // Slight delay so server has the player record.
+        setTimeout(fetchStreakStatus, 250);
+    }
+    // Hook into the existing register call sites by re-binding the references.
+    if (btnCreate && Creator) {
+        btnCreate.removeEventListener('click', null);
+        // Already wired, just trigger fetch on connect/load too.
+    }
+    socket.on('connect', () => { setTimeout(fetchStreakStatus, 400); });
+
     // --- Start ---
     init();
+    setTimeout(fetchStreakStatus, 800);
 })();

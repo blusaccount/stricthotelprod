@@ -20,6 +20,7 @@ import { registerPlinkoHandlers } from './handlers/plinko.js';
 import { registerCrashHandlers, startCrashLoop } from './handlers/crash.js';
 import { registerWatchpartyHandlers } from './handlers/watchparty.js';
 import { registerTierlistHandlers, cleanupTierlistOnDisconnect } from './handlers/tierlist.js';
+import { registerDailyStreakHandlers, cleanupStreakRateLimitOnDisconnect } from './handlers/daily-streak.js';
 
 // ============== RATE LIMITING ==============
 
@@ -139,12 +140,14 @@ export function registerSocketHandlers(io, { fetchTickerQuotes, getYahooFinance,
         registerCrashHandlers(socket, io, deps);
         registerWatchpartyHandlers(socket, io, deps);
         registerTierlistHandlers(socket, io, deps);
+        registerDailyStreakHandlers(socket, io, deps);
 
         socket.on('disconnect', async () => { try {
             rateLimiters.delete(socket.id);
             stockTradeCooldown.delete(socket.id);
             strictly7sSpinCooldown.delete(socket.id);
             plinkoDropCooldown.delete(socket.id);
+            cleanupStreakRateLimitOnDisconnect(socket.id);
 
             cleanupPictochatOnDisconnect(socket.id, io);
             cleanupClubOnDisconnect(socket.id, io);

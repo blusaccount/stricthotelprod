@@ -128,3 +128,41 @@ create index if not exists tierlist_placements_week_idx
 
 create index if not exists tierlist_placements_player_week_idx
   on tierlist_placements (player_name, week_key);
+
+-- ============================================================================
+-- Daily Streaks (lobby-wide login streak)
+-- ============================================================================
+create table if not exists daily_streaks (
+  player_id bigint primary key references players(id) on delete cascade,
+  current_streak integer not null default 0,
+  max_streak integer not null default 0,
+  last_claimed_day integer,
+  total_claims integer not null default 0
+);
+
+create index if not exists daily_streaks_current_idx
+  on daily_streaks (current_streak desc, max_streak desc);
+
+-- ============================================================================
+-- Achievements
+-- ============================================================================
+create table if not exists achievements (
+  player_id bigint not null references players(id) on delete cascade,
+  achievement_id text not null,
+  unlocked_at timestamptz not null default now(),
+  metadata jsonb,
+  primary key (player_id, achievement_id)
+);
+
+create index if not exists achievements_unlocked_idx
+  on achievements (player_id, unlocked_at desc);
+
+-- ============================================================================
+-- Achievement progress counters (running tallies for incremental unlocks)
+-- ============================================================================
+create table if not exists achievement_progress (
+  player_id bigint not null references players(id) on delete cascade,
+  counter_id text not null,
+  value bigint not null default 0,
+  primary key (player_id, counter_id)
+);

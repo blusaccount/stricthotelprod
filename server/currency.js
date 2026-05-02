@@ -223,4 +223,32 @@ export async function buyDiamonds(playerName, count = 1) {
     });
 }
 
+// Grant diamonds for free (rewards, streaks, achievements). Returns the new
+// diamond count, or null on failure. No coins are deducted.
+export async function addDiamonds(playerName, count = 1, reason = 'reward', metadata = null) {
+    if (!Number.isInteger(count) || count <= 0) return null;
+    if (!isDatabaseEnabled()) {
+        return await withBalanceLock(playerName, async () => {
+            const current = diamonds.get(playerName) || 0;
+            const next = current + count;
+            diamonds.set(playerName, next);
+            return next;
+        });
+    }
+    return withTransaction(async (txClient) => {
+        await getOrCreatePlayerBalance(playerName, txClient);
+        const result = await txClient.query(
+            'update players set diamonds = diamonds + $1 where name = $2 returning diamonds',
+            [count, playerName]
+        );
+        // Log to ledger as well so the wallet ledger reflects the grant.
+        await txClient.query(
+            `insert into wallet_ledger (player_id, delta, reason, metadata)
+             select id, 0, $2, $3 from players where name = $1`,
+            [playerName, reason, JSON.stringify({ diamonds: count, ...(metadata || {}) })]
+        );
+        return result.rows[0]?.diamonds || 0;
+    });
+}
+
 export { STARTING_BALANCE };
