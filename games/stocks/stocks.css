@@ -703,3 +703,9 @@ body {
         max-width: 1100px;
     }
 }
+
+@media (min-width: 1600px) {
+    .stock-page {
+        max-width: 1500px;
+    }
+}

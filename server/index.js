@@ -82,8 +82,7 @@ const APP_ROUTES = [
     /^\/contacts\.html$/,
     /^\/achievements\.html$/,
     /^\/strict-club\//,
-    /^\/nostalgiabait/,
-    /^\/creator-test\.html$/
+    /^\/nostalgiabait/
 ];
 app.use((req, res, next) => {
     if (req.method !== 'GET') return next();

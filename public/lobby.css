@@ -21,7 +21,7 @@ body {
 .menu-container {
     text-align: center;
     padding: 18px 14px 60px;
-    max-width: 1180px;
+    max-width: 1600px;
     margin: 0 auto;
     position: relative;
     z-index: 1;
@@ -849,8 +849,8 @@ body .ticker-change.down { color: var(--arcade-loss); }
 /* ============= Public Watch Party ============= */
 
 .lobby-wp-section {
-    margin: 38px auto 22px;
-    max-width: 1180px;
+    margin: 24px auto 22px;
+    max-width: 1800px;
     border: 2px solid var(--arcade-frame);
     background: linear-gradient(180deg, var(--arcade-panel) 0%, var(--arcade-panel-2) 100%);
     box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(255,255,255,0.04);
@@ -906,7 +906,9 @@ body .ticker-change.down { color: var(--arcade-loss); }
 .lobby-wp-player-area {
     position: relative;
     width: 100%;
+    max-width: calc((100vh - 240px) * 16 / 9);
     aspect-ratio: 16 / 9;
+    margin: 0 auto;
     background: #050208;
     border: 2px solid var(--arcade-border);
     overflow: hidden;
