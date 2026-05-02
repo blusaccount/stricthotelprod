@@ -2,6 +2,7 @@ import { randomInt } from 'crypto';
 import { addBalance, deductBalance, getBalance } from '../currency.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
+import { STANDARD_CASINO_BETS, validateCasinoBet } from '../socket-utils.js';
 
 // ============================================================================
 // Roulette — European wheel (single 0). 37 pockets: 0..36.
@@ -19,7 +20,7 @@ import { notifyUnlocks } from './achievements.js';
 // Multiple bets per round are supported.
 // ============================================================================
 
-const ROULETTE_BETS = [5, 10, 25, 50, 100, 500];
+const ROULETTE_BETS = STANDARD_CASINO_BETS;
 const MAX_BETS_PER_ROUND = 12;
 const POCKET_COUNT = 37;
 
@@ -113,8 +114,8 @@ function validateBets(rawBets) {
     for (const r of rawBets) {
         if (!r || typeof r !== 'object') return null;
         if (!VALID_BET_TYPES.has(r.type)) return null;
-        const amount = Number(r.amount);
-        if (!Number.isInteger(amount) || !ROULETTE_BETS.includes(amount)) return null;
+        const amount = validateCasinoBet(r.amount);
+        if (amount === null) return null;
         if (r.type === 'straight') {
             const value = Number(r.value);
             if (!Number.isInteger(value) || value < 0 || value > 36) return null;

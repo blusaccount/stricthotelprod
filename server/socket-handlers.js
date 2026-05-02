@@ -21,7 +21,7 @@ import { registerCrashHandlers, startCrashLoop } from './handlers/crash.js';
 import { registerWatchpartyHandlers } from './handlers/watchparty.js';
 import { registerTierlistHandlers, cleanupTierlistOnDisconnect } from './handlers/tierlist.js';
 import { registerDailyStreakHandlers, cleanupStreakRateLimitOnDisconnect } from './handlers/daily-streak.js';
-import { registerAchievementHandlers } from './handlers/achievements.js';
+import { registerAchievementHandlers, makeAchievementsHelper } from './handlers/achievements.js';
 import { registerBlackjackHandlers } from './handlers/blackjack.js';
 import { registerRouletteHandlers, cleanupRouletteCooldown } from './handlers/roulette.js';
 
@@ -124,7 +124,8 @@ export function registerSocketHandlers(io, { fetchTickerQuotes, getYahooFinance,
         removePlayerFromRoom,
         fetchTickerQuotes,
         getYahooFinance,
-        isStockGameEnabled
+        isStockGameEnabled,
+        achievements: makeAchievementsHelper(io, onlinePlayers)
     };
 
     io.on('connection', (socket) => {

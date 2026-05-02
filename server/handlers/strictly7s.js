@@ -2,6 +2,7 @@ import { randomInt } from 'crypto';
 import { addBalance, deductBalance, getBalance } from '../currency.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
+import { STANDARD_CASINO_BETS, validateCasinoBet } from '../socket-utils.js';
 
 // ============================================================================
 // Strictly7s 2.0 — 5×3 grid, 10 paylines, win-both-ways, expanding wild,
@@ -11,7 +12,7 @@ import { notifyUnlocks } from './achievements.js';
 // Hit frequency: ~30.7 %. Free-spin trigger: ~1 in 178 base spins.
 // ============================================================================
 
-const STRICTLY7S_BETS = [5, 10, 25, 50, 100, 500];
+const STRICTLY7S_BETS = STANDARD_CASINO_BETS;
 const PAYLINE_COUNT = 10;
 const FREE_SPIN_AWARD = 10;
 const FREE_SPIN_MULTIPLIER = 2;
@@ -274,8 +275,8 @@ export function registerStrictly7sHandlers(socket, io, deps) {
             bet = fs.bet;
             multiplier = fs.multiplier;
         } else {
-            bet = Number(data?.bet);
-            if (!Number.isInteger(bet) || !STRICTLY7S_BETS.includes(bet)) {
+            bet = validateCasinoBet(data?.bet);
+            if (bet === null) {
                 socket.emit('strictly7s-error', { message: 'Invalid bet amount' });
                 return;
             }

@@ -2,6 +2,7 @@ import { randomInt } from 'crypto';
 import { addBalance, deductBalance, getBalance } from '../currency.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
+import { STANDARD_CASINO_BETS, validateCasinoBet } from '../socket-utils.js';
 
 // ============================================================================
 // Blackjack — single player vs. dealer, 6-deck shoe.
@@ -15,7 +16,7 @@ import { notifyUnlocks } from './achievements.js';
 //  - No split, no insurance (MVP).
 // ============================================================================
 
-const BLACKJACK_BETS = [5, 10, 25, 50, 100, 500];
+const BLACKJACK_BETS = STANDARD_CASINO_BETS;
 const NUM_DECKS = 6;
 const RESHUFFLE_AT = 80;
 
@@ -156,8 +157,8 @@ export function registerBlackjackHandlers(socket, io, deps) {
             socket.emit('bj-error', { message: 'Finish your current hand first' });
             return;
         }
-        const bet = Number(data?.bet);
-        if (!Number.isInteger(bet) || !BLACKJACK_BETS.includes(bet)) {
+        const bet = validateCasinoBet(data?.bet);
+        if (bet === null) {
             socket.emit('bj-error', { message: 'Invalid bet amount' });
             return;
         }

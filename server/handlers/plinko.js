@@ -2,6 +2,7 @@ import { randomInt } from 'crypto';
 import { addBalance, deductBalance } from '../currency.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
+import { STANDARD_CASINO_BETS, validateCasinoBet } from '../socket-utils.js';
 
 // ============================================================================
 // Plinko — 12-row peg field, 13 buckets, three risk levels.
@@ -14,7 +15,7 @@ import { notifyUnlocks } from './achievements.js';
 //   high   96.5 %   max win 200× bet
 // ============================================================================
 
-const PLINKO_BETS = [5, 10, 25, 50, 100, 500];
+const PLINKO_BETS = STANDARD_CASINO_BETS;
 const ROWS = 12;
 const BUCKETS = ROWS + 1;
 const RISK_LEVELS = ['low', 'medium', 'high'];
@@ -60,8 +61,8 @@ export function registerPlinkoHandlers(socket, io, deps) {
             return;
         }
 
-        const bet = Number(data?.bet);
-        if (!Number.isInteger(bet) || !PLINKO_BETS.includes(bet)) {
+        const bet = validateCasinoBet(data?.bet);
+        if (bet === null) {
             socket.emit('plinko-error', { message: 'Invalid bet amount' });
             return;
         }

@@ -1,9 +1,7 @@
 import {
-    getPlayerPlacements,
     upsertPlacement,
     removePlacement,
     getAllPlacementsForWeek,
-    getUniqueRankerCount,
     pruneOldWeeks
 } from '../tierlist-store.js';
 import { bump } from '../achievements.js';

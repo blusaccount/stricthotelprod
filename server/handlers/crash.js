@@ -2,6 +2,7 @@ import { randomInt } from 'crypto';
 import { addBalance, deductBalance } from '../currency.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
+import { STANDARD_CASINO_BETS, validateCasinoBet } from '../socket-utils.js';
 
 // ============================================================================
 // Crash — single global round, exponential multiplier curve, server-authoritative.
@@ -19,9 +20,7 @@ const GROWTH_RATE = 0.08;          // per second
 const BETTING_MS = 6_000;
 const REVEAL_MS = 4_000;
 const TICK_MS = 100;                // multiplier broadcast cadence
-const MIN_BET = 2;
-const MAX_BET = 50;
-const CRASH_BETS = [5, 10, 25, 50, 100, 500];
+const CRASH_BETS = STANDARD_CASINO_BETS;
 const MAX_ROUND_MS = 120_000;       // safety cap (~134000× hard ceiling)
 const MAX_AUTO_CASHOUT = 1_000_000; // sane cap for autoCashout input
 
@@ -278,8 +277,8 @@ export function registerCrashHandlers(socket, io, deps) {
             socket.emit('crash-error', { message: 'Bet already placed for this round' });
             return;
         }
-        const bet = Number(data?.bet);
-        if (!Number.isInteger(bet) || !CRASH_BETS.includes(bet)) {
+        const bet = validateCasinoBet(data?.bet);
+        if (bet === null) {
             socket.emit('crash-error', { message: 'Invalid bet amount' });
             return;
         }
@@ -380,8 +379,6 @@ export {
     REVEAL_MS,
     TICK_MS,
     CRASH_BETS,
-    MIN_BET,
-    MAX_BET,
     sampleCrashMultiplier,
     multiplierAt,
     timeForMultiplier

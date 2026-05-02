@@ -137,10 +137,10 @@ export async function saveMessage(name, text) {
 
 export async function clearMessages() {
     if (!isDatabaseEnabled()) return;
-
     try {
         await query('delete from picto_messages');
     } catch (err) {
         console.error('clearMessages error:', err.message);
     }
 }
+

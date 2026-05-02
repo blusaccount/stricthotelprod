@@ -42,6 +42,18 @@ export function validateYouTubeId(videoId) {
     return videoId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 11);
 }
 
+// Canonical bet ladder used by every casino game (Strictly7s, Plinko, Crash,
+// Blackjack, Roulette). Centralised so a balance change only happens here.
+export const STANDARD_CASINO_BETS = [5, 10, 25, 50, 100, 500];
+
+// Returns the validated integer bet, or null if the input is not in the
+// allowed set. Pass a custom array as the second arg for non-standard ladders.
+export function validateCasinoBet(raw, allowed = STANDARD_CASINO_BETS) {
+    const n = Number(raw);
+    if (!Number.isInteger(n) || !allowed.includes(n)) return null;
+    return n;
+}
+
 export function normalizePoint(point) {
     if (!point || typeof point !== 'object') return null;
     const x = Number(point.x);

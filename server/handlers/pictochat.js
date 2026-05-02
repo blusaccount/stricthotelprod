@@ -1,4 +1,4 @@
-import { loadStrokes, saveStroke, deleteStroke, clearStrokes, loadMessages, saveMessage, clearMessages, PICTO_MAX_MESSAGES } from '../pictochat-store.js';
+import { loadStrokes, saveStroke, deleteStroke, clearStrokes, loadMessages, saveMessage, PICTO_MAX_MESSAGES } from '../pictochat-store.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
 import { normalizePoint, sanitizeColor, sanitizeSize } from '../socket-utils.js';
