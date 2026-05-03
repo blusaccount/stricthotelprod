@@ -1,0 +1,511 @@
+# Thing of the Week — catalog source
+# Format: Wikipedia article title | category
+# Lines starting with # are ignored. Run scripts/import-tierlist-items.mjs to import.
+# Add new entries any time; existing local images are kept and not re-downloaded.
+
+# ─── FOOD ─────────────────────────────────────────────
+Pizza | food
+Sushi | food
+Tacos | food
+Hamburger | food
+Ice cream | food
+Ramen | food
+Croissant | food
+Steak | food
+Pad Thai | food
+Doner kebab | food
+Chocolate | food
+Pancake | food
+French fries | food
+Dim sum | food
+Curry | food
+Pasta | food
+Waffle | food
+Nachos | food
+Pho | food
+Cheesecake | food
+Coffee | food
+Bubble tea | food
+Pretzel | food
+Baklava | food
+Tiramisu | food
+Popcorn | food
+Avocado | food
+Poutine | food
+Spring roll | food
+Donut | food
+Espresso | food
+Matcha | food
+Lasagna | food
+Falafel | food
+Pierogi | food
+Goulash | food
+Risotto | food
+Macaron | food
+Burrito | food
+Quesadilla | food
+Empanada | food
+Hot dog | food
+Sandwich | food
+Bagel | food
+Schnitzel | food
+Bratwurst | food
+Sauerkraut | food
+Currywurst | food
+Fish and chips | food
+Paella | food
+Gazpacho | food
+Fondue | food
+Raclette | food
+Hummus | food
+Shawarma | food
+Bao | food
+Mochi | food
+Onigiri | food
+Tempura | food
+Gyoza | food
+Bibimbap | food
+Kimchi | food
+Pad See Ew | food
+Banh Mi | food
+Massaman curry | food
+Tom Yum | food
+Beer | food
+Whiskey | food
+Wine | food
+Champagne | food
+Mojito | food
+Margarita (cocktail) | food
+Pina Colada | food
+Aperol Spritz | food
+Sangria | food
+Lemonade | food
+Iced tea | food
+Smoothie | food
+Milkshake | food
+Boba | food
+Cinnamon roll | food
+Apple pie | food
+Brownie | food
+Cookie | food
+
+# ─── ANIMALS ─────────────────────────────────────────
+Cat | animals
+Dog | animals
+Red panda | animals
+Penguin | animals
+Owl | animals
+Dolphin | animals
+Elephant | animals
+Otter | animals
+Koala | animals
+Turtle | animals
+Octopus | animals
+Hedgehog | animals
+Giant panda | animals
+Tiger | animals
+Jellyfish | animals
+Frog | animals
+Bee | animals
+Shark | animals
+Eagle | animals
+Lion | animals
+Giraffe | animals
+Zebra | animals
+Hippopotamus | animals
+Rhinoceros | animals
+Kangaroo | animals
+Platypus | animals
+Sloth | animals
+Capybara | animals
+Axolotl | animals
+Tardigrade | animals
+Naked mole-rat | animals
+Aye-aye | animals
+Pangolin | animals
+Quokka | animals
+Narwhal | animals
+Manatee | animals
+Walrus | animals
+Polar bear | animals
+Grizzly bear | animals
+Wolf | animals
+Fox | animals
+Raccoon | animals
+Squirrel | animals
+Chipmunk | animals
+Beaver | animals
+Hamster | animals
+Guinea pig | animals
+Ferret | animals
+Hummingbird | animals
+Flamingo | animals
+Peacock | animals
+Toucan | animals
+Parrot | animals
+Crow | animals
+Ostrich | animals
+Goose | animals
+Duck | animals
+Chicken | animals
+Pig | animals
+Cow | animals
+Sheep | animals
+Goat | animals
+Horse | animals
+Camel | animals
+Llama | animals
+Alpaca | animals
+Bison | animals
+Moose | animals
+Reindeer | animals
+Stag beetle | animals
+Praying mantis | animals
+Butterfly | animals
+Dragonfly | animals
+Ladybug | animals
+Spider | animals
+Scorpion | animals
+Centipede | animals
+Crab | animals
+Lobster | animals
+Shrimp | animals
+Squid | animals
+Seahorse | animals
+Starfish | animals
+Coral | animals
+Snail | animals
+Slug | animals
+Tarantula | animals
+
+# ─── ABSURD / WEIRD ──────────────────────────────────
+Loch Ness Monster | absurd
+Bigfoot | absurd
+Yeti | absurd
+Mothman | absurd
+Chupacabra | absurd
+Kraken | absurd
+Unicorn | absurd
+Mermaid | absurd
+Phoenix (mythology) | absurd
+Bermuda Triangle | absurd
+Area 51 | absurd
+Stonehenge | absurd
+Easter Island | absurd
+Atlantis | absurd
+El Dorado | absurd
+Holy Grail | absurd
+Excalibur | absurd
+Pandora's box | absurd
+Trojan Horse | absurd
+Gargoyle | absurd
+Garden gnome | absurd
+Rubber duck | absurd
+Yo-yo | absurd
+Slinky | absurd
+Boomerang | absurd
+Magic 8-ball | absurd
+Whoopee cushion | absurd
+Bobblehead | absurd
+Gummy bear | absurd
+Plastic flamingo | absurd
+Lawn gnome | absurd
+Mood ring | absurd
+Lava lamp | absurd
+Disco ball | absurd
+Snow globe | absurd
+Pet rock | absurd
+Tamagotchi | absurd
+Furby | absurd
+Stick figure | absurd
+Toilet paper | absurd
+Toaster | absurd
+Rubik's Cube | absurd
+Pogo stick | absurd
+Slip 'N Slide | absurd
+Trampoline | absurd
+Pool noodle | absurd
+Inflatable castle | absurd
+Bubble wrap | absurd
+Duct tape | absurd
+WD-40 | absurd
+Spam (food) | absurd
+Marmite | absurd
+
+# ─── INTERNET / POP CULTURE ──────────────────────────
+Rickrolling | internet
+Doge (meme) | internet
+Grumpy Cat | internet
+Keyboard Cat | internet
+Nyan Cat | internet
+Pepe the Frog | internet
+Trollface | internet
+LOLcat | internet
+Distracted boyfriend | internet
+Drakeposting | internet
+Harambe | internet
+Y2K | internet
+QR code | internet
+Emoji | internet
+
+# ─── SPORTS ──────────────────────────────────────────
+Association football | sports
+Basketball | sports
+Skateboarding | sports
+Tennis | sports
+Boxing | sports
+Archery | sports
+Chess | sports
+Golf | sports
+Baseball | sports
+American football | sports
+Rugby football | sports
+Cricket | sports
+Volleyball | sports
+Hockey | sports
+Bowling | sports
+Darts | sports
+Curling | sports
+Skiing | sports
+Snowboarding | sports
+Surfing | sports
+Climbing | sports
+Cycling | sports
+Marathon | sports
+Yoga | sports
+Karate | sports
+Taekwondo | sports
+Sumo | sports
+Fencing | sports
+Wrestling | sports
+Rowing | sports
+Sailing | sports
+Diving | sports
+Swimming | sports
+Skydiving | sports
+
+# ─── PLACES ──────────────────────────────────────────
+Tokyo | places
+Paris | places
+Hawaii | places
+Rome | places
+Dubai | places
+Machu Picchu | places
+London | places
+Grand Canyon | places
+Santorini | places
+Barcelona | places
+Great Wall of China | places
+Egyptian pyramids | places
+Eiffel Tower | places
+Statue of Liberty | places
+Big Ben | places
+Colosseum | places
+Taj Mahal | places
+Mount Everest | places
+Niagara Falls | places
+Sydney Opera House | places
+Times Square | places
+Las Vegas Strip | places
+Venice | places
+Amsterdam | places
+Berlin | places
+Prague | places
+Vienna | places
+Reykjavik | places
+Bali | places
+Maldives | places
+Iceland | places
+Sahara | places
+Antarctica | places
+North Pole | places
+Mount Fuji | places
+Galapagos Islands | places
+Yellowstone National Park | places
+
+# ─── MUSIC ───────────────────────────────────────────
+Electric guitar | music
+Drum kit | music
+Violin | music
+Cello | music
+Piano | music
+Saxophone | music
+Trumpet | music
+Flute | music
+Harp | music
+Accordion | music
+Bagpipes | music
+Banjo | music
+Sitar | music
+Didgeridoo | music
+Theremin | music
+Synthesizer | music
+DJ mixer | music
+Microphone | music
+Vinyl record | music
+Headphones | music
+
+# ─── ENTERTAINMENT ───────────────────────────────────
+Karaoke | entertainment
+Board game | entertainment
+Pinball | entertainment
+Slot machine | entertainment
+Roller coaster | entertainment
+Ferris wheel | entertainment
+Carousel | entertainment
+Bumper cars | entertainment
+Bowling alley | entertainment
+Movie theater | entertainment
+Theme park | entertainment
+Magic show | entertainment
+
+# ─── NATURE ──────────────────────────────────────────
+Sunset | nature
+Rainbow | nature
+Sunflower | nature
+Cherry blossom | nature
+Aurora (astronomy) | nature
+Lightning | nature
+Tornado | nature
+Volcano | nature
+Geyser | nature
+Glacier | nature
+Iceberg | nature
+Coral reef | nature
+Rainforest | nature
+Bamboo forest | nature
+Cactus | nature
+Bonsai | nature
+Mushroom | nature
+Carnivorous plant | nature
+Venus flytrap | nature
+
+# ─── TECH ────────────────────────────────────────────
+Mechanical keyboard | tech
+Telescope | tech
+Microscope | tech
+Game Boy | tech
+3D printing | tech
+Drone | tech
+Robot | tech
+Smartphone | tech
+Smartwatch | tech
+Virtual reality | tech
+Polaroid | tech
+Compact disc | tech
+Floppy disk | tech
+Walkman | tech
+Cassette tape | tech
+Pager | tech
+Calculator | tech
+Sewing machine | tech
+Typewriter | tech
+
+# ─── VEHICLES ────────────────────────────────────────
+Motorcycle | vehicles
+Sailboat | vehicles
+Space Shuttle | vehicles
+Cable car (railway) | vehicles
+Hot air balloon | vehicles
+Submarine | vehicles
+Helicopter | vehicles
+Tank | vehicles
+Train | vehicles
+Skateboard | vehicles
+Roller skates | vehicles
+Segway | vehicles
+Unicycle | vehicles
+Tricycle | vehicles
+Hovercraft | vehicles
+Zeppelin | vehicles
+Steamboat | vehicles
+Tuk-tuk | vehicles
+Gondola | vehicles
+Kayak | vehicles
+Canoe | vehicles
+
+# ─── SPACE ───────────────────────────────────────────
+Black hole | space
+Saturn | space
+Mars | space
+Jupiter | space
+Mercury (planet) | space
+Venus | space
+Pluto | space
+Moon | space
+Sun | space
+Comet | space
+Asteroid | space
+Galaxy | space
+Milky Way | space
+Nebula | space
+Supernova | space
+International Space Station | space
+Hubble Space Telescope | space
+Mars rover | space
+Astronaut | space
+
+# ─── HOLIDAYS ────────────────────────────────────────
+Christmas tree | holidays
+Halloween | holidays
+Easter Bunny | holidays
+Thanksgiving | holidays
+Valentine's Day | holidays
+New Year's Eve | holidays
+Oktoberfest | holidays
+Carnival | holidays
+Diwali | holidays
+Hanukkah | holidays
+Lunar New Year | holidays
+
+# ─── FANTASY ─────────────────────────────────────────
+Dragon | fantasy
+Wizard | fantasy
+Sword | fantasy
+Crown | fantasy
+Castle | fantasy
+Treasure chest | fantasy
+Magic wand | fantasy
+Crystal ball | fantasy
+Witch's hat | fantasy
+Cauldron | fantasy
+Spellbook | fantasy
+
+# ─── HOBBIES / OBJECTS ───────────────────────────────
+Lego | objects
+Hammock | objects
+Origami | objects
+Pottery | objects
+Knitting | objects
+Calligraphy | objects
+Photography | objects
+Birdwatching | objects
+Stamp collecting | objects
+Model railway | objects
+Jigsaw puzzle | objects
+Tarot | objects
+Yoga mat | objects
+Tent | objects
+Sleeping bag | objects
+Compass | objects
+Pocket watch | objects
+Hourglass | objects
+Globe | objects
+Map | objects
+Postcard | objects
+Polaroid camera | objects
+Teddy bear | objects
+Music box | objects
+Kaleidoscope | objects
+
+# ─── BODY / MEDICAL (silly) ──────────────────────────
+Mustache | body
+Tattoo | body
+Beard | body
+Eyebrow | body
+Nose | body
+Tongue | body
+Hiccup | body
+Sneeze | body
+Yawn | body
+Goosebumps | body

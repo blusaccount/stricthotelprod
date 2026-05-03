@@ -60,30 +60,6 @@
 
     // ─── Item Card Creation ───
 
-    // ─── Staggered Image Loader ───
-    // Wikipedia rate-limits concurrent requests; load images in small batches
-    var imageQueue = [];
-    var imageLoading = false;
-
-    function enqueueImage(img, url) {
-        imageQueue.push({ img: img, url: url });
-        if (!imageLoading) processImageQueue();
-    }
-
-    function processImageQueue() {
-        if (imageQueue.length === 0) { imageLoading = false; return; }
-        imageLoading = true;
-        // Load a batch of 5 at once
-        var batch = imageQueue.splice(0, 5);
-        var pending = batch.length;
-        batch.forEach(function (entry) {
-            entry.img.src = entry.url;
-            function onDone() { pending--; if (pending === 0) setTimeout(processImageQueue, 200); }
-            entry.img.addEventListener('load', onDone, { once: true });
-            entry.img.addEventListener('error', onDone, { once: true });
-        });
-    }
-
     function createItemCard(item) {
         var card = document.createElement('div');
         card.className = 'item-card';
@@ -93,27 +69,13 @@
         var img = document.createElement('img');
         img.alt = item.name;
         img.loading = 'lazy';
-        img.referrerPolicy = 'no-referrer';
-
-        var retries = 0;
-        var MAX_RETRIES = 3;
+        img.src = item.image;
         img.onerror = function () {
-            if (retries < MAX_RETRIES) {
-                retries++;
-                // Retry with increasing delay + jitter
-                setTimeout(function () {
-                    img.src = item.image;
-                }, retries * 2000 + Math.random() * 1000);
-            } else {
-                // Final fallback — show full item name
-                var fb = document.createElement('div');
-                fb.className = 'item-fallback';
-                fb.textContent = item.name;
-                img.replaceWith(fb);
-            }
+            var fb = document.createElement('div');
+            fb.className = 'item-fallback';
+            fb.textContent = item.name;
+            img.replaceWith(fb);
         };
-        // Don't set src directly — enqueue for staggered loading
-        enqueueImage(img, item.image);
 
         var name = document.createElement('div');
         name.className = 'item-name';
@@ -135,10 +97,6 @@
     // ─── Render Functions ───
 
     function renderMyView() {
-        // Reset image queue on re-render
-        imageQueue.length = 0;
-        imageLoading = false;
-
         // Clear all tier rows and unranked pool
         TIERS.forEach(function (tier) {
             var zone = document.querySelector('.tier-items[data-tier="' + tier + '"]');
@@ -180,7 +138,7 @@
             if (!data || data.total === 0) {
                 // Show unranked items at the bottom
                 html += '<div class="community-item" data-community-idx="' + item.index + '">';
-                html += '<img class="community-item-img" src="' + escapeHtml(item.image) + '" alt="' + escapeHtml(item.name) + '" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML=\'<div class=\\\'community-item-img community-item-fallback\\\'>' + escapeHtml(item.name) + '</div>\'">';
+                html += '<img class="community-item-img" src="' + escapeHtml(item.image) + '" alt="' + escapeHtml(item.name) + '" loading="lazy" onerror="this.outerHTML=\'<div class=\\\'community-item-img community-item-fallback\\\'>' + escapeHtml(item.name) + '</div>\'">';
                 html += '<div class="community-item-info">';
                 html += '<div class="community-item-name">' + escapeHtml(item.name) + '</div>';
                 html += '<div class="community-item-meta">No votes yet</div>';
@@ -191,7 +149,7 @@
 
             hasAnyData = true;
             html += '<div class="community-item" data-community-idx="' + item.index + '">';
-            html += '<img class="community-item-img" src="' + escapeHtml(item.image) + '" alt="' + escapeHtml(item.name) + '" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML=\'<div class=\\\'community-item-img community-item-fallback\\\'>' + escapeHtml(item.name) + '</div>\'">';
+            html += '<img class="community-item-img" src="' + escapeHtml(item.image) + '" alt="' + escapeHtml(item.name) + '" loading="lazy" onerror="this.outerHTML=\'<div class=\\\'community-item-img community-item-fallback\\\'>' + escapeHtml(item.name) + '</div>\'">';
             html += '<div class="community-item-info">';
             html += '<div class="community-item-name">' + escapeHtml(item.name) + '</div>';
             html += renderCommunityBar(data);
