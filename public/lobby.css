@@ -306,18 +306,6 @@ body .soundboard-section {
     overflow: hidden;
 }
 
-body .picto-section::before,
-body .soundboard-section::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: repeating-linear-gradient(180deg, transparent 0, transparent 2px, rgba(0,0,0,0.18) 2px, rgba(0,0,0,0.18) 3px);
-    mix-blend-mode: multiply;
-    opacity: 0.4;
-    pointer-events: none;
-    display: block;
-}
-
 body .picto-title,
 body .soundboard-title {
     color: var(--arcade-gold);
@@ -858,15 +846,6 @@ body .ticker-change.down { color: var(--arcade-loss); }
     position: relative;
     overflow: hidden;
     text-align: left;
-}
-.lobby-wp-section::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: repeating-linear-gradient(180deg, transparent 0, transparent 2px, rgba(0,0,0,0.18) 2px, rgba(0,0,0,0.18) 3px);
-    mix-blend-mode: multiply;
-    opacity: 0.4;
-    pointer-events: none;
 }
 .lobby-wp-header {
     display: flex;

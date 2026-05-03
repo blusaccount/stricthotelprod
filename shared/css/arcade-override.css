@@ -36,21 +36,6 @@ body {
     image-rendering: pixelated;
 }
 
-/* CRT scanlines on top of everything (theme.css already has a similar
- * green-tinted overlay; this one uses the neutral dark scanline pattern
- * the casino games use). */
-body::after {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    background: repeating-linear-gradient(180deg, transparent 0, transparent 2px, rgba(0, 0, 0, 0.18) 2px, rgba(0, 0, 0, 0.18) 3px);
-    mix-blend-mode: multiply;
-    opacity: 0.45;
-    z-index: 1000;
-    animation: none;
-}
-
 /* Generic title glow — applies to common title classes used across the
  * legacy games. Specific pages can layer additional rules on top. */
 .stock-title,

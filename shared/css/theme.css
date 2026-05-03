@@ -107,27 +107,6 @@ body::before {
     }
 }
 
-/* ===== Scanline Overlay ===== */
-body::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background: repeating-linear-gradient(
-        0deg,
-        transparent,
-        transparent 2px,
-        rgba(0,255,136,0.03) 2px,
-        rgba(0,255,136,0.03) 4px
-    );
-    pointer-events: none;
-    z-index: 1000;
-    animation: scanline 10s linear infinite;
-}
-
-@keyframes scanline {
-    0% { background-position: 0 0; }
-    100% { background-position: 0 100vh; }
-}
 
 #app {
     width: 100%;
