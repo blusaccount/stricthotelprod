@@ -350,18 +350,24 @@ body .picto-chat {
 body .picto-chat-message {
     background: rgba(0, 0, 0, 0.45);
     border-left: 3px solid var(--arcade-magenta);
-    font-size: 9px;
+    font-size: 12px;
+    line-height: 1.4;
     color: var(--arcade-ink);
+    padding: 6px 8px;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 body .picto-chat-message .name {
     color: var(--arcade-magenta);
+    font-weight: 700;
 }
 body .picto-chat-input input {
     background: #120a1c;
     border: 2px solid var(--arcade-border);
     color: var(--arcade-ink);
-    font-family: 'Press Start 2P', monospace;
-    font-size: 9px;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px;
+    padding: 10px 12px;
+    min-height: 38px;
 }
 body .picto-chat-input input:focus {
     outline: none;
@@ -373,7 +379,9 @@ body .picto-send {
     color: #001a14;
     border: 2px solid var(--arcade-cyan);
     font-family: 'Press Start 2P', monospace;
-    font-size: 9px;
+    font-size: 10px;
+    padding: 0 14px;
+    min-height: 38px;
     box-shadow: 0 0 10px rgba(62, 255, 225, 0.4);
 }
 body .picto-send:hover { box-shadow: 0 0 18px rgba(62, 255, 225, 0.7); transform: translateY(-1px); }

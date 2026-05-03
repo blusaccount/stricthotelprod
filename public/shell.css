@@ -409,24 +409,31 @@ body.shell-body > .shell-root { width: 100%; }
     grid-template-columns: none; /* override theme grid */
     gap: 8px;
 }
-.shell-rail .picto-canvas-area { width: 100%; }
+.shell-rail .picto-canvas-area { width: 100%; flex-shrink: 1; min-height: 0; }
 .shell-rail .picto-canvas-wrap {
     width: 100%;
     aspect-ratio: 4 / 3;
-    max-height: 200px;
+    max-height: 170px;
 }
 .shell-rail .picto-canvas-wrap canvas {
     width: 100%; height: 100%;
 }
 .shell-rail .picto-chat {
     width: 100%;
-    max-height: 220px;
+    max-height: 240px;
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
 }
-.shell-rail .picto-chat-messages { flex: 1; min-height: 80px; max-height: 160px; }
-.shell-rail .picto-chat-input { flex-shrink: 0; }
+.shell-rail .picto-chat-messages { flex: 1; min-height: 60px; max-height: 140px; }
+.shell-rail .picto-chat-input {
+    flex-shrink: 0;
+    position: sticky;
+    bottom: 0;
+    background: var(--arcade-panel-2);
+    padding-top: 6px;
+    z-index: 2;
+}
 .shell-rail .soundboard-grid {
     grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
     gap: 6px;
