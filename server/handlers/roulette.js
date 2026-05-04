@@ -193,10 +193,10 @@ export function registerRouletteHandlers(socket, io, deps) {
         if (pocket === 13) unlocks.push(...await bump(player.name, 'roulette_thirteen_hits', 1));
         notifyUnlocks(io, onlinePlayers, player.name, unlocks);
 
-        // Activity feed: profit ≥ 10× total stake (so a single straight-up
-        // hit on any chip qualifies, but pure red/black break-even doesn't).
+        // Activity feed: profit ≥ 5× total stake and at least 50 SC profit
+        // (filters out pure red/black break-even, but includes solid wins).
         const profit = totalPayout - totalStake;
-        if (profit >= totalStake * 10 && profit >= 100) {
+        if (profit >= totalStake * 5 && profit >= 50) {
             pushActivity({
                 type: 'big_win', player: player.name,
                 text: `Roulette ${pocket} ${pocketColor(pocket).toUpperCase()} → +${profit} SC`,

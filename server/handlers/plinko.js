@@ -105,8 +105,8 @@ export function registerPlinkoHandlers(socket, io, deps) {
         }
         notifyUnlocks(io, onlinePlayers, player.name, unlocks);
 
-        // Activity feed: 25× and bigger wins, plus any unlocks.
-        if (multiplier >= 25 && payout >= bet * 25) {
+        // Activity feed: 10× and bigger wins, plus any unlocks.
+        if (multiplier >= 10 && payout >= bet * 10) {
             pushActivity({
                 type: 'big_win', player: player.name,
                 text: `Landed ${multiplier}× on Plinko (${risk}) for ${payout} SC`,

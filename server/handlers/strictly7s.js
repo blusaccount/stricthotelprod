@@ -366,7 +366,7 @@ export function registerStrictly7sHandlers(socket, io, deps) {
             }
             notifyUnlocks(io, onlinePlayers, player.name, unlocks);
 
-            // Activity feed: jackpot or any win >= 25× bet.
+            // Activity feed: jackpot or any win >= 10× bet.
             const winMultiplier = payout / Math.max(1, bet);
             if (isJackpot) {
                 pushActivity({
@@ -375,7 +375,7 @@ export function registerStrictly7sHandlers(socket, io, deps) {
                     icon: '7️⃣', color: 'magenta',
                     meta: { game: 'strictly7s', amount: payout, multiplier: winMultiplier }
                 });
-            } else if (winMultiplier >= 25) {
+            } else if (winMultiplier >= 10) {
                 pushActivity({
                     type: 'big_win', player: player.name,
                     text: `Hit a ${winMultiplier.toFixed(1)}× win on Strictly7s for ${payout} SC`,

@@ -236,8 +236,8 @@ async function resolveCashout(playerName, atMultiplier, isAuto = false) {
         }
         notifyUnlocks(mainLoopIo, onlinePlayersRef, playerName, unlocks);
 
-        // Activity feed: any cash-out at 10× or higher (or the rare 50/100×).
-        if (m >= 10) {
+        // Activity feed: any cash-out at 5× or higher (or the rare 50/100×).
+        if (m >= 5) {
             pushActivity({
                 type: 'big_win', player: playerName,
                 text: `Cashed out ${m.toFixed(2)}× on Crash for ${payout} SC`,

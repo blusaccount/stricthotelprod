@@ -295,7 +295,7 @@ async function finishGame(playerName, socket, knownBalance = null, io = null, on
     }
     if (io && onlinePlayers) notifyUnlocks(io, onlinePlayers, playerName, unlocks);
 
-    // Activity feed: natural blackjack at any bet, or any payout >= 250 SC.
+    // Activity feed: natural blackjack at any bet, or any profit >= 100 SC.
     if (result.outcome === 'blackjack') {
         pushActivity({
             type: 'big_win', player: playerName,
@@ -303,7 +303,7 @@ async function finishGame(playerName, socket, knownBalance = null, io = null, on
             icon: '🃏', color: 'magenta',
             meta: { game: 'blackjack', amount: result.payout - g.bet, bet: g.bet }
         });
-    } else if (result.outcome === 'win' && result.payout - g.bet >= 250) {
+    } else if (result.outcome === 'win' && result.payout - g.bet >= 100) {
         pushActivity({
             type: 'big_win', player: playerName,
             text: `Won ${result.payout - g.bet} SC on Blackjack`,
