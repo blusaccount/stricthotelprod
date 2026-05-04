@@ -33,33 +33,61 @@
     const statusEl = $('lobby-wp-status');
     const nowPlaying = $('lobby-wp-now');
 
-    // --- Mini player (rail) ---
-    // The player wrap moves between its home parent (.lobby-wp-player-area)
-    // and the rail mini slot (#lobby-wp-mini-slot) when the user navigates
-    // away. Moving via appendChild preserves the YT iframe playback state in
-    // Chromium and Firefox (no reload).
-    const homeParent = playerWrap ? playerWrap.parentElement : null;
+    // --- Mini player (rail) — portal pattern ---
+    // The playerWrap lives permanently at body level with position:fixed.
+    // We never re-parent it (which avoids the Chromium iframe-reload-on-move
+    // quirk that would kill the YT.Player instance and audio playback).
+    // Instead we just toggle which slot it visually overlays by reading the
+    // slot's getBoundingClientRect and applying it to the wrap's CSS.
+    const homeSlot = $('lobby-wp-home-slot');
     const miniBox = $('lobby-wp-mini');
     const miniSlot = $('lobby-wp-mini-slot');
     const miniBackBtn = $('lobby-wp-mini-back');
     let inMiniMode = false;
+    let activeSlot = homeSlot;
+    let portalRafId = null;
+
+    function repositionPortal() {
+        portalRafId = null;
+        if (!playerWrap) return;
+        if (!currentVideoId || !activeSlot) {
+            playerWrap.style.display = 'none';
+            return;
+        }
+        const rect = activeSlot.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) {
+            // Slot is hidden / collapsed — keep wrap hidden so it doesn't
+            // briefly flash at (0,0).
+            playerWrap.style.display = 'none';
+            return;
+        }
+        playerWrap.style.display = 'block';
+        playerWrap.style.top = rect.top + 'px';
+        playerWrap.style.left = rect.left + 'px';
+        playerWrap.style.width = rect.width + 'px';
+        playerWrap.style.height = rect.height + 'px';
+    }
+
+    function schedulePortalReposition() {
+        if (portalRafId != null) return;
+        portalRafId = requestAnimationFrame(repositionPortal);
+    }
 
     function enterMiniMode() {
-        if (inMiniMode) return;
         if (!playerWrap || !miniBox || !miniSlot) return;
-        // Only show the mini player if a video is actually loaded.
         if (!currentVideoId) return;
-        miniSlot.appendChild(playerWrap);
         miniBox.hidden = false;
+        activeSlot = miniSlot;
         inMiniMode = true;
+        repositionPortal();
     }
 
     function exitMiniMode() {
-        if (!inMiniMode) return;
-        if (!playerWrap || !homeParent || !miniBox) return;
-        homeParent.appendChild(playerWrap);
+        if (!playerWrap || !miniBox) return;
         miniBox.hidden = true;
+        activeSlot = homeSlot;
         inMiniMode = false;
+        repositionPortal();
     }
 
     if (miniBackBtn) {
@@ -68,6 +96,15 @@
                 window.StrictHotelShell.navigate('/');
             }
         });
+    }
+
+    // Keep the portal aligned with the active slot whenever layout changes.
+    window.addEventListener('resize', schedulePortalReposition);
+    window.addEventListener('scroll', schedulePortalReposition, true);
+    if (window.ResizeObserver) {
+        const ro = new ResizeObserver(schedulePortalReposition);
+        if (homeSlot) ro.observe(homeSlot);
+        if (miniSlot) ro.observe(miniSlot);
     }
 
     function escapeHtml(str) {
@@ -159,6 +196,9 @@
                         ytReady = true;
                         // Mute the lobby ambience as soon as a video is loaded.
                         autoMuteAmbience();
+                        // Now that we have a video, the portal can become
+                        // visible and snap to the active slot.
+                        repositionPortal();
                         if (typeof callback === 'function') callback();
                     },
                     onStateChange: onPlayerStateChange
@@ -209,8 +249,9 @@
             stopHeartbeat();
             if (nowPlaying) nowPlaying.textContent = '';
             setStatus('No video loaded — paste a YouTube link to start.', 'idle');
-            // Pull the (now empty) wrap back to home and hide mini.
+            // Hide mini box and the portal wrap.
             exitMiniMode();
+            repositionPortal();
             return;
         }
 

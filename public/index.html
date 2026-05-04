@@ -144,8 +144,7 @@
                     <div class="lobby-wp-now" id="lobby-wp-now"></div>
                 </div>
                 <div class="lobby-wp-body">
-                    <div class="lobby-wp-player-area">
-                        <div class="lobby-wp-player-wrap" id="lobby-wp-player-wrap"></div>
+                    <div class="lobby-wp-player-area" id="lobby-wp-home-slot">
                         <div class="lobby-wp-placeholder" id="lobby-wp-placeholder">
                             <div class="lobby-wp-placeholder-icon">📺</div>
                             <div>No video loaded yet</div>
@@ -246,6 +245,11 @@
     <!-- Mobile rail toggle -->
     <button class="shell-rail-toggle" id="shell-rail-toggle" type="button" aria-label="Toggle social rail">💬</button>
 </div>
+
+<!-- Watch Party portal: the YT iframe lives here permanently, positioned via JS
+     to overlay either #lobby-wp-home-slot (on home) or #lobby-wp-mini-slot
+     (when navigated away). Never re-parented, so the iframe never reloads. -->
+<div class="lobby-wp-player-wrap" id="lobby-wp-player-wrap"></div>
 
 <!-- Activity Feed (floating widget, shell-level) -->
 <div class="activity-feed" id="activity-feed">
