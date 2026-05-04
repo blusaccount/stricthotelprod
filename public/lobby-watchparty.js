@@ -207,34 +207,59 @@
         });
     }
 
+    // Debounce play/pause emissions. YT often fires a transient PAUSED
+    // between BUFFERING and PLAYING during network hiccups, with a stale
+    // currentTime. If we emit that, every other client seeks backwards.
+    // By delaying the emit ~400ms and replacing pending state on rapid
+    // transitions, the BUFFERING→PAUSED→PLAYING cascade collapses to a
+    // single PLAYING with the settled (correct) currentTime.
+    const STATE_DEBOUNCE_MS = 400;
+    let pendingStateAction = null;
+    let pendingStateTimer = null;
+
+    function flushPendingState() {
+        pendingStateTimer = null;
+        const action = pendingStateAction;
+        pendingStateAction = null;
+        if (!action || !player) return;
+        if (suppressEvents) return;
+        try {
+            const time = player.getCurrentTime ? player.getCurrentTime() : 0;
+            socket.emit('lobby-wp-control', { action, time });
+            if (action === 'play') startHeartbeat();
+        } catch (_) {}
+    }
+
     function onPlayerStateChange(event) {
         if (suppressEvents || !player) return;
         const YTState = window.YT && window.YT.PlayerState;
         if (!YTState) return;
-        try {
-            const time = player.getCurrentTime ? player.getCurrentTime() : 0;
-            if (event.data === YTState.PLAYING) {
-                socket.emit('lobby-wp-control', { action: 'play', time });
-                startHeartbeat();
-            } else if (event.data === YTState.PAUSED) {
-                socket.emit('lobby-wp-control', { action: 'pause', time });
-            }
-        } catch (_) {}
+        // ENDED → don't emit (YT auto-resets currentTime to 0 around this,
+        // which would corrupt server state.time). UNSTARTED / CUED →
+        // pre-playback transitions, irrelevant. BUFFERING → wait it out.
+        if (event.data !== YTState.PLAYING && event.data !== YTState.PAUSED) {
+            return;
+        }
+        pendingStateAction = event.data === YTState.PLAYING ? 'play' : 'pause';
+        if (pendingStateTimer) clearTimeout(pendingStateTimer);
+        pendingStateTimer = setTimeout(flushPendingState, STATE_DEBOUNCE_MS);
     }
 
     function expectedTime(serverState) {
         if (!serverState || serverState.time == null) return 0;
         if (serverState.videoState !== 'playing') return serverState.time;
-        // serverState.time is the playback position at the moment of the
-        // server's last play/pause/seek/load event (state.updatedAt). Between
-        // events the server does NOT advance state.time, so we have to add
-        // the elapsed wall time since updatedAt ourselves. Using serverTime
-        // (snapshot send time) instead would only count network latency,
-        // which is what caused heartbeat re-syncs to seek us back to a
-        // many-minutes-old state.time.
-        const anchor = serverState.updatedAt || serverState.serverTime || Date.now();
-        const elapsed = (Date.now() - anchor) / 1000;
-        return serverState.time + Math.max(0, elapsed);
+        // Use ONLY server-side timestamps (serverTime - updatedAt) to avoid
+        // any client/server wall-clock skew. Both fields are set on the
+        // server so this delta is purely how long the video had been
+        // playing on the server when the snapshot was created. Network
+        // latency adds <500ms, which is below the sync drift threshold and
+        // not worth correcting (mixing in client Date.now() reintroduces
+        // skew bugs that produced random ~10s backward seeks for users
+        // whose clocks are a few seconds behind the server).
+        const serverTime = serverState.serverTime || serverState.updatedAt || 0;
+        const updatedAt = serverState.updatedAt || serverTime;
+        const elapsed = Math.max(0, (serverTime - updatedAt) / 1000);
+        return serverState.time + elapsed;
     }
 
     function applyServerState(s) {
@@ -300,8 +325,13 @@
                 setStatus(`⏸ Paused at ${formatTime(s.time)}`, 'paused');
             }
         } finally {
-            // Release a tick later so YT events from our own programmatic calls don't echo.
-            setTimeout(() => { suppressEvents = false; }, 250);
+            // Release after enough time for YT to actually settle into the
+            // requested state. seekTo+playVideo are async and can take
+            // 1-2s on slow connections; releasing too early lets our own
+            // programmatic state changes echo back to the server with
+            // stale times, which other clients then seek to (visible as
+            // a brief backward jump).
+            setTimeout(() => { suppressEvents = false; }, 1500);
         }
     }
 
