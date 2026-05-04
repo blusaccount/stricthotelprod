@@ -33,6 +33,43 @@
     const statusEl = $('lobby-wp-status');
     const nowPlaying = $('lobby-wp-now');
 
+    // --- Mini player (rail) ---
+    // The player wrap moves between its home parent (.lobby-wp-player-area)
+    // and the rail mini slot (#lobby-wp-mini-slot) when the user navigates
+    // away. Moving via appendChild preserves the YT iframe playback state in
+    // Chromium and Firefox (no reload).
+    const homeParent = playerWrap ? playerWrap.parentElement : null;
+    const miniBox = $('lobby-wp-mini');
+    const miniSlot = $('lobby-wp-mini-slot');
+    const miniBackBtn = $('lobby-wp-mini-back');
+    let inMiniMode = false;
+
+    function enterMiniMode() {
+        if (inMiniMode) return;
+        if (!playerWrap || !miniBox || !miniSlot) return;
+        // Only show the mini player if a video is actually loaded.
+        if (!currentVideoId) return;
+        miniSlot.appendChild(playerWrap);
+        miniBox.hidden = false;
+        inMiniMode = true;
+    }
+
+    function exitMiniMode() {
+        if (!inMiniMode) return;
+        if (!playerWrap || !homeParent || !miniBox) return;
+        homeParent.appendChild(playerWrap);
+        miniBox.hidden = true;
+        inMiniMode = false;
+    }
+
+    if (miniBackBtn) {
+        miniBackBtn.addEventListener('click', () => {
+            if (window.StrictHotelShell && typeof window.StrictHotelShell.navigate === 'function') {
+                window.StrictHotelShell.navigate('/');
+            }
+        });
+    }
+
     function escapeHtml(str) {
         return String(str == null ? '' : str)
             .replace(/&/g, '&amp;')
@@ -164,12 +201,22 @@
             stopHeartbeat();
             if (nowPlaying) nowPlaying.textContent = '';
             setStatus('No video loaded — paste a YouTube link to start.', 'idle');
+            // Pull the (now empty) wrap back to home and hide mini.
+            exitMiniMode();
             return;
         }
 
         // Video changed: rebuild player, then continue applying state.
         if (s.videoId !== currentVideoId) {
-            ensurePlayer(s.videoId, () => applyPlaybackState(s));
+            ensurePlayer(s.videoId, () => {
+                applyPlaybackState(s);
+                // If the user is not on the home route, immediately move
+                // the freshly-built player into the rail mini slot.
+                if (window.StrictHotelShell &&
+                    window.StrictHotelShell.getCurrentPath() !== '/') {
+                    enterMiniMode();
+                }
+            });
             if (nowPlaying && s.setBy) {
                 nowPlaying.innerHTML = `Now playing — set by <strong>${escapeHtml(s.setBy)}</strong>`;
             }
@@ -273,4 +320,12 @@
     function requestState() { socket.emit('lobby-wp-state'); }
     socket.on('connect', () => { setTimeout(requestState, 600); });
     setTimeout(requestState, 700);
+
+    // Public API for the shell router so it can move the player into the
+    // rail when the user navigates away from home.
+    window.StrictHotelLobbyWP = {
+        enterMiniMode,
+        exitMiniMode,
+        hasVideo: () => !!currentVideoId
+    };
 })();

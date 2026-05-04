@@ -86,6 +86,11 @@
         frame.removeAttribute('src');
         frame.hidden = true;
         home.style.display = '';
+        // Move the watch-party player back into the home view if it was
+        // running as a rail mini-player.
+        if (window.StrictHotelLobbyWP) {
+            try { window.StrictHotelLobbyWP.exitMiniMode(); } catch (_) {}
+        }
     }
 
     function loadApp(path, item) {
@@ -102,6 +107,11 @@
         // Active highlight
         const matched = item || matchNavItem(p);
         if (matched) setActiveItem(matched);
+        // If a watch-party video is loaded, keep it running as a rail
+        // mini-player while the user is on another route.
+        if (window.StrictHotelLobbyWP && window.StrictHotelLobbyWP.hasVideo()) {
+            try { window.StrictHotelLobbyWP.enterMiniMode(); } catch (_) {}
+        }
     }
 
     function navigate(path, opts) {
