@@ -185,8 +185,16 @@
     function expectedTime(serverState) {
         if (!serverState || serverState.time == null) return 0;
         if (serverState.videoState !== 'playing') return serverState.time;
-        const drift = (Date.now() - (serverState.serverTime || Date.now())) / 1000;
-        return serverState.time + Math.max(0, drift);
+        // serverState.time is the playback position at the moment of the
+        // server's last play/pause/seek/load event (state.updatedAt). Between
+        // events the server does NOT advance state.time, so we have to add
+        // the elapsed wall time since updatedAt ourselves. Using serverTime
+        // (snapshot send time) instead would only count network latency,
+        // which is what caused heartbeat re-syncs to seek us back to a
+        // many-minutes-old state.time.
+        const anchor = serverState.updatedAt || serverState.serverTime || Date.now();
+        const elapsed = (Date.now() - anchor) / 1000;
+        return serverState.time + Math.max(0, elapsed);
     }
 
     function applyServerState(s) {
