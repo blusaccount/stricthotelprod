@@ -17,7 +17,11 @@
 
     let player = null;            // YT.Player instance
     let ytReady = false;
-    let suppressEvents = false;   // ignore YT state events while applying remote state
+    // Monotonic deadline (ms since epoch). YT state events firing before this
+    // are ignored — they're echoes of our own programmatic seekTo/playVideo.
+    // Using a deadline (vs. a bool with setTimeout) means back-to-back syncs
+    // never release early and leak the second call's settling events back.
+    let suppressUntil = 0;
     let currentVideoId = null;
     let lastServerState = null;
     let heartbeatTimer = null;
@@ -174,6 +178,12 @@
         currentVideoId = videoId;
         if (placeholder) placeholder.style.display = 'none';
         if (!playerWrap) return;
+        // Drop any pending state from the previous player — flushing it on
+        // the rebuilt player would emit getCurrentTime() of the new video.
+        cancelPendingState();
+        suppressUntil = 0;
+        player = null;
+        ytReady = false;
         // Always tear down and rebuild on video change.
         playerWrap.innerHTML = '<div id="lobby-wp-player"></div>';
         loadYouTubeAPI().then(() => {
@@ -214,15 +224,21 @@
     // transitions, the BUFFERING→PAUSED→PLAYING cascade collapses to a
     // single PLAYING with the settled (correct) currentTime.
     const STATE_DEBOUNCE_MS = 400;
+    const SUPPRESS_MS = 300;
     let pendingStateAction = null;
     let pendingStateTimer = null;
+
+    function cancelPendingState() {
+        if (pendingStateTimer) { clearTimeout(pendingStateTimer); pendingStateTimer = null; }
+        pendingStateAction = null;
+    }
 
     function flushPendingState() {
         pendingStateTimer = null;
         const action = pendingStateAction;
         pendingStateAction = null;
         if (!action || !player) return;
-        if (suppressEvents) return;
+        if (Date.now() < suppressUntil) return;
         try {
             const time = player.getCurrentTime ? player.getCurrentTime() : 0;
             socket.emit('lobby-wp-control', { action, time });
@@ -231,12 +247,24 @@
     }
 
     function onPlayerStateChange(event) {
-        if (suppressEvents || !player) return;
+        if (!player) return;
+        if (Date.now() < suppressUntil) return;
         const YTState = window.YT && window.YT.PlayerState;
         if (!YTState) return;
-        // ENDED → don't emit (YT auto-resets currentTime to 0 around this,
-        // which would corrupt server state.time). UNSTARTED / CUED →
-        // pre-playback transitions, irrelevant. BUFFERING → wait it out.
+        // ENDED is a deterministic terminal state. Pin the server to
+        // "paused at duration" so heartbeats don't keep advancing
+        // expectedTime past the end of the video. Bypass the debounce —
+        // there's no buffering bounce to absorb here.
+        if (event.data === YTState.ENDED) {
+            cancelPendingState();
+            try {
+                const dur = player.getDuration ? player.getDuration() : 0;
+                socket.emit('lobby-wp-control', { action: 'pause', time: dur });
+            } catch (_) {}
+            return;
+        }
+        // UNSTARTED / CUED → pre-playback transitions, irrelevant.
+        // BUFFERING → wait it out (debounce will collapse the cascade).
         if (event.data !== YTState.PLAYING && event.data !== YTState.PAUSED) {
             return;
         }
@@ -271,6 +299,8 @@
             player = null;
             currentVideoId = null;
             ytReady = false;
+            cancelPendingState();
+            suppressUntil = 0;
             stopHeartbeat();
             if (nowPlaying) nowPlaying.textContent = '';
             setStatus('No video loaded — paste a YouTube link to start.', 'idle');
@@ -304,10 +334,13 @@
     function applyPlaybackState(s) {
         if (!player || !ytReady) return;
         const target = expectedTime(s);
+        const localTime = player.getCurrentTime ? player.getCurrentTime() : 0;
+        const drift = Math.abs(localTime - target);
+        // Push the suppression deadline forward so the seekTo / playVideo /
+        // pauseVideo we issue below don't echo back to the server. Math.max
+        // keeps it monotonic across rapid back-to-back syncs.
+        suppressUntil = Math.max(suppressUntil, Date.now() + SUPPRESS_MS);
         try {
-            const localTime = player.getCurrentTime ? player.getCurrentTime() : 0;
-            const drift = Math.abs(localTime - target);
-            suppressEvents = true;
             if (drift > SYNC_DRIFT_THRESHOLD_S) {
                 player.seekTo(target, true);
             }
@@ -324,14 +357,8 @@
                 }
                 setStatus(`⏸ Paused at ${formatTime(s.time)}`, 'paused');
             }
-        } finally {
-            // Release after enough time for YT to actually settle into the
-            // requested state. seekTo+playVideo are async and can take
-            // 1-2s on slow connections; releasing too early lets our own
-            // programmatic state changes echo back to the server with
-            // stale times, which other clients then seek to (visible as
-            // a brief backward jump).
-            setTimeout(() => { suppressEvents = false; }, 1500);
+        } catch (_) {
+            // YT API can throw mid-rebuild — safe to swallow.
         }
     }
 
