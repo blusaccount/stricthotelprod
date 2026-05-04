@@ -6,43 +6,97 @@
 }
 
 :root {
-    --bg: #000000;
-    --bg-light: #0a0a0a;
-    --surface: #111111;
-    --accent: #00ff88;
-    --accent-glow: #00ffaa;
-    --gold: #ffdd00;
-    --green: #00ff88;
-    --danger: #ff3366;
-    --text: #e0ffe0;
-    --text-dim: #88aa88;
-    --radius: 12px;
-    --shadow: 0 4px 20px rgba(0,255,136,0.2);
+    --bg: #050b1a;
+    --bg-light: #0a1830;
+    --surface: #0e2545;
+    --accent: #7dc7ff;
+    --accent-glow: #a8e0ff;
+    --gold: #ffd66b;
+    --green: #6bd99c;
+    --danger: #ff7a90;
+    --text: #f2f8ff;
+    --text-dim: #9eb6cf;
+    --radius: 10px;
+    --shadow: 0 8px 24px rgba(0, 18, 50, 0.55);
 
-    /* ===== Neon Arcade palette =====
-       Canonical palette used by casino + lobby + shop + login. Other pages
-       (maexchen, etc.) keep using the older --accent (green) tokens above. */
-    --arcade-bg-1:        #1c0e2e;
-    --arcade-bg-2:        #07040d;
-    --arcade-panel:       #15101e;
-    --arcade-panel-2:     #08050e;
-    --arcade-frame:       #d7d7d7;
-    --arcade-border:      #2c2240;
-    --arcade-ink:         #f6f6f6;
-    --arcade-dim:         #9a8db0;
-    --arcade-gold:        #ffcc33;
-    --arcade-gold-dark:   #c08a00;
-    --arcade-magenta:     #ff3ea5;
-    --arcade-cyan:        #3effe1;
-    --arcade-win:         #7cff8b;
-    --arcade-loss:        #ff6a7a;
-    --arcade-red:         #ff3838;
+    /* ===== Vista Aero + PS2 chrome palette =====
+       Canonical cool-toned tokens. Existing pages still reference these
+       --arcade-* names; only the values changed, so legacy game pages
+       (casino, brain, lol-betting, lobby home, shop, etc.) recolor for free.
+       The Stocks app opts out via stocks-frozen.css and keeps the prior
+       neon look. */
+    --arcade-bg-1:        #0e2545;   /* PS2 deep navy (panel base) */
+    --arcade-bg-2:        #050b1a;   /* near-black navy (page base) */
+    --arcade-panel:       #0d2444;   /* dark navy panel */
+    --arcade-panel-2:     #061328;   /* deeper navy panel */
+    --arcade-frame:       #d8e8fa;   /* icy silver chrome edge */
+    --arcade-border:      #2a4670;   /* cool blue border */
+    --arcade-ink:         #f2f8ff;   /* primary text — icy white */
+    --arcade-dim:         #9eb6cf;   /* dim text — cool blue-gray */
+    --arcade-gold:        #ffd66b;   /* warm accent kept for currency/claim only */
+    --arcade-gold-dark:   #b88a14;
+    --arcade-magenta:     #5eb9ff;   /* PRIMARY accent (icy blue, replaces magenta) */
+    --arcade-cyan:        #5eeaff;   /* cyan accent (cool electric) */
+    --arcade-win:         #6bd99c;   /* mint green */
+    --arcade-loss:        #ff7a90;   /* cool pink-red */
+    --arcade-red:         #ff5a6a;
+
+    /* ===== New PS2 boot-menu tokens (the wave) ===== */
+    --ps2-wave-deep:      #050b1a;
+    --ps2-wave-1:         #0a1f3d;
+    --ps2-wave-2:         #1c4e8a;
+    --ps2-wave-3:         #4a8acf;
+    --ps2-wave-glow:      rgba(125, 199, 255, 0.35);
+
+    /* ===== Vista Aero glass surfaces ===== */
+    --aero-glass:         rgba(180, 215, 250, 0.14);
+    --aero-glass-2:       rgba(210, 230, 255, 0.26);
+    --aero-glass-3:       rgba(140, 200, 250, 0.32);
+    --aero-tint:          rgba(120, 180, 240, 0.10);
+    --aero-highlight:     rgba(255, 255, 255, 0.55);
+    --aero-highlight-2:   rgba(255, 255, 255, 0.22);
+    --aero-shadow:        0 10px 28px rgba(0, 18, 50, 0.55);
+    --aero-shadow-soft:   0 4px 12px rgba(0, 18, 50, 0.35);
+    --aero-inset-top:     inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    --aero-inset-bot:     inset 0 -1px 0 rgba(0, 24, 60, 0.35);
+    --aero-border:        rgba(255, 255, 255, 0.45);
+    --aero-border-2:      rgba(120, 180, 230, 0.55);
+    --aero-border-3:      rgba(40, 90, 150, 0.55);
+
+    /* ===== PS2 brushed-chrome accents ===== */
+    --chrome-1:           #f4f8fd;   /* highlight top */
+    --chrome-2:           #c4ced9;
+    --chrome-3:           #8896a8;
+    --chrome-4:           #4a5868;   /* mid */
+    --chrome-5:           #2a3645;
+    --chrome-edge:        #1a2230;   /* bottom edge */
+    --chrome-gradient:    linear-gradient(180deg, var(--chrome-1) 0%, var(--chrome-2) 18%, var(--chrome-4) 70%, var(--chrome-edge) 100%);
+    --chrome-gradient-soft: linear-gradient(180deg, rgba(244, 248, 253, 0.96) 0%, rgba(196, 206, 217, 0.85) 35%, rgba(74, 88, 104, 0.85) 85%, rgba(26, 34, 48, 0.95) 100%);
+
+    /* ===== Cool accents ===== */
+    --ice:                #7dc7ff;
+    --ice-bright:         #a8e0ff;
+    --ice-deep:           #3a8fd9;
+    --ice-glow:           0 0 14px rgba(125, 199, 255, 0.55);
+    --ice-glow-strong:    0 0 22px rgba(125, 199, 255, 0.85), 0 0 40px rgba(94, 234, 255, 0.35);
+    --silver:             #d8e2ec;
+
+    /* ===== Type ===== */
+    --font-aero:          "Segoe UI", "Tahoma", "Trebuchet MS", system-ui, -apple-system, sans-serif;
+    --font-pixel:         'Press Start 2P', monospace;
+    --font-mono:          'Courier New', monospace;
+
+    /* ===== Radii (Vista) ===== */
+    --r-window:           10px;
+    --r-button:           6px;
+    --r-pill:             18px;
+    --r-tile:             8px;
 }
 
-/* ===== Starfield Background ===== */
+/* ===== PS2 Wave Background ===== */
 body {
-    font-family: 'Orbitron', 'Courier New', monospace;
-    font-size: 18px;
+    font-family: var(--font-aero);
+    font-size: 14px;
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
