@@ -61,7 +61,6 @@
                 avatarPlaceholder.style.display = 'none';
             }
             if (btnCreate) {
-                btnCreate.textContent = '✎';
                 btnCreate.title = 'Charakter ändern';
                 btnCreate.setAttribute('aria-label', 'Charakter ändern');
             }
@@ -69,7 +68,6 @@
             if (avatarImg) avatarImg.style.display = 'none';
             if (avatarPlaceholder) avatarPlaceholder.style.display = 'flex';
             if (btnCreate) {
-                btnCreate.textContent = '✎';
                 btnCreate.title = 'Charakter erstellen';
                 btnCreate.setAttribute('aria-label', 'Charakter erstellen');
             }
