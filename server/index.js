@@ -1,4 +1,6 @@
 import 'dotenv/config';
+import './log-buffer.js'; // auto-installs console capture for /admin/logs
+import crypto from 'node:crypto';
 import express from 'express';
 import session from 'express-session';
 import http from 'http';
@@ -27,6 +29,7 @@ import nostalgiaRouter from './routes/nostalgiabait.js';
 import { createStocksRouter } from './routes/stocks.js';
 import { startPeriodicCleanup } from './cleanup.js';
 import { startKeepAlive, stopKeepAlive } from './keep-alive.js';
+import { getLogs, getStats } from './log-buffer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -113,6 +116,33 @@ app.get('/health', (req, res) => {
         uptime: process.uptime(),
         players: onlinePlayers.size,
         rooms: rooms.size
+    });
+});
+
+// ============== ADMIN LOGS ==============
+
+function tokensEqual(a, b) {
+    if (typeof a !== 'string' || typeof b !== 'string') return false;
+    const aBuf = Buffer.from(a);
+    const bBuf = Buffer.from(b);
+    if (aBuf.length !== bBuf.length) return false;
+    return crypto.timingSafeEqual(aBuf, bBuf);
+}
+
+app.get('/admin/logs', (req, res) => {
+    const expected = process.env.LOGS_TOKEN;
+    if (!expected) return res.status(503).json({ error: 'LOGS_TOKEN not configured' });
+    const provided = req.query.token || req.headers['x-logs-token'] || '';
+    if (!tokensEqual(String(provided), expected)) {
+        return res.status(401).json({ error: 'unauthorized' });
+    }
+    const since = parseInt(req.query.since, 10) || 0;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 500, 500);
+    const level = req.query.level;
+    const grep = req.query.grep;
+    res.json({
+        stats: getStats(),
+        logs: getLogs({ since, level, grep, limit })
     });
 });
 
