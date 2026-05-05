@@ -4,7 +4,7 @@ name: Keep Render Awake
 # server-internal keep-alive (server/keep-alive.js) can take over.
 #
 # Berlin 10:00–02:00 maps to UTC 08:00–01:00 (worst case, accounting for DST:
-# CET = UTC+1 in winter, CEST = UTC+2 in summer). Pinging every 15 min is
+# CET = UTC+1 in winter, CEST = UTC+2 in summer). Pinging every 12 min is
 # redundant by design — GitHub Actions cron has known drift (often delayed
 # 5–20 min, occasionally skipped under load).
 #
@@ -13,8 +13,8 @@ name: Keep Render Awake
 
 on:
   schedule:
-    - cron: '*/15 8-23 * * *'
-    - cron: '0,15,30,45 0 * * *'
+    - cron: '*/12 8-23 * * *'
+    - cron: '0,12,24,36,48 0 * * *'
   workflow_dispatch:
 
 jobs:
