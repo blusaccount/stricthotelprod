@@ -1,0 +1,44 @@
+name: Keep Render Awake
+
+# Wakes the Render free-tier instance during the active window so the
+# server-internal keep-alive (server/keep-alive.js) can take over.
+#
+# Berlin 10:00–02:00 maps to UTC 08:00–01:00 (worst case, accounting for DST:
+# CET = UTC+1 in winter, CEST = UTC+2 in summer). Pinging every 15 min is
+# redundant by design — GitHub Actions cron has known drift (often delayed
+# 5–20 min, occasionally skipped under load).
+#
+# Setup: add a repo secret RENDER_URL with the public URL of the service,
+# e.g. https://stricthotel.onrender.com
+
+on:
+  schedule:
+    - cron: '*/15 8-23 * * *'
+    - cron: '0,15,30,45 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping /health
+        env:
+          URL: ${{ secrets.RENDER_URL }}
+        run: |
+          if [ -z "$URL" ]; then
+            echo "::error::RENDER_URL secret not set"
+            exit 1
+          fi
+          # Retry a few times — a cold start can take 30–60s on Render free tier.
+          for i in 1 2 3 4 5; do
+            if curl -fsS --max-time 60 "${URL%/}/health"; then
+              echo
+              echo "Ping ok on attempt $i"
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+          echo "::error::All ping attempts failed"
+          exit 1

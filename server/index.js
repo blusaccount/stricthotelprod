@@ -26,6 +26,7 @@ import turkishRouter from './routes/turkish.js';
 import nostalgiaRouter from './routes/nostalgiabait.js';
 import { createStocksRouter } from './routes/stocks.js';
 import { startPeriodicCleanup } from './cleanup.js';
+import { startKeepAlive, stopKeepAlive } from './keep-alive.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -156,12 +157,16 @@ server.listen(PORT, async () => {
     } catch (err) {
         console.error('LoL Match Checker error:', err.message);
     }
+
+    // Self-ping to keep Render free-tier instance awake during 10:00–02:00 Berlin
+    startKeepAlive();
 });
 
 // Graceful shutdown
 function gracefulShutdown(signal) {
     console.log(`${signal} received, shutting down gracefully...`);
     stopMatchChecker();
+    stopKeepAlive();
     server.close(() => {
         console.log('Server closed');
         process.exit(0);
