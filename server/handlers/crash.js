@@ -24,6 +24,7 @@ const TICK_MS = 100;                // multiplier broadcast cadence
 const CRASH_BETS = STANDARD_CASINO_BETS;
 const MAX_ROUND_MS = 120_000;       // safety cap (~134000× hard ceiling)
 const MAX_AUTO_CASHOUT = 1_000_000; // sane cap for autoCashout input
+const MIN_CASHOUT = 1.01;           // cash-outs below this would refund the bet (no risk)
 
 // ---------- math helpers ---------- //
 
@@ -384,6 +385,10 @@ export function registerCrashHandlers(socket, io, deps) {
             socket.emit('crash-error', { message: 'Too late — already crashed' });
             return;
         }
+        if (m < MIN_CASHOUT) {
+            socket.emit('crash-error', { message: `Cash out unlocks at ${MIN_CASHOUT.toFixed(2)}×` });
+            return;
+        }
         const result = await resolveCashout(player.name, m, false);
         if (result) socket.emit('crash-cashout-confirmed', result);
     } catch (err) {
@@ -400,6 +405,7 @@ export {
     REVEAL_MS,
     TICK_MS,
     CRASH_BETS,
+    MIN_CASHOUT,
     sampleCrashMultiplier,
     multiplierAt,
     timeForMultiplier
