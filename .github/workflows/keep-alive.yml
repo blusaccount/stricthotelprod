@@ -6,14 +6,19 @@ name: Keep Render Awake
 # Berlin 10:00–02:00 maps to UTC 08:00–01:00 (worst case, accounting for DST:
 # CET = UTC+1 in winter, CEST = UTC+2 in summer). Pinging every 12 min is
 # redundant by design — GitHub Actions cron has known drift (often delayed
-# 5–20 min, occasionally skipped under load).
+# 5–20 min, occasionally skipped under load), especially at top-of-hour.
+#
+# We start pinging one hour early (07:00 UTC = 09:00 Berlin in summer / 08:00
+# in winter) so that drift + Render cold-start (30–60s) don't push first
+# availability past 10:00 Berlin. The server-internal keep-alive
+# (server/keep-alive.js) still only self-pings from 10:00 Berlin onward.
 #
 # Setup: add a repo secret RENDER_URL with the public URL of the service,
 # e.g. https://stricthotel.onrender.com
 
 on:
   schedule:
-    - cron: '*/12 8-23 * * *'
+    - cron: '*/12 7-23 * * *'
     - cron: '0,12,24,36,48 0 * * *'
   workflow_dispatch:
 
