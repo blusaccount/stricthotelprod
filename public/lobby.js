@@ -491,6 +491,14 @@
 
     // --- Start ---
     init();
+    // Fallback: if the first register-player lost its balance-update reply
+    // (e.g. Render cold-start swallowed a DB error), re-fetch after a moment.
+    setTimeout(() => {
+        const el = document.getElementById('currency-amount');
+        if (registered && el && el.textContent === '—') {
+            socket.emit('get-balance');
+        }
+    }, 4000);
     setTimeout(fetchStreakStatus, 800);
     setTimeout(requestFeedSnapshot, 800);
 })();
