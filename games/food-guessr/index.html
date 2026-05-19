@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="/shared/js/iframe-helper.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StrictHotel – Food Guessr</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍽️</text></svg>">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/css/theme.css">
+    <link rel="stylesheet" href="/shared/css/arcade-override.css">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --fg-bg: #1a1410;
+            --fg-surface: #221b16;
+            --fg-surface-2: #2c241e;
+            --fg-border: #f4d28a;
+            --fg-text: #f9eed8;
+            --fg-text-dim: #b8a589;
+            --fg-accent: #ff9b3a;
+            --fg-positive: #6dd66d;
+            --fg-negative: #ff5e5e;
+            --fg-warm: #ffd166;
+            --fg-cold: #5eb2ff;
+        }
+
+        body {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 10px;
+            line-height: 1.7;
+            background: var(--fg-bg);
+            background-image:
+                radial-gradient(circle at 20% 10%, rgba(255,155,58,0.07), transparent 50%),
+                radial-gradient(circle at 80% 90%, rgba(244,210,138,0.05), transparent 50%);
+            color: var(--fg-text);
+            min-height: 100vh;
+        }
+
+        .fg-page {
+            max-width: 880px;
+            margin: 0 auto;
+            padding: 16px 14px 60px;
+        }
+
+        /* Header */
+        .fg-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 18px;
+            padding-bottom: 12px;
+            border-bottom: 3px solid var(--fg-border);
+        }
+        .fg-title {
+            font-size: 18px;
+            letter-spacing: 2px;
+            color: var(--fg-accent);
+            text-shadow: 2px 2px 0 #000;
+        }
+        .fg-title-sub {
+            font-size: 8px;
+            color: var(--fg-text-dim);
+            margin-top: 4px;
+            letter-spacing: 1px;
+        }
+        .fg-home {
+            background: var(--fg-surface);
+            border: 2px solid var(--fg-border);
+            color: var(--fg-text);
+            text-decoration: none;
+            padding: 10px 14px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .fg-home:hover { background: var(--fg-accent); color: #000; }
+
+        /* Screens */
+        .fg-screen { display: none; }
+        .fg-screen.active { display: block; }
+
+        /* ============ START SCREEN ============ */
+        .fg-start-box {
+            background: var(--fg-surface);
+            border: 3px solid var(--fg-border);
+            padding: 28px 24px;
+            text-align: center;
+        }
+        .fg-start-emoji {
+            font-size: 64px;
+            margin-bottom: 12px;
+            display: block;
+        }
+        .fg-start-h {
+            font-size: 16px;
+            margin-bottom: 16px;
+            color: var(--fg-accent);
+            letter-spacing: 2px;
+        }
+        .fg-start-rules {
+            text-align: left;
+            background: var(--fg-surface-2);
+            border: 2px solid var(--fg-border);
+            padding: 16px;
+            margin: 16px auto;
+            max-width: 540px;
+            font-size: 10px;
+            line-height: 2.1;
+        }
+        .fg-start-rules b { color: var(--fg-accent); }
+        .fg-start-btn {
+            background: var(--fg-accent);
+            border: 3px solid var(--fg-border);
+            color: #000;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 14px;
+            padding: 18px 32px;
+            cursor: pointer;
+            letter-spacing: 2px;
+            margin-top: 8px;
+        }
+        .fg-start-btn:hover { background: var(--fg-warm); }
+
+        /* ============ ROUND SCREEN ============ */
+        .fg-round-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .fg-round-info {
+            font-size: 11px;
+            color: var(--fg-accent);
+            letter-spacing: 2px;
+        }
+        .fg-score-pill {
+            background: var(--fg-surface);
+            border: 2px solid var(--fg-border);
+            padding: 8px 14px;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .fg-score-pill .label { color: var(--fg-text-dim); }
+        .fg-score-pill .value { color: var(--fg-accent); font-size: 12px; }
+
+        .fg-lives {
+            display: flex;
+            gap: 4px;
+            font-size: 16px;
+        }
+        .fg-life.lost { opacity: 0.5; filter: grayscale(1); }
+
+        /* Photo */
+        .fg-photo-wrap {
+            position: relative;
+            background: #000;
+            border: 3px solid var(--fg-border);
+            aspect-ratio: 16 / 10;
+            margin-bottom: 14px;
+            overflow: hidden;
+        }
+        .fg-photo-wrap img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            image-rendering: auto;
+        }
+        .fg-dish-fallback {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            background: linear-gradient(135deg, var(--fg-surface), var(--fg-surface-2));
+            color: var(--fg-text-dim);
+            text-align: center;
+            padding: 20px;
+        }
+        .fg-fallback-emoji { font-size: 84px; }
+        .fg-fallback-loading { font-size: 10px; letter-spacing: 1px; }
+
+        /* Hints */
+        .fg-hints {
+            background: var(--fg-surface);
+            border: 2px solid var(--fg-border);
+            padding: 12px 14px;
+            margin-bottom: 14px;
+            min-height: 60px;
+        }
+        .fg-hint-placeholder {
+            font-size: 10px;
+            color: var(--fg-text-dim);
+            text-align: center;
+            letter-spacing: 1px;
+        }
+        .fg-hint-row {
+            display: flex;
+            gap: 12px;
+            align-items: baseline;
+            padding: 4px 0;
+        }
+        .fg-hint-label {
+            color: var(--fg-text-dim);
+            font-size: 8px;
+            letter-spacing: 1px;
+            min-width: 78px;
+        }
+        .fg-hint-value {
+            color: var(--fg-accent);
+            font-size: 11px;
+        }
+        .fg-hint-desc {
+            margin-top: 6px;
+            padding: 8px 0 4px;
+            border-top: 1px dashed var(--fg-text-dim);
+            color: var(--fg-text);
+            font-size: 9px;
+            line-height: 2.1;
+            letter-spacing: 0.5px;
+        }
+
+        /* Input */
+        .fg-input-wrap {
+            position: relative;
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .fg-input {
+            flex: 1;
+            background: var(--fg-surface);
+            border: 3px solid var(--fg-border);
+            color: var(--fg-text);
+            font-family: 'Press Start 2P', monospace;
+            font-size: 11px;
+            padding: 12px 14px;
+            letter-spacing: 1px;
+        }
+        .fg-input:focus { outline: none; border-color: var(--fg-accent); }
+        .fg-input-error { animation: fg-shake 0.4s; border-color: var(--fg-negative) !important; }
+        @keyframes fg-shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-6px); }
+            75% { transform: translateX(6px); }
+        }
+        .fg-btn-submit {
+            background: var(--fg-accent);
+            border: 3px solid var(--fg-border);
+            color: #000;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 11px;
+            padding: 0 22px;
+            cursor: pointer;
+            letter-spacing: 1px;
+        }
+        .fg-btn-submit:hover:not(:disabled) { background: var(--fg-warm); }
+        .fg-btn-submit:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .fg-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 110px;
+            background: var(--fg-surface-2);
+            border: 2px solid var(--fg-border);
+            border-top: none;
+            max-height: 240px;
+            overflow-y: auto;
+            display: none;
+            z-index: 50;
+        }
+        .fg-suggestions.open { display: block; }
+        .fg-suggestion {
+            padding: 10px 14px;
+            cursor: pointer;
+            font-size: 10px;
+            border-bottom: 1px solid #3a3026;
+        }
+        .fg-suggestion:hover { background: var(--fg-accent); color: #000; }
+        .fg-suggestion-empty { color: var(--fg-text-dim); cursor: default; pointer-events: none; }
+        .fg-suggestion-empty:hover { background: none; color: var(--fg-text-dim); }
+
+        /* Guess log */
+        .fg-guess-log { display: flex; flex-direction: column; gap: 6px; }
+        .fg-guess-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--fg-surface);
+            border: 2px solid var(--fg-border);
+            padding: 8px 12px;
+            gap: 8px;
+            flex-wrap: wrap;
+            font-size: 10px;
+        }
+        .fg-guess-country { color: var(--fg-text); }
+        .fg-guess-dist { color: var(--fg-text-dim); font-size: 9px; }
+        .fg-guess-result { font-size: 9px; letter-spacing: 1px; }
+        .fg-temp-burn   { color: #ff3a3a; }
+        .fg-temp-hot    { color: #ff7a3a; }
+        .fg-temp-warm   { color: #ffb04a; }
+        .fg-temp-mild   { color: var(--fg-warm); }
+        .fg-temp-cold   { color: var(--fg-cold); }
+        .fg-temp-freeze { color: #a3d4ff; }
+        .fg-temp-correct { color: var(--fg-positive); }
+        .fg-guess-correct { border-color: var(--fg-positive); }
+
+        /* ============ RESULT SCREEN ============ */
+        .fg-result-box {
+            background: var(--fg-surface);
+            border: 3px solid var(--fg-border);
+            padding: 28px 22px;
+            text-align: center;
+        }
+        .fg-result-emoji { font-size: 56px; margin-bottom: 8px; }
+        .fg-result-title {
+            font-size: 16px;
+            letter-spacing: 2px;
+            margin-bottom: 14px;
+            color: var(--fg-accent);
+        }
+        .fg-result-dish {
+            background: var(--fg-surface-2);
+            border: 2px solid var(--fg-border);
+            padding: 14px;
+            margin: 14px 0;
+        }
+        .fg-result-dish-name { font-size: 13px; color: var(--fg-text); margin-bottom: 8px; letter-spacing: 1px; }
+        .fg-result-dish-desc { font-size: 9px; color: var(--fg-text-dim); line-height: 2; }
+        .fg-result-country {
+            font-size: 12px;
+            margin: 14px 0;
+            letter-spacing: 1px;
+        }
+        .fg-result-label { color: var(--fg-text-dim); font-size: 9px; }
+        .fg-result-country-name { color: var(--fg-accent); font-size: 14px; }
+        .fg-result-region { color: var(--fg-text-dim); font-size: 9px; }
+        .fg-result-score {
+            display: flex;
+            align-items: baseline;
+            justify-content: center;
+            gap: 10px;
+            margin: 18px 0;
+        }
+        .fg-result-score-num { font-size: 30px; color: var(--fg-positive); }
+        .fg-result-score-label { font-size: 9px; color: var(--fg-text-dim); letter-spacing: 1px; }
+        .fg-btn-next {
+            background: var(--fg-accent);
+            border: 3px solid var(--fg-border);
+            color: #000;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 12px;
+            padding: 14px 22px;
+            cursor: pointer;
+            letter-spacing: 2px;
+            margin-top: 10px;
+        }
+        .fg-btn-next:hover { background: var(--fg-warm); }
+
+        /* ============ FINAL SCREEN ============ */
+        .fg-final-box {
+            background: var(--fg-surface);
+            border: 3px solid var(--fg-border);
+            padding: 28px 22px;
+            text-align: center;
+        }
+        .fg-final-h {
+            font-size: 18px;
+            letter-spacing: 3px;
+            color: var(--fg-accent);
+            margin-bottom: 14px;
+        }
+        .fg-final-score-wrap {
+            display: flex;
+            align-items: baseline;
+            justify-content: center;
+            gap: 10px;
+            margin: 18px 0 10px;
+        }
+        .fg-final-score-num { font-size: 48px; color: var(--fg-accent); text-shadow: 3px 3px 0 #000; }
+        .fg-final-score-max { font-size: 14px; color: var(--fg-text-dim); }
+        .fg-final-verdict {
+            font-size: 11px;
+            color: var(--fg-warm);
+            letter-spacing: 1px;
+            margin-bottom: 18px;
+        }
+        .fg-final-rounds {
+            background: var(--fg-surface-2);
+            border: 2px solid var(--fg-border);
+            padding: 12px;
+            margin: 14px 0;
+            text-align: left;
+        }
+        .fg-final-row {
+            display: grid;
+            grid-template-columns: 28px 1fr 1fr 60px;
+            gap: 8px;
+            align-items: center;
+            padding: 8px 4px;
+            font-size: 9px;
+            border-bottom: 1px dashed #3a3026;
+        }
+        .fg-final-row:last-child { border-bottom: none; }
+        .fg-final-num   { color: var(--fg-text-dim); }
+        .fg-final-dish  { color: var(--fg-text); }
+        .fg-final-country { color: var(--fg-accent); text-align: right; }
+        .fg-final-pts   { color: var(--fg-positive); text-align: right; }
+        .fg-btn-play-again {
+            background: var(--fg-accent);
+            border: 3px solid var(--fg-border);
+            color: #000;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 12px;
+            padding: 14px 22px;
+            cursor: pointer;
+            letter-spacing: 2px;
+            margin-top: 12px;
+        }
+        .fg-btn-play-again:hover { background: var(--fg-warm); }
+
+        /* Mobile */
+        @media (max-width: 600px) {
+            .fg-title { font-size: 14px; }
+            .fg-start-emoji { font-size: 48px; }
+            .fg-suggestions { right: 0; }
+            .fg-input-wrap { flex-direction: column; }
+            .fg-btn-submit { padding: 12px; width: 100%; }
+            .fg-final-score-num { font-size: 36px; }
+            .fg-final-row { grid-template-columns: 22px 1fr 1fr 48px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="fg-page">
+    <div class="fg-header">
+        <div>
+            <div class="fg-title">FOOD GUESSR 🍽️</div>
+            <div class="fg-title-sub">Guess the country from a dish</div>
+        </div>
+        <a href="/" class="fg-home" title="Home">🏠</a>
+    </div>
+
+    <!-- ============ START SCREEN ============ -->
+    <div class="fg-screen active" id="fg-screen-start">
+        <div class="fg-start-box">
+            <span class="fg-start-emoji">🥘🍣🌮</span>
+            <div class="fg-start-h">EXPLORE THE WORLD BY FOOD</div>
+            <div class="fg-start-rules">
+                <b>▸ 3 rounds.</b> Each round shows a photo of a dish from Wikipedia.<br>
+                <b>▸ 3 lives.</b> Type a country, hit Enter or SUBMIT.<br>
+                <b>▸ Wrong guess?</b> Get hot/cold distance feedback + a new hint:<br>
+                &nbsp;&nbsp;1st wrong → dish name + description revealed<br>
+                &nbsp;&nbsp;2nd wrong → continent revealed<br>
+                &nbsp;&nbsp;3rd wrong → round over, country revealed<br>
+                <b>▸ Score:</b> 1000 / 600 / 300 / 0 points per round.
+            </div>
+            <button class="fg-start-btn" id="fg-btn-start" type="button">START COOKING ▶</button>
+        </div>
+    </div>
+
+    <!-- ============ ROUND SCREEN ============ -->
+    <div class="fg-screen" id="fg-screen-round">
+        <div class="fg-round-top">
+            <div class="fg-round-info" id="fg-round-number">ROUND 1 / 3</div>
+            <div class="fg-lives" id="fg-lives"></div>
+            <div class="fg-score-pill">
+                <span class="label">SCORE</span>
+                <span class="value" id="fg-total-score">0</span>
+            </div>
+        </div>
+
+        <div class="fg-photo-wrap">
+            <img id="fg-dish-image" alt="Mystery dish">
+            <div class="fg-dish-fallback" id="fg-dish-fallback">
+                <div class="fg-fallback-emoji">🍽️</div>
+                <div class="fg-fallback-loading">Loading…</div>
+            </div>
+        </div>
+
+        <div class="fg-hints" id="fg-hints"></div>
+
+        <div class="fg-input-wrap">
+            <input class="fg-input" id="fg-input" type="text" placeholder="Type a country…" autocomplete="off" spellcheck="false">
+            <button class="fg-btn-submit" id="fg-btn-submit" type="button">SUBMIT</button>
+            <div class="fg-suggestions" id="fg-suggestions"></div>
+        </div>
+
+        <div class="fg-guess-log" id="fg-guess-log"></div>
+    </div>
+
+    <!-- ============ RESULT SCREEN ============ -->
+    <div class="fg-screen" id="fg-screen-result">
+        <div class="fg-result-box">
+            <div class="fg-result-emoji" id="fg-result-emoji">🎉</div>
+            <div class="fg-result-title" id="fg-result-title">CORRECT!</div>
+            <div class="fg-result-dish" id="fg-result-dish"></div>
+            <div class="fg-result-country" id="fg-result-country"></div>
+            <div class="fg-result-score" id="fg-result-score"></div>
+            <button class="fg-btn-next" id="fg-btn-next" type="button">NEXT ROUND ▶</button>
+        </div>
+    </div>
+
+    <!-- ============ FINAL SCREEN ============ -->
+    <div class="fg-screen" id="fg-screen-final">
+        <div class="fg-final-box">
+            <div class="fg-final-h">FINAL SCORE</div>
+            <div class="fg-final-score-wrap">
+                <span class="fg-final-score-num" id="fg-final-score">0</span>
+                <span class="fg-final-score-max" id="fg-final-max">/ 3000</span>
+            </div>
+            <div class="fg-final-verdict" id="fg-final-verdict"></div>
+            <div class="fg-final-rounds" id="fg-final-rounds"></div>
+            <button class="fg-btn-play-again" id="fg-btn-play-again" type="button">PLAY AGAIN ↺</button>
+        </div>
+    </div>
+</div>
+
+<script src="/games/food-guessr/js/countries.js"></script>
+<script src="/games/food-guessr/js/dishes.js"></script>
+<script src="/games/food-guessr/js/game.js"></script>
+
+</body>
+</html>
