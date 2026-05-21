@@ -370,27 +370,54 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled }) {
             },
         };
 
-        // If ?probe=1, fire a fresh Yahoo request right now and capture what comes back.
+        // If ?probe=1, fire a fresh request right now via every provider so
+        // we can see which one Render can actually reach.
         if (req.query.probe === '1') {
+            out.probe = {};
+            const testSyms = ['AAPL', 'BTC-USD'];
+
+            // 1) v7 spark batch
+            try {
+                const t0 = Date.now();
+                const { quotes, errors } = await fetchQuotesViaChart(testSyms);
+                out.probe.spark = {
+                    ok: quotes.length > 0,
+                    elapsedMs: Date.now() - t0,
+                    quotes: quotes.map(q => ({ symbol: q.symbol, price: q.price, currency: q.currency })),
+                    errors,
+                };
+            } catch (e) {
+                out.probe.spark = { ok: false, error: e.message };
+            }
+
+            // 2) v8 chart single
+            try {
+                const t0 = Date.now();
+                const q = await fetchSingleQuoteViaChart('AAPL');
+                out.probe.chart = {
+                    ok: true,
+                    elapsedMs: Date.now() - t0,
+                    symbol: q.symbol,
+                    price: q.price,
+                    currency: q.currency,
+                };
+            } catch (e) {
+                out.probe.chart = { ok: false, error: e.message };
+            }
+
+            // 3) yf.quote (crumb-protected, expected to fail on cloud IPs)
             try {
                 const yf = await getYahooFinance();
                 const t0 = Date.now();
                 const q = await yf.quote('AAPL');
-                out.probe = {
+                out.probe.yfQuote = {
                     ok: true,
                     elapsedMs: Date.now() - t0,
                     symbol: q?.symbol,
                     price: q?.regularMarketPrice,
-                    currency: q?.currency,
-                    marketState: q?.marketState,
                 };
             } catch (e) {
-                out.probe = {
-                    ok: false,
-                    name: e && e.name,
-                    message: e && e.message,
-                    stack: (e && e.stack || '').split('\n').slice(0, 4).join('\n'),
-                };
+                out.probe.yfQuote = { ok: false, error: e.message };
             }
         }
 
