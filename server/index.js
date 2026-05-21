@@ -28,6 +28,7 @@ import { createAuthRouter, authMiddleware } from './routes/auth.js';
 import turkishRouter from './routes/turkish.js';
 import nostalgiaRouter from './routes/nostalgiabait.js';
 import { createStocksRouter } from './routes/stocks.js';
+import { getAllHeldSymbols } from './stock-game.js';
 import { startPeriodicCleanup } from './cleanup.js';
 import { startKeepAlive, stopKeepAlive } from './keep-alive.js';
 import { getLogs, getStats } from './log-buffer.js';
@@ -149,7 +150,14 @@ app.get('/admin/logs', (req, res) => {
 
 // ============== ROUTE MODULES ==============
 
-const stocksRouter = createStocksRouter({ getYahooFinance, isStockGameEnabled: GAME_ENABLED });
+const stocksRouter = createStocksRouter({
+    getYahooFinance,
+    isStockGameEnabled: GAME_ENABLED,
+    // Held symbols join the ticker batch so non-listed positions are
+    // priced via the same single yf.quote() call (vs. a per-symbol
+    // fallback that would trigger Yahoo's crumb 429 from Render's IP).
+    getExtraSymbols: () => getAllHeldSymbols().catch(() => []),
+});
 app.use(stocksRouter);
 app.use(turkishRouter);
 app.use(nostalgiaRouter);

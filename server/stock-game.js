@@ -254,6 +254,25 @@ export async function getAllPortfolioPlayerNames() {
 }
 
 /**
+ * Distinct symbols anyone is currently holding. The ticker prefetch uses
+ * this so every portfolio's live prices come from a single batch yf.quote
+ * call rather than one HTTP request per non-ticker symbol (which crumb-
+ * 429s on cloud egress IPs).
+ * @returns {Promise<string[]>}
+ */
+export async function getAllHeldSymbols() {
+    if (!isDatabaseEnabled()) {
+        const set = new Set();
+        for (const portfolio of portfolios.values()) {
+            for (const symbol of portfolio.keys()) set.add(symbol);
+        }
+        return Array.from(set);
+    }
+    const result = await query('select distinct symbol from stock_positions');
+    return result.rows.map(r => r.symbol);
+}
+
+/**
  * Build the full leaderboard in 2 DB queries instead of N+1.
  * @returns {Promise<Array<{ name, portfolioValue, cash, netWorth, holdings }>>}
  */

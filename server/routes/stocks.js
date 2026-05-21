@@ -88,7 +88,7 @@ const SEARCH_CACHE_MS = 10 * 60 * 1000; // 10 minutes
 const singleQuoteCache = new Map();
 const SINGLE_QUOTE_CACHE_MS = 2 * 60 * 1000; // 2 minutes
 
-export function createStocksRouter({ getYahooFinance, isStockGameEnabled }) {
+export function createStocksRouter({ getYahooFinance, isStockGameEnabled, getExtraSymbols }) {
     const router = Router();
 
     // Seed in-memory ticker cache from the persisted DB cache so the very
@@ -132,8 +132,31 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled }) {
             try {
                 diag.lastAttemptAt = Date.now();
 
-                const symbols = TICKER_SYMBOLS.map(s => s.symbol);
+                const tickerSyms = TICKER_SYMBOLS.map(s => s.symbol);
+                const tickerSymsSet = new Set(tickerSyms.map(s => s.replace('^', '')));
                 const nameMap = new Map(TICKER_SYMBOLS.map(s => [s.symbol, s.name]));
+
+                // Expand the fetch list with every symbol currently held by
+                // any player. This way one batch yf.quote() call covers both
+                // the market grid AND every portfolio's live prices — vs.
+                // making a separate single-symbol fetch (which would force a
+                // crumb refresh and 429 on cloud IPs).
+                let extras = [];
+                if (typeof getExtraSymbols === 'function') {
+                    try {
+                        const raw = await getExtraSymbols();
+                        if (Array.isArray(raw)) {
+                            for (const s of raw) {
+                                if (typeof s === 'string' && s && !tickerSymsSet.has(s.replace('^', ''))) {
+                                    extras.push(s);
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('[fetchTickerQuotes] getExtraSymbols threw:', e.message);
+                    }
+                }
+                const symbols = tickerSyms.concat(extras);
 
                 const commit = (results) => {
                     if (tickerCache.data) {
@@ -245,7 +268,11 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled }) {
         }
         try {
             const data = await fetchTickerQuotes();
-            res.json(data);
+            // The internal cache may also contain user-held symbols (so
+            // snapshots don't need a separate call); only ticker-board
+            // symbols are exposed on the public market grid.
+            const tickerOnly = new Set(TICKER_SYMBOLS.map(s => s.symbol.replace('^', '')));
+            res.json(data.filter(q => tickerOnly.has(q.symbol)));
         } catch (err) {
             console.error('[Ticker] Failed to fetch quotes:', err.message);
             // Return cached data if available, even if stale
