@@ -318,6 +318,70 @@ window.FG_DISHES = [
       description: "Soft egg-noodle dumplings, often served with cheese (Käsespätzle) and fried onions." }
 ];
 
+// ============================================================
+// Wikipedia Pageviews — used as the rating signal in the
+// "Scrandle Wiki" mode. Fetches monthly views for the article
+// over the last 6 months, returns the average per month.
+// Cached in localStorage (7-day TTL) to keep things snappy.
+// ============================================================
+
+var FG_VIEWS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function fgReadViewsCache() {
+    try { return JSON.parse(localStorage.getItem('fg-wiki-views') || '{}') || {}; }
+    catch (e) { return {}; }
+}
+function fgWriteViewsCache(cache) {
+    try { localStorage.setItem('fg-wiki-views', JSON.stringify(cache)); } catch (e) {}
+}
+function fgYyyymmddhh(date) {
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    return date.getUTCFullYear() +
+        pad(date.getUTCMonth() + 1) +
+        pad(date.getUTCDate()) + '00';
+}
+
+window.FG_fetchDishViews = async function (wikiTitle) {
+    var cache = fgReadViewsCache();
+    var entry = cache[wikiTitle];
+    if (entry && (Date.now() - entry.ts) < FG_VIEWS_TTL_MS) {
+        return entry.views;
+    }
+    try {
+        // 6 month window ending last full month
+        var end = new Date();
+        end.setUTCDate(1); // first of current month
+        end.setUTCHours(0, 0, 0, 0);
+        end.setUTCDate(end.getUTCDate() - 1); // last day of previous month
+        var start = new Date(end);
+        start.setUTCMonth(start.getUTCMonth() - 5); // 6 months back
+        start.setUTCDate(1);
+
+        var url = 'https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/' +
+            'en.wikipedia/all-access/all-agents/' +
+            encodeURIComponent(wikiTitle) +
+            '/monthly/' + fgYyyymmddhh(start) + '/' + fgYyyymmddhh(end);
+        var res = await fetch(url, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        var data = await res.json();
+        var items = (data && data.items) || [];
+        if (!items.length) throw new Error('no data');
+        var sum = 0;
+        for (var i = 0; i < items.length; i++) sum += Number(items[i].views) || 0;
+        var avg = Math.round(sum / items.length);
+
+        cache[wikiTitle] = { views: avg, ts: Date.now() };
+        fgWriteViewsCache(cache);
+        return avg;
+    } catch (err) {
+        console.warn('FoodGuessr views fetch failed for', wikiTitle, err.message || err);
+        // Soft-cache the failure so we don't hammer on every round (1h)
+        cache[wikiTitle] = { views: null, ts: Date.now() - FG_VIEWS_TTL_MS + 60 * 60 * 1000 };
+        fgWriteViewsCache(cache);
+        return null;
+    }
+};
+
 // Dish image cache — Wikipedia REST summary endpoint
 window.FG_imageCache = {};
 

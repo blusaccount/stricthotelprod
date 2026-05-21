@@ -26,6 +26,7 @@ import { registerActivityFeedHandlers } from './handlers/activity-feed.js';
 import { attachActivityFeed } from './activity-feed.js';
 import { registerBlackjackHandlers } from './handlers/blackjack.js';
 import { registerRouletteHandlers, cleanupRouletteCooldown } from './handlers/roulette.js';
+import { registerFoodGuessrHandlers } from './handlers/food-guessr.js';
 
 // ============== RATE LIMITING ==============
 
@@ -152,6 +153,7 @@ export function registerSocketHandlers(io, { fetchTickerQuotes, getYahooFinance,
         registerActivityFeedHandlers(socket, io, deps);
         registerBlackjackHandlers(socket, io, deps);
         registerRouletteHandlers(socket, io, deps);
+        registerFoodGuessrHandlers(socket, io, deps);
 
         socket.on('disconnect', async () => { try {
             rateLimiters.delete(socket.id);

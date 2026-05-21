@@ -176,3 +176,23 @@ create table if not exists loop_machine_state (
   updated_at timestamptz not null default now(),
   constraint loop_machine_state_singleton check (id = 1)
 );
+
+-- ============================================================================
+-- Food Guessr — per-user smash/pass votes on dishes (rating mode)
+-- Used to compute community ratings for the Scrandle "community" mode.
+-- ============================================================================
+create table if not exists food_ratings (
+  id bigserial primary key,
+  player_name text not null,
+  dish_key text not null,
+  rating smallint not null check (rating in (-1, 1)),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (player_name, dish_key)
+);
+
+create index if not exists food_ratings_dish_idx
+  on food_ratings (dish_key);
+
+create index if not exists food_ratings_player_idx
+  on food_ratings (player_name);
