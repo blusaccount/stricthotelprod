@@ -133,18 +133,21 @@ export function registerCurrencyHandlers(socket, io, { checkRateLimit, onlinePla
         unlocks.push(...await bump(player.name, 'diamonds_owned', result.diamonds, 'max'));
         notifyUnlocks(io, onlinePlayers, player.name, unlocks);
 
-        // Activity feed: only push for purchases of 5+ diamonds (≥1000 SC) to
-        // keep the feed signal-to-noise high.
-        if (count >= 5) {
-            pushActivity({
-                type: 'shop_purchase', player: player.name,
-                text: count >= 25
-                    ? `Bought a glittering ${count} diamonds`
-                    : `Bought ${count} diamonds in the shop`,
-                icon: '💎', color: count >= 25 ? 'magenta' : 'cyan',
-                meta: { game: 'shop', diamonds: count, totalDiamonds: result.diamonds }
-            });
-        }
+        // Activity feed: every diamond purchase shows up — the shop currently
+        // only sells single diamonds and a purchase is already a deliberate
+        // 25 SC sink, so it's worth surfacing.
+        pushActivity({
+            type: 'shop_purchase', player: player.name,
+            text: count >= 25
+                ? `Bought a glittering ${count} diamonds`
+                : count >= 5
+                    ? `Bought ${count} diamonds in the shop`
+                    : count === 1
+                        ? 'Bought a diamond in the shop'
+                        : `Bought ${count} diamonds in the shop`,
+            icon: '💎', color: count >= 25 ? 'magenta' : count >= 5 ? 'gold' : 'cyan',
+            meta: { game: 'shop', diamonds: count, totalDiamonds: result.diamonds }
+        });
     } catch (err) { console.error('buy-diamonds error:', err.message); } });
 
     // --- Make It Rain Effect ---

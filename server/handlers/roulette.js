@@ -204,15 +204,6 @@ export function registerRouletteHandlers(socket, io, deps) {
                 meta: { game: 'roulette', amount: profit, pocket }
             });
         }
-        for (const a of unlocks) {
-            pushActivity({
-                type: 'achievement', player: player.name,
-                text: `Unlocked "${a.title}"`,
-                icon: a.icon || '🏅',
-                color: a.tier === 'platinum' ? 'magenta' : a.tier === 'gold' ? 'gold' : 'cyan',
-                meta: { id: a.id, tier: a.tier }
-            });
-        }
 
         emitToUser(io, player.name, 'balance-update', { balance: finalBalance });
         socket.emit('roulette-result', {

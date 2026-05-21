@@ -8,6 +8,7 @@ import { manualCheckBetStatus, scheduleBetTimeout } from '../lol-match-checker.j
 import { getBalance, deductBalance, addBalance } from '../currency.js';
 import { emitBalanceUpdate, emitToUser } from '../socket-utils.js';
 import { isDatabaseEnabled, withTransaction } from '../db.js';
+import { pushActivity } from '../activity-feed.js';
 
 // Per-IP backoff for the admin-resolve endpoint. Each failure doubles the
 // next-allowed timestamp (1s → 2s → 4s … capped at 5 min). Successful
@@ -155,6 +156,17 @@ export function registerLolBettingHandlers(socket, io, deps) {
         // Achievement: lol_bets counter
         const unlocks = await bump(playerName, 'lol_bets', 1);
         notifyUnlocks(io, onlinePlayers, playerName, unlocks);
+
+        // Activity feed: announce sizeable bets (≥250 SC) so others can
+        // tail the LoL action; small wagers stay quiet.
+        if (betAmount >= 250) {
+            pushActivity({
+                type: 'lol_bet_placed', player: playerName,
+                text: `Bet ${betAmount} SC on ${resolvedName} to ${betOnWin ? 'WIN' : 'LOSE'}`,
+                icon: '⚔️', color: betAmount >= 750 ? 'magenta' : 'gold',
+                meta: { game: 'lol-betting', amount: betAmount, lolUsername: resolvedName, betOnWin }
+            });
+        }
 
         // Send confirmation to player
         socket.emit('lol-bet-placed', {

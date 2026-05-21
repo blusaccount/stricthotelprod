@@ -5,6 +5,9 @@ import { recordSnapshot, getHistory } from '../portfolio-history.js';
 import { emitStockError, emitBalanceUpdate, emitToUser } from '../socket-utils.js';
 import { getBalance } from '../currency.js';
 import { getCharactersByNames } from '../character-store.js';
+import { pushActivity } from '../activity-feed.js';
+
+const STOCK_TRADE_FEED_THRESHOLD = 1000; // SC traded
 
 const stockQuoteCache = new Map(); // symbol -> { quote, ts }
 const STOCK_QUOTE_CACHE_MS = 60 * 1000;
@@ -113,6 +116,16 @@ export function registerStocksHandlers(socket, io, deps) {
         unlocks.push(...await bump(player.name, 'stock_max_net_worth', Math.floor(netWorth), 'max'));
         unlocks.push(...await bump(player.name, 'max_balance', Math.floor(result.newBalance), 'max'));
         notifyUnlocks(io, onlinePlayers, player.name, unlocks);
+
+        // Activity feed: big buys (≥1000 SC) so the wider lobby sees plays.
+        if (amount >= STOCK_TRADE_FEED_THRESHOLD) {
+            pushActivity({
+                type: 'stock_trade', player: player.name,
+                text: `Bought ${amount} SC of ${quote.symbol}`,
+                icon: '📈', color: amount >= 10000 ? 'magenta' : 'gold',
+                meta: { game: 'stocks', side: 'buy', symbol: quote.symbol, amount, price: quote.price }
+            });
+        }
     } catch (err) { console.error('stock-buy error:', err.message); } });
 
     // --- Stock Game: Sell ---
@@ -168,6 +181,16 @@ export function registerStocksHandlers(socket, io, deps) {
         unlocks.push(...await bump(player.name, 'stock_max_net_worth', Math.floor(netWorth), 'max'));
         unlocks.push(...await bump(player.name, 'max_balance', Math.floor(result.newBalance), 'max'));
         notifyUnlocks(io, onlinePlayers, player.name, unlocks);
+
+        // Activity feed: big sells (≥1000 SC) — symmetric with buys.
+        if (amount >= STOCK_TRADE_FEED_THRESHOLD) {
+            pushActivity({
+                type: 'stock_trade', player: player.name,
+                text: `Sold ${amount} SC of ${quote.symbol}`,
+                icon: '📉', color: amount >= 10000 ? 'magenta' : 'gold',
+                meta: { game: 'stocks', side: 'sell', symbol: quote.symbol, amount, price: quote.price }
+            });
+        }
     } catch (err) { console.error('stock-sell error:', err.message); } });
 
     // --- Stock Game: Get Portfolio ---

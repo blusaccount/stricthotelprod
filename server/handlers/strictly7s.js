@@ -383,16 +383,6 @@ export function registerStrictly7sHandlers(socket, io, deps) {
                     meta: { game: 'strictly7s', amount: payout, multiplier: winMultiplier }
                 });
             }
-            // Achievement unlocks → activity events.
-            for (const a of unlocks) {
-                pushActivity({
-                    type: 'achievement', player: player.name,
-                    text: `Unlocked "${a.title}"`,
-                    icon: a.icon || '🏅',
-                    color: a.tier === 'platinum' ? 'magenta' : a.tier === 'gold' ? 'gold' : 'cyan',
-                    meta: { id: a.id, tier: a.tier }
-                });
-            }
         }
 
         const highestLineSingle = highestSingleLineMultiplier(outcome.wins);

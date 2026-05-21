@@ -246,15 +246,6 @@ async function resolveCashout(playerName, atMultiplier, isAuto = false) {
                 meta: { game: 'crash', amount: payout, multiplier: m, auto: isAuto }
             });
         }
-        for (const a of unlocks) {
-            pushActivity({
-                type: 'achievement', player: playerName,
-                text: `Unlocked "${a.title}"`,
-                icon: a.icon || '🏅',
-                color: a.tier === 'platinum' ? 'magenta' : a.tier === 'gold' ? 'gold' : 'cyan',
-                meta: { id: a.id, tier: a.tier }
-            });
-        }
     }
     return { multiplier: m, payout, balance: updated };
 }

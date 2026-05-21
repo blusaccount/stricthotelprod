@@ -105,22 +105,13 @@ export function registerPlinkoHandlers(socket, io, deps) {
         }
         notifyUnlocks(io, onlinePlayers, player.name, unlocks);
 
-        // Activity feed: 10× and bigger wins, plus any unlocks.
+        // Activity feed: 10× and bigger wins.
         if (multiplier >= 10 && payout >= bet * 10) {
             pushActivity({
                 type: 'big_win', player: player.name,
                 text: `Landed ${multiplier}× on Plinko (${risk}) for ${payout} SC`,
                 icon: '🌀', color: multiplier >= 100 ? 'magenta' : 'gold',
                 meta: { game: 'plinko', amount: payout, multiplier, risk, bucket }
-            });
-        }
-        for (const a of unlocks) {
-            pushActivity({
-                type: 'achievement', player: player.name,
-                text: `Unlocked "${a.title}"`,
-                icon: a.icon || '🏅',
-                color: a.tier === 'platinum' ? 'magenta' : a.tier === 'gold' ? 'gold' : 'cyan',
-                meta: { id: a.id, tier: a.tier }
             });
         }
 

@@ -1,4 +1,5 @@
 import { getCatalog, listUnlocked, listProgress } from '../achievements.js';
+import { pushActivity } from '../activity-feed.js';
 
 export function registerAchievementHandlers(socket, io, deps) {
     const { checkRateLimit, onlinePlayers } = deps;
@@ -33,8 +34,9 @@ export function registerAchievementHandlers(socket, io, deps) {
 }
 
 /**
- * Broadcast unlock toasts to every connected socket of a given player. Imported
- * by individual game handlers after they `bump()` a counter.
+ * Broadcast unlock toasts to every connected socket of a given player, and
+ * push each unlock onto the lobby-wide activity feed. Imported by individual
+ * game handlers after they `bump()` a counter.
  */
 export function notifyUnlocks(io, onlinePlayers, playerName, unlocks) {
     if (!unlocks || !unlocks.length) return;
@@ -43,5 +45,14 @@ export function notifyUnlocks(io, onlinePlayers, playerName, unlocks) {
             const sock = io.sockets.sockets.get(socketId);
             if (sock) sock.emit('achievement-unlocked', { unlocks });
         }
+    }
+    for (const a of unlocks) {
+        pushActivity({
+            type: 'achievement', player: playerName,
+            text: `Unlocked "${a.title}"`,
+            icon: a.icon || '🏅',
+            color: a.tier === 'platinum' ? 'magenta' : a.tier === 'gold' ? 'gold' : 'cyan',
+            meta: { id: a.id, tier: a.tier }
+        });
     }
 }

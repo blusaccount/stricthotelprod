@@ -63,15 +63,6 @@ export function registerDailyStreakHandlers(socket, io, deps) {
                     meta: { streak: result.currentStreak }
                 });
             }
-            for (const a of unlocks) {
-                pushActivity({
-                    type: 'achievement', player: player.name,
-                    text: `Unlocked "${a.title}"`,
-                    icon: a.icon || '🏅',
-                    color: a.tier === 'platinum' ? 'magenta' : a.tier === 'gold' ? 'gold' : 'cyan',
-                    meta: { id: a.id, tier: a.tier }
-                });
-            }
         }
         // Refresh status in the same event so the client always converges.
         const status = await getStreakStatus(player.name);
