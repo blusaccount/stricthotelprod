@@ -8,6 +8,7 @@ import { getCharactersByNames } from '../character-store.js';
 import { pushActivity } from '../activity-feed.js';
 import { upsertQuotes, getCachedQuote } from '../stock-price-cache.js';
 import { fetchSingleQuoteViaChart } from '../stock-providers/yahoo-chart.js';
+import { fetchSingleQuoteViaStooq } from '../stock-providers/stooq.js';
 
 const STOCK_TRADE_FEED_THRESHOLD = 1000; // SC traded
 
@@ -37,39 +38,55 @@ async function getQuoteForSymbol(symbol, quotes, _getYahooFinance) {
         return cached.quote;
     }
 
-    // Primary: v8 chart endpoint (no crumb required, works on Render).
-    try {
-        const q = await fetchSingleQuoteViaChart(symbol);
-        quote = {
-            symbol: (q.symbol || symbol).replace('^', ''),
-            name: q.shortName || symbol,
-            price: parseFloat(q.price.toFixed(2)),
-            currency: q.currency || 'USD',
-        };
-        stockQuoteCache.set(symbol, { quote, ts: Date.now() });
-        upsertQuotes([quote]).catch(() => {});
-        return quote;
-    } catch (e) {
-        // Fallback: yf.quote() — usually crumb-429'd on Render, but try anyway.
-        if (_getYahooFinance) {
-            try {
-                const yf = await _getYahooFinance();
-                const q = await yf.quote(symbol);
-                if (q && q.regularMarketPrice != null) {
-                    quote = {
-                        symbol: (q.symbol || symbol).replace('^', ''),
-                        name: q.shortName || q.longName || symbol,
-                        price: parseFloat(q.regularMarketPrice.toFixed(2)),
-                        currency: q.currency || 'USD',
-                    };
-                    stockQuoteCache.set(symbol, { quote, ts: Date.now() });
-                    upsertQuotes([quote]).catch(() => {});
-                    return quote;
-                }
-            } catch (yfErr) {
-                console.error(`[getQuoteForSymbol] both chart and yf.quote failed for ${symbol}:`, e.message, '|', yfErr.message);
-            }
+    // Provider cascade: Stooq → Yahoo v8 chart → yahoo-finance2 quote().
+    // First success wins. On Render, only Stooq is expected to work because
+    // Yahoo locks out the egress IP.
+    const providers = [
+        async () => {
+            const q = await fetchSingleQuoteViaStooq(symbol);
+            return {
+                symbol: (q.symbol || symbol).replace('^', ''),
+                name: q.shortName || symbol,
+                price: parseFloat(q.price.toFixed(2)),
+                currency: q.currency || 'USD',
+            };
+        },
+        async () => {
+            const q = await fetchSingleQuoteViaChart(symbol);
+            return {
+                symbol: (q.symbol || symbol).replace('^', ''),
+                name: q.shortName || symbol,
+                price: parseFloat(q.price.toFixed(2)),
+                currency: q.currency || 'USD',
+            };
+        },
+    ];
+    if (_getYahooFinance) {
+        providers.push(async () => {
+            const yf = await _getYahooFinance();
+            const q = await yf.quote(symbol);
+            if (!q || q.regularMarketPrice == null) throw new Error('no price');
+            return {
+                symbol: (q.symbol || symbol).replace('^', ''),
+                name: q.shortName || q.longName || symbol,
+                price: parseFloat(q.regularMarketPrice.toFixed(2)),
+                currency: q.currency || 'USD',
+            };
+        });
+    }
+    const providerErrors = [];
+    for (const fn of providers) {
+        try {
+            quote = await fn();
+            stockQuoteCache.set(symbol, { quote, ts: Date.now() });
+            upsertQuotes([quote]).catch(() => {});
+            return quote;
+        } catch (e) {
+            providerErrors.push(e.message);
         }
+    }
+    if (providerErrors.length > 0) {
+        console.error(`[getQuoteForSymbol] all providers failed for ${symbol}: ${providerErrors.join(' | ')}`);
     }
 
     // Both live sources failed — fall back to persisted cache.
