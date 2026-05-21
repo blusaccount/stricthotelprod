@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { upsertQuotes, getAllCached } from '../stock-price-cache.js';
+import { fetchQuotesViaChart, fetchSingleQuoteViaChart } from '../stock-providers/yahoo-chart.js';
 
 const TICKER_SYMBOLS = [
     // ETFs / Indices
@@ -127,41 +128,13 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled }) {
         if (tickerFetchPromise) return tickerFetchPromise;
 
         tickerFetchPromise = (async () => {
-            diag.lastAttemptAt = Date.now();
             try {
+                diag.lastAttemptAt = Date.now();
+
                 const symbols = TICKER_SYMBOLS.map(s => s.symbol);
-                const yf = await getYahooFinance();
-                const quotes = await yf.quote(symbols);
-                diag.lastResultCount = Array.isArray(quotes) ? quotes.length : (quotes ? 1 : 0);
-
                 const nameMap = new Map(TICKER_SYMBOLS.map(s => [s.symbol, s.name]));
-                const results = [];
 
-                const quoteList = Array.isArray(quotes) ? quotes : [quotes];
-
-                for (const q of quoteList) {
-                    if (!q || q.regularMarketPrice == null) continue;
-
-                    const price = q.regularMarketPrice;
-                    const change = q.regularMarketChange ?? 0;
-                    const pct = q.regularMarketChangePercent ?? 0;
-                    const currency = q.currency || 'USD';
-                    const rawSymbol = q.symbol || '';
-
-                    results.push({
-                        symbol: rawSymbol.replace('^', ''),
-                        name: nameMap.get(rawSymbol) || q.shortName || rawSymbol.replace('^', ''),
-                        price: parseFloat(price.toFixed(2)),
-                        change: parseFloat(change.toFixed(2)),
-                        pct: parseFloat(pct.toFixed(2)),
-                        currency,
-                        marketState: q.marketState || null,
-                    });
-                }
-
-                if (results.length > 0) {
-                    // Merge: keep previously-cached prices for symbols
-                    // missing from this batch (partial API responses)
+                const commit = (results) => {
                     if (tickerCache.data) {
                         const freshSymbols = new Set(results.map(r => r.symbol));
                         for (const prev of tickerCache.data) {
@@ -173,24 +146,68 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled }) {
                     tickerCache = { data: results, ts: Date.now() };
                     diag.lastSuccessAt = Date.now();
                     diag.successCount++;
-                    // Persist for DB-backed cold-start recovery
                     upsertQuotes(results).catch(() => {});
                     return results;
+                };
+
+                // Primary: v8 chart endpoint (no crumb → works on Render).
+                try {
+                    const { quotes, errors } = await fetchQuotesViaChart(symbols, { concurrency: 6 });
+                    diag.lastResultCount = quotes.length;
+                    if (errors.length > 0) {
+                        diag.lastError = `chart endpoint: ${errors.length} of ${symbols.length} symbols failed (${errors[0].symbol}: ${errors[0].message})`;
+                        diag.lastErrorAt = Date.now();
+                    }
+                    if (quotes.length > 0) {
+                        return commit(quotes.map((q) => {
+                            const rawSymbol = q.symbol || '';
+                            return {
+                                symbol: rawSymbol.replace('^', ''),
+                                name: nameMap.get(rawSymbol) || q.shortName || rawSymbol.replace('^', ''),
+                                price: parseFloat(q.price.toFixed(2)),
+                                change: parseFloat(q.change.toFixed(2)),
+                                pct: parseFloat(q.pct.toFixed(2)),
+                                currency: q.currency,
+                                marketState: q.marketState,
+                            };
+                        }));
+                    }
+                } catch (err) {
+                    diag.lastError = `chart endpoint threw: ${err.message}`;
+                    diag.lastErrorAt = Date.now();
                 }
 
-                // Yahoo answered but had no usable quotes (rate-limit, partial outage).
-                // Bug fix: don't return [] — fall back to whatever we last had so the
-                // UI doesn't silently lose every price.
+                // Fallback: yf.quote (typically crumb-429'd on cloud IPs).
+                try {
+                    const yf = await getYahooFinance();
+                    const yfQuotes = await yf.quote(symbols);
+                    const list = Array.isArray(yfQuotes) ? yfQuotes : [yfQuotes];
+                    const fallback = [];
+                    for (const q of list) {
+                        if (!q || q.regularMarketPrice == null) continue;
+                        const rawSymbol = q.symbol || '';
+                        fallback.push({
+                            symbol: rawSymbol.replace('^', ''),
+                            name: nameMap.get(rawSymbol) || q.shortName || rawSymbol.replace('^', ''),
+                            price: parseFloat(q.regularMarketPrice.toFixed(2)),
+                            change: parseFloat((q.regularMarketChange ?? 0).toFixed(2)),
+                            pct: parseFloat((q.regularMarketChangePercent ?? 0).toFixed(2)),
+                            currency: q.currency || 'USD',
+                            marketState: q.marketState || null,
+                        });
+                    }
+                    if (fallback.length > 0) {
+                        return commit(fallback);
+                    }
+                } catch (yfErr) {
+                    diag.errorCount++;
+                    diag.lastError = `chart and yf.quote both failed; yf: ${yfErr.message}`;
+                    diag.lastErrorAt = Date.now();
+                    console.error('[fetchTickerQuotes]', diag.lastError);
+                }
+
                 diag.emptyCount++;
-                diag.lastError = 'Yahoo returned no usable quotes (' + diag.lastResultCount + ' raw items)';
-                diag.lastErrorAt = Date.now();
-                console.warn('[fetchTickerQuotes]', diag.lastError, '— serving previous cache');
-                return tickerCache.data || [];
-            } catch (err) {
-                diag.errorCount++;
-                diag.lastError = (err && err.name ? err.name + ': ' : '') + (err && err.message ? err.message : String(err));
-                diag.lastErrorAt = Date.now();
-                console.error('[fetchTickerQuotes] Error:', diag.lastError);
+                console.warn('[fetchTickerQuotes] both chart and yf.quote returned nothing; serving previous cache');
                 return tickerCache.data || [];
             } finally {
                 tickerFetchPromise = null;
@@ -277,20 +294,38 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled }) {
                 return res.json(cached.data);
             }
 
-            const yf = await getYahooFinance();
-            const q = await yf.quote(symbol);
-            if (!q || q.regularMarketPrice == null) {
-                return res.status(404).json({ error: 'Symbol not found' });
+            // Primary: v8 chart endpoint (no crumb needed).
+            let data = null;
+            try {
+                const q = await fetchSingleQuoteViaChart(symbol);
+                data = {
+                    symbol: (q.symbol || symbol).replace('^', ''),
+                    name: q.shortName || symbol,
+                    price: parseFloat(q.price.toFixed(2)),
+                    change: parseFloat(q.change.toFixed(2)),
+                    pct: parseFloat(q.pct.toFixed(2)),
+                    currency: q.currency || 'USD',
+                };
+            } catch (chartErr) {
+                // Fallback to yf.quote (often crumb-blocked but worth a try)
+                try {
+                    const yf = await getYahooFinance();
+                    const q = await yf.quote(symbol);
+                    if (!q || q.regularMarketPrice == null) {
+                        return res.status(404).json({ error: 'Symbol not found' });
+                    }
+                    data = {
+                        symbol: (q.symbol || symbol).replace('^', ''),
+                        name: q.shortName || q.longName || symbol,
+                        price: parseFloat(q.regularMarketPrice.toFixed(2)),
+                        change: parseFloat((q.regularMarketChange ?? 0).toFixed(2)),
+                        pct: parseFloat((q.regularMarketChangePercent ?? 0).toFixed(2)),
+                        currency: q.currency || 'USD',
+                    };
+                } catch {
+                    return res.status(502).json({ error: 'Failed to fetch quote: ' + chartErr.message });
+                }
             }
-
-            const data = {
-                symbol: (q.symbol || symbol).replace('^', ''),
-                name: q.shortName || q.longName || symbol,
-                price: parseFloat(q.regularMarketPrice.toFixed(2)),
-                change: parseFloat((q.regularMarketChange ?? 0).toFixed(2)),
-                pct: parseFloat((q.regularMarketChangePercent ?? 0).toFixed(2)),
-                currency: q.currency || 'USD',
-            };
 
             singleQuoteCache.set(symbol, { data, ts: Date.now() });
             if (singleQuoteCache.size > 500) {

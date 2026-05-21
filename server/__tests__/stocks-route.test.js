@@ -5,11 +5,16 @@ let createStocksRouter;
 beforeEach(async () => {
     vi.useFakeTimers();
     vi.resetModules();
+    // Force-disable the v8 chart endpoint so these tests exercise the
+    // yf.quote fallback path the suite was originally written against.
+    // Chart-endpoint behavior is covered by yahoo-chart.test.js.
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('v8 chart disabled in this test')));
     const mod = await import('../routes/stocks.js');
     createStocksRouter = mod.createStocksRouter;
 });
 
 afterEach(() => {
+    vi.unstubAllGlobals();
     vi.useRealTimers();
 });
 
