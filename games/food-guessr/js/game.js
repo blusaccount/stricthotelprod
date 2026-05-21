@@ -75,16 +75,56 @@
         }
     }
 
-    // ─── Server connection (community ratings) ───
+    // ─── Server connection (community ratings + leaderboards) ───
     var socket = null;
     var communityAggregates = {};   // dishKey -> { likes, dislikes, total }
     var myVotes = {};               // dishKey -> 1 | -1
+    var leaderboards = { classic: [], scrandleWiki: [], scrandleCommunity: [], myStats: { classic: null, scrandle: {} } };
     var ratingListeners = [];
 
     function onRatingsChange() {
         for (var i = 0; i < ratingListeners.length; i++) {
             try { ratingListeners[i](); } catch (e) {}
         }
+    }
+
+    function renderLeaderboardRows(rows, formatter) {
+        if (!rows || !rows.length) return '<div class="fg-lb-empty">No entries yet — be the first!</div>';
+        return rows.map(function (r, i) {
+            return '<div class="fg-lb-row">' +
+                '<span class="fg-lb-rank">#' + (i + 1) + '</span>' +
+                '<span class="fg-lb-name">' + escapeHtml(r.name) + '</span>' +
+                '<span class="fg-lb-val">' + formatter(r) + '</span>' +
+                '</div>';
+        }).join('');
+    }
+
+    function renderLeaderboards() {
+        var classicFmt = function (r) { return r.best + ' pts'; };
+        var streakFmt = function (r) { return r.best + (r.best === 1 ? ' streak' : ' streaks'); };
+
+        var elClassic = $('fg-lb-classic');
+        if (elClassic) elClassic.innerHTML = renderLeaderboardRows(leaderboards.classic, classicFmt);
+        var elWiki = $('fg-lb-scrandle-wiki');
+        if (elWiki) elWiki.innerHTML = renderLeaderboardRows(leaderboards.scrandleWiki, streakFmt);
+        var elComm = $('fg-lb-scrandle-community');
+        if (elComm) elComm.innerHTML = renderLeaderboardRows(leaderboards.scrandleCommunity, streakFmt);
+
+        // Menu-screen top-3 teasers
+        var top3 = function (rows, fmt) {
+            if (!rows || !rows.length) return '<span class="fg-lb-teaser-empty">no entries yet</span>';
+            return rows.slice(0, 3).map(function (r, i) {
+                var medal = ['🥇', '🥈', '🥉'][i] || '·';
+                return '<span class="fg-lb-teaser-row">' + medal + ' ' +
+                    escapeHtml(r.name) + ' <em>' + fmt(r) + '</em></span>';
+            }).join('');
+        };
+        var t1 = $('fg-lb-teaser-classic');
+        if (t1) t1.innerHTML = top3(leaderboards.classic, classicFmt);
+        var t2 = $('fg-lb-teaser-wiki');
+        if (t2) t2.innerHTML = top3(leaderboards.scrandleWiki, streakFmt);
+        var t3 = $('fg-lb-teaser-community');
+        if (t3) t3.innerHTML = top3(leaderboards.scrandleCommunity, streakFmt);
     }
 
     function connectSocket() {
@@ -106,7 +146,10 @@
                 // Defer the rating-state request slightly so register-player's
                 // async DB write finishes first (it sets onlinePlayers, which the
                 // food-rating-state handler reads to filter myVotes by name).
-                setTimeout(function () { socket.emit('food-rating-state'); }, hasName ? 200 : 0);
+                setTimeout(function () {
+                    socket.emit('food-rating-state');
+                    socket.emit('food-leaderboards');
+                }, hasName ? 200 : 0);
             });
             socket.on('food-rating-state', function (data) {
                 communityAggregates = (data && data.aggregates) || {};
@@ -123,9 +166,23 @@
                 myVotes[data.dishKey] = data.rating;
                 onRatingsChange();
             });
+            socket.on('food-leaderboards-data', function (data) {
+                if (!data) return;
+                leaderboards = {
+                    classic: data.classic || [],
+                    scrandleWiki: data.scrandleWiki || [],
+                    scrandleCommunity: data.scrandleCommunity || [],
+                    myStats: data.myStats || { classic: null, scrandle: {} }
+                };
+                renderLeaderboards();
+            });
         } catch (err) {
             console.warn('FoodGuessr: socket connection failed —', err.message || err);
         }
+    }
+
+    function fetchLeaderboards() {
+        if (socket && socket.connected) socket.emit('food-leaderboards');
     }
 
     function emitVote(dishKey, rating) {
@@ -387,6 +444,11 @@
                     '</div>';
             }).join('');
             showScreen('fg-screen-final');
+
+            // Persist score on server and refresh leaderboard
+            if (socket && socket.connected) {
+                socket.emit('food-classic-finish', { score: totalScore, perfect: pct === 100 });
+            }
         }
 
         async function start() {
@@ -733,6 +795,11 @@
             $('fg-sc-over-best').textContent = String(best);
             $('fg-sc-over-mode').textContent = variantBadge();
             showScreen('fg-screen-scrandle-over');
+
+            // Persist streak on server and refresh leaderboard
+            if (socket && socket.connected) {
+                socket.emit('food-scrandle-finish', { variant: variant, streak: streak });
+            }
         }
 
         async function start(_variant) {

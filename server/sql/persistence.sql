@@ -208,3 +208,32 @@ create table if not exists stock_price_cache (
   currency text,
   updated_at timestamptz not null default now()
 );
+
+-- ============================================================================
+-- Food Guessr — Scrandle best streak per player per variant (wiki | community)
+-- ============================================================================
+create table if not exists food_scrandle_streaks (
+  player_name text not null,
+  variant text not null check (variant in ('wiki', 'community')),
+  best_streak integer not null default 0,
+  total_runs integer not null default 0,
+  updated_at timestamptz not null default now(),
+  primary key (player_name, variant)
+);
+
+create index if not exists food_scrandle_streaks_variant_idx
+  on food_scrandle_streaks (variant, best_streak desc, updated_at desc);
+
+-- ============================================================================
+-- Food Guessr — Classic mode best score per player
+-- ============================================================================
+create table if not exists food_classic_scores (
+  player_name text not null primary key,
+  best_score integer not null default 0,
+  total_games integer not null default 0,
+  perfect_games integer not null default 0,
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists food_classic_scores_best_idx
+  on food_classic_scores (best_score desc, updated_at desc);

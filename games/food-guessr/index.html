@@ -417,11 +417,66 @@
         .fg-sc-over-stat .num { font-size: 36px; color: var(--fg-accent); }
         .fg-sc-over-stat .label { font-size: 8px; color: var(--fg-text-dim); letter-spacing: 1px; margin-top: 4px; }
 
+        /* Leaderboards */
+        .fg-lb-teasers {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 16px;
+        }
+        .fg-lb-teaser {
+            background: var(--fg-surface-2);
+            border: 2px solid var(--fg-border);
+            padding: 10px 12px;
+        }
+        .fg-lb-teaser-title {
+            font-size: 8px; color: var(--fg-pink);
+            letter-spacing: 1px; margin-bottom: 8px;
+        }
+        .fg-lb-teaser-rows {
+            display: flex; flex-direction: column; gap: 4px;
+            font-size: 8px; color: var(--fg-text); line-height: 1.6;
+        }
+        .fg-lb-teaser-row { display: block; }
+        .fg-lb-teaser-row em { font-style: normal; color: var(--fg-accent); margin-left: 4px; }
+        .fg-lb-teaser-empty { color: var(--fg-text-dim); font-size: 8px; font-style: italic; }
+
+        .fg-lb-block {
+            background: var(--fg-surface-2);
+            border: 2px solid var(--fg-border);
+            padding: 12px;
+            margin: 14px 0;
+            text-align: left;
+        }
+        .fg-lb-title {
+            font-size: 9px; color: var(--fg-pink);
+            letter-spacing: 1px; margin-bottom: 8px;
+            text-align: center;
+        }
+        .fg-lb-row {
+            display: grid;
+            grid-template-columns: 36px 1fr auto;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 4px;
+            font-size: 9px;
+            border-bottom: 1px dashed #3a3026;
+        }
+        .fg-lb-row:last-child { border-bottom: none; }
+        .fg-lb-rank { color: var(--fg-text-dim); }
+        .fg-lb-name { color: var(--fg-text); }
+        .fg-lb-val { color: var(--fg-accent); }
+        .fg-lb-empty {
+            font-size: 9px; color: var(--fg-text-dim);
+            font-style: italic; text-align: center; padding: 12px 0;
+        }
+
         /* Mobile */
         @media (max-width: 700px) {
             .fg-menu-grid { grid-template-columns: 1fr; }
             .fg-sc-cards { grid-template-columns: 1fr; }
             .fg-sc-card-photo { aspect-ratio: 16 / 10; }
+            .fg-lb-teasers { grid-template-columns: 1fr; }
         }
         @media (max-width: 600px) {
             .fg-title { font-size: 14px; }
@@ -490,6 +545,27 @@
                 </span>
             </button>
         </div>
+
+        <div class="fg-lb-teasers">
+            <div class="fg-lb-teaser">
+                <div class="fg-lb-teaser-title">🌍 CLASSIC TOP 3</div>
+                <div class="fg-lb-teaser-rows" id="fg-lb-teaser-classic">
+                    <span class="fg-lb-teaser-empty">loading…</span>
+                </div>
+            </div>
+            <div class="fg-lb-teaser">
+                <div class="fg-lb-teaser-title">📚 SCRANDLE WIKI TOP 3</div>
+                <div class="fg-lb-teaser-rows" id="fg-lb-teaser-wiki">
+                    <span class="fg-lb-teaser-empty">loading…</span>
+                </div>
+            </div>
+            <div class="fg-lb-teaser">
+                <div class="fg-lb-teaser-title">👥 SCRANDLE COMMUNITY TOP 3</div>
+                <div class="fg-lb-teaser-rows" id="fg-lb-teaser-community">
+                    <span class="fg-lb-teaser-empty">loading…</span>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- ============ CLASSIC ROUND ============ -->
@@ -540,6 +616,10 @@
             </div>
             <div class="fg-final-verdict" id="fg-final-verdict"></div>
             <div class="fg-final-rounds" id="fg-final-rounds"></div>
+            <div class="fg-lb-block">
+                <div class="fg-lb-title">🏆 CLASSIC TOP 10</div>
+                <div id="fg-lb-classic"><div class="fg-lb-empty">loading…</div></div>
+            </div>
             <button class="fg-cta" id="fg-btn-play-again" type="button">PLAY AGAIN ↺</button>
             <button class="fg-cta fg-cta-ghost" data-fg-menu type="button">CHANGE MODE</button>
         </div>
@@ -666,6 +746,14 @@
                     <div class="num" id="fg-sc-over-best">0</div>
                     <div class="label">YOUR BEST</div>
                 </div>
+            </div>
+            <div class="fg-lb-block">
+                <div class="fg-lb-title">🏆 SCRANDLE WIKI TOP 10</div>
+                <div id="fg-lb-scrandle-wiki"><div class="fg-lb-empty">loading…</div></div>
+            </div>
+            <div class="fg-lb-block">
+                <div class="fg-lb-title">🏆 SCRANDLE COMMUNITY TOP 10</div>
+                <div id="fg-lb-scrandle-community"><div class="fg-lb-empty">loading…</div></div>
             </div>
             <button class="fg-cta" id="fg-sc-over-again-wiki" type="button">PLAY WIKI ↺</button>
             <button class="fg-cta" id="fg-sc-over-again-community" type="button">PLAY COMMUNITY ↺</button>
