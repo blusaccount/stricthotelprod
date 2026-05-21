@@ -5,6 +5,7 @@ import { saveCharacter, getCharacter } from '../character-store.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
 import { pushActivity } from '../activity-feed.js';
+import { claimName, isValidOwnerToken } from '../identity.js';
 
 export function registerCurrencyHandlers(socket, io, { checkRateLimit, onlinePlayers }) {
     socket.on('register-player', async (data) => { try {
@@ -16,16 +17,38 @@ export function registerCurrencyHandlers(socket, io, { checkRateLimit, onlinePla
         const character = validateCharacter(data.character);
         const game = validateGameType(data.game);
 
+        // Owner-token format check before any DB writes (claimName inserts a
+        // player row, which would otherwise flip isNewPlayer below).
+        if (!isValidOwnerToken(data.ownerToken)) {
+            socket.emit('register-player-error', {
+                code: 'INVALID_TOKEN',
+                message: 'Owner token missing or malformed — clear your site data and reload.'
+            });
+            return;
+        }
+
+        // Detect first-ever registration BEFORE claimName creates the row.
+        const firstTime = await isNewPlayer(name);
+
+        // Trust-On-First-Use ownership: claim the name with the browser's
+        // long-lived ownerToken. A name owned by a different token is rejected.
+        const claim = await claimName(name, data.ownerToken);
+        if (!claim.ok) {
+            socket.emit('register-player-error', {
+                code: claim.reason === 'taken' ? 'NAME_TAKEN' : 'CLAIM_FAILED',
+                message: claim.reason === 'taken'
+                    ? `Der Name "${name}" gehört bereits jemandem. Wähle einen anderen.`
+                    : 'Name konnte nicht beansprucht werden.'
+            });
+            return;
+        }
+
         // Leave any prior user-room (in case the socket re-registers under a
         // new name) so balance updates don't leak between players.
         const prev = onlinePlayers.get(socket.id);
         if (prev && prev.name && prev.name !== name) socket.leave(userRoom(prev.name));
 
-        // Detect first-ever registration BEFORE we ensure the player row exists
-        // (getBalance below auto-creates it).
-        const firstTime = await isNewPlayer(name);
-
-        onlinePlayers.set(socket.id, { name, character, game });
+        onlinePlayers.set(socket.id, { name, character, game, ownerToken: data.ownerToken });
         socket.join(userRoom(name));
         broadcastOnlinePlayers(io);
 

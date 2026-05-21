@@ -24,6 +24,17 @@ let brainLeaderboardBroadcastTimer = null;
 let brainGameLeaderboardsTimer = null;
 const BRAIN_LEADERBOARD_THROTTLE_MS = 1000;
 
+// Per-player anti-spam for brain-training-score. Without these limits a
+// scripted client could pump ~250 SC/sec via this single event handler.
+const trainingCooldownByName = new Map();   // name -> ts of last submission
+const trainingDailyByName = new Map();      // name -> { day, totalCoins }
+const TRAINING_COOLDOWN_MS = 20_000;        // ≈ length of one training round
+const TRAINING_DAILY_CAP_COINS = 200;
+
+function getUtcDayString() {
+    return new Date().toISOString().slice(0, 10);
+}
+
 let _io = null;
 
 function calculateBrainCoins(brainAge) {
@@ -90,7 +101,18 @@ function scheduleBrainGameLeaderboardsBroadcast() {
 
 export function registerBrainVersusHandlers(socket, io, deps) {
     _io = io;
-    const { checkRateLimit } = deps;
+    const { checkRateLimit, onlinePlayers } = deps;
+
+    // Resolve the socket's registered name. Returns null and signals the
+    // client when the socket hasn't gone through register-player yet.
+    function resolveSelfName(errorEvent) {
+        const player = onlinePlayers && onlinePlayers.get(socket.id);
+        if (!player || !player.name) {
+            if (errorEvent) socket.emit(errorEvent, { message: 'Not logged in' });
+            return null;
+        }
+        return player.name;
+    }
 
     socket.on('brain-get-leaderboard', async () => { try {
         if (!checkRateLimit(socket)) return;
@@ -102,8 +124,10 @@ export function registerBrainVersusHandlers(socket, io, deps) {
 
     socket.on('brain-submit-score', async (data) => { try {
         if (!checkRateLimit(socket)) return;
-        if (!data || typeof data.playerName !== 'string') return;
-        const name = sanitizeName(data.playerName);
+        if (!data || typeof data !== 'object') return;
+        // Identity comes from the registered socket — clients can't submit
+        // scores on behalf of another name.
+        const name = resolveSelfName();
         if (!name) return;
 
         const brainAge = Number(data.brainAge);
@@ -161,9 +185,27 @@ export function registerBrainVersusHandlers(socket, io, deps) {
 
     socket.on('brain-training-score', async (data) => { try {
         if (!checkRateLimit(socket)) return;
-        if (!data || typeof data.playerName !== 'string') return;
-        const name = sanitizeName(data.playerName);
+        if (!data || typeof data !== 'object') return;
+        // Identity from the socket — body-supplied playerName is ignored so
+        // a scripted client can't pump coins onto someone else's wallet.
+        const name = resolveSelfName();
         if (!name) return;
+
+        // Per-name cooldown: a real training round takes ~20-30s. This caps
+        // the printer at one payout per cooldown window.
+        const nowTs = Date.now();
+        const lastTs = trainingCooldownByName.get(name) || 0;
+        if (nowTs - lastTs < TRAINING_COOLDOWN_MS) return;
+
+        // Daily cap: even legit usage tops out at TRAINING_DAILY_CAP_COINS
+        // SC/day across all training submissions.
+        const today = getUtcDayString();
+        let dailyState = trainingDailyByName.get(name);
+        if (!dailyState || dailyState.day !== today) {
+            dailyState = { day: today, totalCoins: 0 };
+            trainingDailyByName.set(name, dailyState);
+        }
+        if (dailyState.totalCoins >= TRAINING_DAILY_CAP_COINS) return;
 
         // Update per-game leaderboard
         if (data.gameId && VALID_BRAIN_GAME_IDS.includes(data.gameId)) {
@@ -179,7 +221,15 @@ export function registerBrainVersusHandlers(socket, io, deps) {
                 const coinScore = data.gameId === 'reaction'
                     ? Math.round(Math.max(0, Math.min(100, ((2500 - s) / 1750) * 100)))
                     : s;
-                const coins = calculateTrainingCoins(coinScore);
+                let coins = calculateTrainingCoins(coinScore);
+                // Clip to the remaining daily allowance so the cap is exact.
+                const remaining = Math.max(0, TRAINING_DAILY_CAP_COINS - dailyState.totalCoins);
+                coins = Math.min(coins, remaining);
+                if (coins <= 0) return;
+
+                trainingCooldownByName.set(name, nowTs);
+                dailyState.totalCoins += coins;
+
                 const newBalance = await addBalance(name, coins, 'brain_training');
                 if (newBalance !== null) {
                     emitToUser(io, name, 'balance-update', { balance: newBalance });
@@ -192,7 +242,12 @@ export function registerBrainVersusHandlers(socket, io, deps) {
 
     socket.on('brain-versus-create', (data) => { try {
         if (!checkRateLimit(socket)) return;
-        const playerName = sanitizeName(typeof data === 'object' ? data.playerName : data);
+        // Pull the player name from the registered socket; only fall back to
+        // body input when the socket hasn't registered yet (legacy clients).
+        let playerName = (onlinePlayers && onlinePlayers.get(socket.id)?.name) || null;
+        if (!playerName) {
+            playerName = sanitizeName(typeof data === 'object' ? data.playerName : data);
+        }
         if (!playerName) { socket.emit('error', { message: 'Name ungültig!' }); return; }
         const existingRoom = getRoom(socket.id);
         if (existingRoom) { socket.emit('error', { message: 'Du bist bereits in einem Raum!' }); return; }
@@ -218,7 +273,11 @@ export function registerBrainVersusHandlers(socket, io, deps) {
         if (!checkRateLimit(socket)) return;
         if (!data || typeof data !== 'object') return;
         const code = validateRoomCode((data.code || '').toUpperCase());
-        const playerName = sanitizeName(data.playerName);
+        // Identity from the registered socket — see brain-versus-create above.
+        let playerName = (onlinePlayers && onlinePlayers.get(socket.id)?.name) || null;
+        if (!playerName) {
+            playerName = sanitizeName(data.playerName);
+        }
         if (!playerName) { socket.emit('error', { message: 'Name ungültig!' }); return; }
         if (code.length !== 4) { socket.emit('error', { message: 'Ungültiger Raum-Code!' }); return; }
 

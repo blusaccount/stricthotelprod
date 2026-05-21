@@ -1,5 +1,5 @@
 import { randomInt } from 'crypto';
-import { addBalance, deductBalance, getBalance } from '../currency.js';
+import { addBalance, deductBalance, getBalance, withWallet } from '../currency.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
 import { STANDARD_CASINO_BETS, validateCasinoBet, emitToUser } from '../socket-utils.js';
@@ -156,26 +156,36 @@ export function registerRouletteHandlers(socket, io, deps) {
         }
         const totalStake = bets.reduce((sum, b) => sum + b.amount, 0);
 
-        const balanceAfter = await deductBalance(player.name, totalStake, 'roulette_bet', { totalStake, bets });
-        if (balanceAfter === null) {
+        // Atomic stake + spin + payout. If the payout insert fails the whole
+        // sequence rolls back so the player keeps their stake.
+        const txResult = await withWallet(async (client) => {
+            const balanceAfter = await deductBalance(player.name, totalStake, 'roulette_bet', { totalStake, bets }, client);
+            if (balanceAfter === null) return { ok: false };
+
+            const pocket = spinWheel();
+            const results = bets.map(b => {
+                const { won, payout } = evaluateBet(b, pocket);
+                return { bet: b, won, payout };
+            });
+            const totalPayout = results.reduce((sum, r) => sum + r.payout, 0);
+
+            let finalBalance = balanceAfter;
+            if (totalPayout > 0) {
+                const updated = await addBalance(player.name, totalPayout, 'roulette_payout', {
+                    pocket, totalPayout, results
+                }, client);
+                if (updated !== null) finalBalance = updated;
+            }
+            return { ok: true, pocket, results, totalPayout, finalBalance };
+        });
+
+        if (!txResult || !txResult.ok) {
             socket.emit('roulette-error', { message: 'Not enough coins' });
             return;
         }
 
-        const pocket = spinWheel();
-        const results = bets.map(b => {
-            const { won, payout } = evaluateBet(b, pocket);
-            return { bet: b, won, payout };
-        });
-        const totalPayout = results.reduce((sum, r) => sum + r.payout, 0);
-
-        let finalBalance = balanceAfter;
-        if (totalPayout > 0) {
-            const updated = await addBalance(player.name, totalPayout, 'roulette_payout', {
-                pocket, totalPayout, results
-            });
-            if (updated !== null) finalBalance = updated;
-        }
+        const { pocket, results, totalPayout } = txResult;
+        let finalBalance = txResult.finalBalance;
         if (finalBalance === null) finalBalance = await getBalance(player.name);
 
         // Achievement bumps

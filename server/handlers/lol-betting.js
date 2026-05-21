@@ -3,9 +3,9 @@ import { getSocketIp } from '../socket-utils.js';
 import { placeBet, getActiveBets, getPlayerBets, resolveBet } from '../lol-betting.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
-import { parseRiotId, validateRiotId } from '../riot-api.js';
+import { parseRiotId, validateRiotId, isRiotApiEnabled } from '../riot-api.js';
 import { manualCheckBetStatus, scheduleBetTimeout } from '../lol-match-checker.js';
-import { getBalance, deductBalance, addBalance } from '../currency.js';
+import { getBalance, deductBalance, addBalance, withWallet } from '../currency.js';
 import { emitBalanceUpdate, emitToUser } from '../socket-utils.js';
 import { isDatabaseEnabled, withTransaction } from '../db.js';
 import { pushActivity } from '../activity-feed.js';
@@ -104,8 +104,20 @@ export function registerLolBettingHandlers(socket, io, deps) {
             return;
         }
 
-        // No server-side Riot API calls on bet placement
-        const puuid = typeof data.puuid === 'string' ? data.puuid : null;
+        // Resolve PUUID server-side from the Riot ID so a client can't bet
+        // against a different account by spoofing data.puuid. When the Riot
+        // API key isn't configured we fall back to no-puuid (manual resolve).
+        let puuid = null;
+        if (isRiotApiEnabled()) {
+            try {
+                const validation = await validateRiotId(resolvedName);
+                if (validation && validation.valid && validation.puuid) {
+                    puuid = validation.puuid;
+                }
+            } catch (apiErr) {
+                console.warn('[lol-place-bet] PUUID resolve failed:', apiErr.message);
+            }
+        }
         const lastMatchId = null;
 
         let newBalance;
@@ -332,24 +344,34 @@ export function registerLolBettingHandlers(socket, io, deps) {
             return;
         }
 
-        // Resolve the bet
-        const result = await resolveBet(safeBetId, didPlayerWin);
+        // Resolve the bet + credit winner balance in one transaction so a
+        // crash between the status flip and the addBalance can't leave a
+        // resolved-but-unpaid bet.
+        const resolution = await withWallet(async (client) => {
+            const r = await resolveBet(safeBetId, didPlayerWin, client);
+            if (!r) return { ok: false, reason: 'not_found' };
+            let newBalance = null;
+            if (r.wonBet && r.payout > 0) {
+                newBalance = await addBalance(r.playerName, r.payout, 'lol_bet_win', {
+                    betId: safeBetId,
+                    resolvedManually: true
+                }, client);
+            }
+            return {
+                ok: true,
+                playerName: r.playerName,
+                wonBet: r.wonBet,
+                payout: r.payout,
+                newBalance
+            };
+        });
 
-        if (!result) {
+        if (!resolution.ok) {
             socket.emit('lol-bet-error', { message: 'Bet not found or already resolved' });
             return;
         }
 
-        const { playerName, wonBet, payout } = result;
-
-        // Credit winner's balance if they won
-        let newBalance = null;
-        if (wonBet && payout > 0) {
-            newBalance = await addBalance(playerName, payout, 'lol_bet_win', {
-                betId: safeBetId,
-                resolvedManually: true
-            });
-        }
+        const { playerName, wonBet, payout, newBalance } = resolution;
 
         console.log(`[LoL Admin Resolve] ${player.name} manually resolved bet ${safeBetId}: ${playerName} ${wonBet ? 'won' : 'lost'} ${wonBet ? payout : 0} SC`);
 

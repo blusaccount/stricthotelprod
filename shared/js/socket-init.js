@@ -10,6 +10,27 @@
     // Storage keys
     var NAME_KEY = 'stricthotel-name';
     var CHAR_KEY = 'stricthotel-character';
+    var OWNER_TOKEN_KEY = 'stricthotel-owner-token';
+
+    /**
+     * Get (or create) a long-lived owner token for this browser. The server
+     * uses it as a Trust-On-First-Use guard so a name claimed from this
+     * browser can't be hijacked by another browser later.
+     */
+    function getOwnerToken() {
+        var t = localStorage.getItem(OWNER_TOKEN_KEY);
+        if (t && /^[A-Za-z0-9_-]{8,128}$/.test(t)) return t;
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+            t = window.crypto.randomUUID().replace(/-/g, '');
+        } else {
+            // RFC 4122-ish fallback for older runtimes.
+            var bytes = new Uint8Array(16);
+            (window.crypto || window.msCrypto).getRandomValues(bytes);
+            t = Array.from(bytes, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+        }
+        localStorage.setItem(OWNER_TOKEN_KEY, t);
+        return t;
+    }
 
     /**
      * Get the player name from localStorage
@@ -89,7 +110,27 @@
         if (!name) return;
 
         var character = getCharacterData();
-        socket.emit('register-player', { name: name, character: character, game: game });
+        socket.emit('register-player', {
+            name: name,
+            character: character,
+            game: game,
+            ownerToken: getOwnerToken()
+        });
+
+        // Surface name-collision errors so the user knows why nothing works.
+        // Once-only attachment per socket to avoid duplicate alerts.
+        if (!socket._stricthotelRegisterErrorBound) {
+            socket._stricthotelRegisterErrorBound = true;
+            socket.on('register-player-error', function (data) {
+                var msg = (data && data.message) || 'Registrierung fehlgeschlagen.';
+                try {
+                    if (window.parent && window.parent !== window) {
+                        window.parent.postMessage({ type: 'stricthotel-toast', message: msg, level: 'error' }, '*');
+                    }
+                } catch (_) {}
+                if (typeof window !== 'undefined' && window.alert) window.alert(msg);
+            });
+        }
     }
 
     /**
@@ -107,8 +148,10 @@
     window.StrictHotelSocket = {
         NAME_KEY: NAME_KEY,
         CHAR_KEY: CHAR_KEY,
+        OWNER_TOKEN_KEY: OWNER_TOKEN_KEY,
         getPlayerName: getPlayerName,
         getCharacterData: getCharacterData,
+        getOwnerToken: getOwnerToken,
         registerPlayer: registerPlayer,
         escapeHtml: escapeHtml
     };

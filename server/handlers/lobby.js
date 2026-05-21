@@ -16,7 +16,15 @@ import {
     socketToRoom
 } from '../room-manager.js';
 
-export function registerLobbyHandlers(socket, io, { checkRateLimit }) {
+export function registerLobbyHandlers(socket, io, { checkRateLimit, onlinePlayers }) {
+    // Force room-occupant names to match the registered socket identity, so
+    // a player can't join a Mäxchen lobby under a fake name and have its
+    // bets/pot accounting touch someone else's wallet.
+    function getOwnedName() {
+        const p = onlinePlayers && onlinePlayers.get(socket.id);
+        return (p && p.name) ? p.name : null;
+    }
+
     // --- Get Lobbies ---
     socket.on('get-lobbies', (gameType) => { try {
         if (!checkRateLimit(socket)) return;
@@ -30,10 +38,15 @@ export function registerLobbyHandlers(socket, io, { checkRateLimit }) {
         if (!checkRateLimit(socket)) return;
 
         // Support both old (string) and new (object) format
-        const playerName = sanitizeName(typeof data === 'string' ? data : data?.playerName);
         const character = validateCharacter(typeof data === 'object' ? data.character : null);
         const gameType = validateGameType(typeof data === 'object' ? data.gameType : 'maexchen');
 
+        // Name is taken from the registered socket — body input is only used
+        // when the socket hasn't yet hit register-player (legacy entry path).
+        let playerName = getOwnedName();
+        if (!playerName) {
+            playerName = sanitizeName(typeof data === 'string' ? data : data?.playerName);
+        }
         if (!playerName) {
             socket.emit('error', { message: 'Name ungültig!' });
             return;
@@ -74,9 +87,14 @@ export function registerLobbyHandlers(socket, io, { checkRateLimit }) {
         if (!data || typeof data !== 'object') return;
 
         const code = validateRoomCode((data.code || '').toUpperCase());
-        const playerName = sanitizeName(data.playerName);
         const character = validateCharacter(data.character);
 
+        // Force the joining name to match the socket identity (TOFU). Without
+        // this, anyone could deduct another player's coins via place-bet.
+        let playerName = getOwnedName();
+        if (!playerName) {
+            playerName = sanitizeName(data.playerName);
+        }
         if (!playerName) {
             socket.emit('error', { message: 'Name ungültig!' });
             return;

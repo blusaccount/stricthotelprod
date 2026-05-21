@@ -210,6 +210,48 @@ async function setProgress(playerName, counter, value) {
     return value;
 }
 
+/**
+ * Atomically apply a delta to a counter and return both the previous and
+ * resulting value in a single round-trip. Replaces the read/modify/write in
+ * `bump()` which lost concurrent increments (two parallel `+1`s could land
+ * as a single `+1` because both reads saw the same baseline).
+ */
+async function bumpProgress(playerName, counter, delta, mode) {
+    if (!isDatabaseEnabled()) {
+        if (!memoryProgress.has(playerName)) memoryProgress.set(playerName, new Map());
+        const m = memoryProgress.get(playerName);
+        const current = m.get(counter) || 0;
+        let next;
+        if (mode === 'max') next = Math.max(current, delta);
+        else if (mode === 'set') next = delta;
+        else next = current + delta;
+        m.set(counter, next);
+        return { previous: current, current: next };
+    }
+    const sql = `
+        with player as (select id from players where name = $1),
+             prev as (
+                 select value from achievement_progress
+                 where player_id = (select id from player) and counter_id = $2
+             )
+        insert into achievement_progress (player_id, counter_id, value)
+        select id, $2, $3 from player
+        on conflict (player_id, counter_id) do update
+            set value = case $4::text
+                when 'max' then greatest(achievement_progress.value, excluded.value)
+                when 'set' then excluded.value
+                else achievement_progress.value + excluded.value
+            end
+        returning value as current, coalesce((select value from prev), 0) as previous
+    `;
+    const result = await query(sql, [playerName, counter, delta, mode || 'add']);
+    if (!result.rows[0]) return { previous: 0, current: 0 };
+    return {
+        previous: Number(result.rows[0].previous),
+        current: Number(result.rows[0].current)
+    };
+}
+
 async function isAlreadyUnlocked(playerName, achievementId) {
     if (!isDatabaseEnabled()) {
         return memoryUnlocks.get(playerName)?.has(achievementId) || false;
@@ -269,20 +311,17 @@ export async function bump(playerName, counter, delta = 1, mode = 'add') {
     if (!playerName || !counter) return [];
     const list = counterMap.get(counter);
 
-    const current = await getProgress(playerName, counter);
-    let next;
-    if (mode === 'max') next = Math.max(current, delta);
-    else if (mode === 'set') next = delta;
-    else next = current + delta;
+    // Atomic increment — returns BOTH the old and new value in one round-trip
+    // so concurrent bumps don't silently overwrite each other's increments.
+    const { previous, current: next } = await bumpProgress(playerName, counter, delta, mode);
 
-    if (next === current) return [];
-    await setProgress(playerName, counter, next);
+    if (next === previous) return [];
 
     if (!list || !list.length) return [];
 
     const newlyUnlocked = [];
     for (const a of list) {
-        if (a.threshold <= current) continue;       // already passed prior threshold
+        if (a.threshold <= previous) continue;      // already passed prior threshold
         if (next < a.threshold) break;              // not yet reached this one (list is sorted)
         if (await isAlreadyUnlocked(playerName, a.id)) continue;
         const inserted = await recordUnlock(playerName, a.id, { counter, value: next });

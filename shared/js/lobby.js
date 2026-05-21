@@ -151,7 +151,10 @@
         const character = window.MaexchenCreator?.hasCharacter()
             ? window.MaexchenCreator.getCharacter()
             : null;
-        socket.emit('register-player', { name, character, game: gameType });
+        const ownerToken = window.StrictHotelSocket
+            ? window.StrictHotelSocket.getOwnerToken()
+            : null;
+        socket.emit('register-player', { name, character, game: gameType, ownerToken });
         // Sync name to shared storage
         localStorage.setItem('stricthotel-name', name);
     }

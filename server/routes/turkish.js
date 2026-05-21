@@ -3,6 +3,7 @@ import { getDailyLesson, buildQuiz, getDailySeed } from '../turkish-lessons.js';
 import { recordDailyCompletion, getTurkishLeaderboard } from '../turkish-streaks.js';
 import { sanitizePlayerName } from './auth.js';
 import { bump } from '../achievements.js';
+import { verifyOwner, isValidOwnerToken } from '../identity.js';
 
 const router = Router();
 
@@ -18,6 +19,16 @@ router.post('/api/turkish/complete', async (req, res) => {
         const name = sanitizePlayerName(req.body?.playerName);
         if (!name) {
             return res.status(400).json({ ok: false, error: 'Invalid player name' });
+        }
+        // TOFU ownership check: prevent friends from completing each other's
+        // daily streak (and printing the streak reward) by guessing names.
+        const ownerToken = req.body?.ownerToken;
+        if (!isValidOwnerToken(ownerToken)) {
+            return res.status(400).json({ ok: false, error: 'Missing owner token' });
+        }
+        const owns = await verifyOwner(name, ownerToken);
+        if (!owns) {
+            return res.status(403).json({ ok: false, error: 'Name belongs to another browser' });
         }
 
         const result = await recordDailyCompletion(name);

@@ -1,5 +1,5 @@
 import { randomInt } from 'crypto';
-import { addBalance, deductBalance, getBalance } from '../currency.js';
+import { addBalance, deductBalance, getBalance, withWallet } from '../currency.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
 import { STANDARD_CASINO_BETS, validateCasinoBet, emitToUser } from '../socket-utils.js';
@@ -66,7 +66,12 @@ const PAYLINES = [
 ];
 
 // Per-player free-spin state (keyed by player name).
+// Each entry: { remaining, multiplier, bet, lastActiveAt }. Entries idle for
+// FREE_SPIN_TTL_MS are evicted by cleanupStaleFreeSpins() (called from the
+// periodic cleanup loop) so a player who triggers free spins and never
+// returns doesn't leak memory forever.
 const freeSpinState = new Map();
+const FREE_SPIN_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
 function getFreeSpinState(playerName) {
     return freeSpinState.get(playerName) || null;
@@ -74,6 +79,15 @@ function getFreeSpinState(playerName) {
 
 function clearFreeSpinState(playerName) {
     freeSpinState.delete(playerName);
+}
+
+export function cleanupStaleFreeSpins() {
+    const cutoff = Date.now() - FREE_SPIN_TTL_MS;
+    for (const [name, fs] of freeSpinState) {
+        if (!fs.lastActiveAt || fs.lastActiveAt < cutoff) {
+            freeSpinState.delete(name);
+        }
+    }
 }
 
 function pickReelSymbol(reelIndex) {
@@ -249,6 +263,7 @@ export function registerStrictly7sHandlers(socket, io, deps) {
     }
 
     socket.on('strictly7s-state', () => { try {
+        if (!checkRateLimit(socket, 5)) return;
         const player = onlinePlayers.get(socket.id);
         if (!player || !player.name) return;
         emitFreeSpinState(player.name);
@@ -284,25 +299,52 @@ export function registerStrictly7sHandlers(socket, io, deps) {
             multiplier = 1;
         }
 
-        // Deduct bet only on paid spins.
-        let balanceAfterBet = null;
-        if (!inFreeSpin) {
-            balanceAfterBet = await deductBalance(player.name, bet, 'strictly7s_bet', { bet });
-            if (balanceAfterBet === null) {
-                socket.emit('strictly7s-error', { message: 'Not enough coins' });
-                return;
+        // Deduct + spin + payout in one DB transaction so a crash between
+        // bet and payout doesn't leave the player short. The RNG happens
+        // inside the tx — that's fine, throwing rolls everything back.
+        const spinResult = await withWallet(async (client) => {
+            let balanceAfterBet = null;
+            if (!inFreeSpin) {
+                balanceAfterBet = await deductBalance(player.name, bet, 'strictly7s_bet', { bet }, client);
+                if (balanceAfterBet === null) {
+                    return { ok: false, reason: 'insufficient' };
+                }
             }
+
+            const grid = spinGrid();
+            const outcome = evaluateSpin(grid, bet);
+            const rawPayout = (outcome.lineWinTotal + outcome.scatterPay) * multiplier;
+            const payout = Math.floor(rawPayout);
+
+            let finalBalance = balanceAfterBet;
+            if (payout > 0) {
+                const updated = await addBalance(player.name, payout, 'strictly7s_payout', {
+                    bet,
+                    payout,
+                    multiplier,
+                    wins: outcome.wins.length,
+                    scatters: outcome.scatterCount,
+                    inFreeSpin
+                }, client);
+                if (updated !== null) finalBalance = updated;
+            }
+            return { ok: true, balanceAfterBet, finalBalance, grid, outcome, payout };
+        });
+
+        if (!spinResult || !spinResult.ok) {
+            socket.emit('strictly7s-error', { message: 'Not enough coins' });
+            return;
         }
 
-        const grid = spinGrid();
-        const outcome = evaluateSpin(grid, bet);
-        const rawPayout = (outcome.lineWinTotal + outcome.scatterPay) * multiplier;
-        const payout = Math.floor(rawPayout);
+        const { balanceAfterBet, grid, outcome, payout } = spinResult;
+        let finalBalance = spinResult.finalBalance;
 
-        // Update free spin state: decrement remaining, award retriggers.
+        // Update free spin state AFTER the transaction commits, so we don't
+        // mutate session state for a spin that ultimately rolled back.
         let freeSpinsRemainingAfter = 0;
         let freeSpinsAddedThisSpin = 0;
         if (inFreeSpin) {
+            fs.lastActiveAt = Date.now();
             fs.remaining -= 1;
             if (outcome.freeSpinsAwarded > 0) {
                 fs.remaining += outcome.freeSpinsAwarded;
@@ -319,25 +361,14 @@ export function registerStrictly7sHandlers(socket, io, deps) {
             const newState = {
                 remaining: outcome.freeSpinsAwarded,
                 multiplier: FREE_SPIN_MULTIPLIER,
-                bet
+                bet,
+                lastActiveAt: Date.now()
             };
             freeSpinState.set(player.name, newState);
             freeSpinsRemainingAfter = newState.remaining;
             freeSpinsAddedThisSpin = outcome.freeSpinsAwarded;
         }
 
-        let finalBalance = balanceAfterBet;
-        if (payout > 0) {
-            const updated = await addBalance(player.name, payout, 'strictly7s_payout', {
-                bet,
-                payout,
-                multiplier,
-                wins: outcome.wins.length,
-                scatters: outcome.scatterCount,
-                inFreeSpin
-            });
-            if (updated !== null) finalBalance = updated;
-        }
         // Free spin with no payout: fetch current balance so the client always sees a value.
         if (finalBalance === null) {
             finalBalance = await getBalance(player.name);

@@ -100,6 +100,9 @@ alter table players add column if not exists diamonds integer not null default 0
 -- add character_data column for persistent character portraits
 alter table players add column if not exists character_data jsonb;
 
+-- TOFU owner token for player names (claimed on first register-player)
+alter table players add column if not exists owner_token text;
+
 create index if not exists lol_bets_status_idx
   on lol_bets (status, created_at desc);
 

@@ -221,10 +221,13 @@
         if (!name) return;
 
         try {
+            const ownerToken = window.StrictHotelSocket
+                ? window.StrictHotelSocket.getOwnerToken()
+                : null;
             const res = await fetch('/api/turkish/complete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ playerName: name })
+                body: JSON.stringify({ playerName: name, ownerToken })
             });
             const data = await res.json();
             if (!res.ok || !data.ok) {

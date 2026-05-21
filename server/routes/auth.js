@@ -1,10 +1,21 @@
 import { Router } from 'express';
+import crypto from 'node:crypto';
 
 const LOGIN_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const LOGIN_RATE_LIMIT_MAX = 10;
 const loginRateLimiter = new Map(); // ip -> { count, resetAt }
 
 const PASSWORD = (process.env.SITE_PASSWORD || 'ADMIN').toLowerCase();
+
+// Constant-time string compare so the login endpoint doesn't leak the
+// secret one byte at a time via response timing.
+function safeStringEqual(a, b) {
+    if (typeof a !== 'string' || typeof b !== 'string') return false;
+    const aBuf = Buffer.from(a);
+    const bBuf = Buffer.from(b);
+    if (aBuf.length !== bBuf.length) return false;
+    return crypto.timingSafeEqual(aBuf, bBuf);
+}
 
 export function sanitizePlayerName(name) {
     if (typeof name !== 'string') return '';
@@ -31,8 +42,14 @@ export function createAuthRouter() {
             loginRateLimiter.set(ip, { count: 1, resetAt: now + LOGIN_RATE_LIMIT_WINDOW_MS });
         }
 
-        const { password } = req.body;
-        if (password && password.toLowerCase() === PASSWORD) {
+        // Reject non-string bodies before calling .toLowerCase() — otherwise
+        // a bare `{}` or `42` makes the handler throw a 500 with a stack
+        // trace in the response.
+        const { password } = req.body || {};
+        if (typeof password !== 'string') {
+            return res.status(401).json({ success: false, message: 'Incorrect password' });
+        }
+        if (safeStringEqual(password.toLowerCase(), PASSWORD)) {
             req.session.authenticated = true;
             loginRateLimiter.delete(ip);
             res.json({ success: true });

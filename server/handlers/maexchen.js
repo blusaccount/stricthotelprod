@@ -4,7 +4,7 @@ import {
     getAlivePlayers, nextAlivePlayerIndex
 } from '../game-logic.js';
 import { getRoom, sendTurnStart, awardPotAndEndGame } from '../room-manager.js';
-import { getBalance, deductBalance, addBalance } from '../currency.js';
+import { getBalance, deductBalance, addBalance, withWallet } from '../currency.js';
 import { emitBalanceUpdate, emitToUser } from '../socket-utils.js';
 
 export function registerMaexchenHandlers(socket, io, deps) {
@@ -40,26 +40,36 @@ export function registerMaexchenHandlers(socket, io, deps) {
             }
         }
 
-        // Refund old bet first, then deduct new amount atomically
-        if (oldBet > 0) {
-            await addBalance(player.name, oldBet, 'maexchen_bet_refund', { roomCode: room.code });
-        }
-
-        if (amount > 0) {
-            const newBalance = await deductBalance(player.name, amount, 'maexchen_bet', { roomCode: room.code });
-            if (newBalance === null) {
-                // Can't afford — re-deduct old bet if it was refunded
-                if (oldBet > 0) {
-                    await deductBalance(player.name, oldBet, 'maexchen_bet', { roomCode: room.code });
-                }
-                socket.emit('error', { message: 'Nicht genug Coins!' });
-                return;
+        // Refund old bet + deduct new bet must be atomic. Without the tx the
+        // previous code would refund, fail the second deduct, and try to
+        // re-deduct as a "compensation" — but if the player had spent the
+        // refunded coins in another tab in between, the re-deduct also
+        // fails and the pot is silently short. withWallet rolls everything
+        // back on failure.
+        const adjustResult = await withWallet(async (client) => {
+            if (oldBet > 0) {
+                const refunded = await addBalance(
+                    player.name, oldBet, 'maexchen_bet_refund', { roomCode: room.code }, client
+                );
+                if (refunded === null) return { ok: false };
             }
-            emitToUser(io, player.name, 'balance-update', { balance: newBalance });
-        } else if (oldBet > 0) {
-            // Bet removed — balance was already refunded above
-            const balance = await getBalance(player.name);
-            emitToUser(io, player.name, 'balance-update', { balance });
+            if (amount > 0) {
+                const newBalance = await deductBalance(
+                    player.name, amount, 'maexchen_bet', { roomCode: room.code }, client
+                );
+                if (newBalance === null) return { ok: false, reason: 'insufficient' };
+                return { ok: true, balance: newBalance };
+            }
+            // Pure removal (amount === 0, oldBet >= 0) — read final balance.
+            return { ok: true, balance: await getBalance(player.name, client) };
+        });
+
+        if (!adjustResult.ok) {
+            socket.emit('error', { message: 'Nicht genug Coins!' });
+            return;
+        }
+        if (typeof adjustResult.balance === 'number') {
+            emitToUser(io, player.name, 'balance-update', { balance: adjustResult.balance });
         }
 
         room.bets[socket.id] = amount;

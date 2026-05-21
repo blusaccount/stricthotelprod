@@ -305,21 +305,22 @@ export async function getBetById(betId) {
 }
 
 /**
- * Mock function to simulate resolving a bet
- * In production, this would integrate with Riot Games API
- * Note: This function is not exposed via socket handlers - it's for future admin/API use
+ * Resolve a bet and (optionally) take an external Postgres client so the
+ * status flip and the winner's addBalance can share one transaction. If no
+ * client is passed the bet update runs on its own connection — fine for
+ * scheduled timeouts where the payout is handled separately.
  */
-export async function resolveBet(betId, didPlayerWin) {
+export async function resolveBet(betId, didPlayerWin, client = null) {
     if (!isDatabaseEnabled()) {
         const bet = betsMemory.find(b => b.id === betId);
         if (!bet || bet.status !== 'pending') {
             return null;
         }
-        
+
         bet.status = 'resolved';
         bet.result = didPlayerWin;
         bet.resolvedAt = new Date().toISOString();
-        
+
         // Calculate total payout (2x total return if won, which includes original bet)
         const wonBet = bet.betOnWin === didPlayerWin;
         return {
@@ -329,7 +330,8 @@ export async function resolveBet(betId, didPlayerWin) {
         };
     }
 
-    const result = await query(
+    const runner = client || { query };
+    const result = await runner.query(
         `update lol_bets
          set status = 'resolved', result = $2, resolved_at = now()
          where id = $1 and status = 'pending'

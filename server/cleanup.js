@@ -1,5 +1,7 @@
 import { rooms, onlinePlayers, socketToRoom, broadcastOnlinePlayers } from './room-manager.js';
 import { cleanupRateLimiters } from './socket-handlers.js';
+import { cleanupStaleBlackjackGames } from './handlers/blackjack.js';
+import { cleanupStaleFreeSpins } from './handlers/strictly7s.js';
 
 export function startPeriodicCleanup(io) {
     // Every 5 minutes: remove orphaned entries where socket is no longer connected
@@ -37,6 +39,10 @@ export function startPeriodicCleanup(io) {
 
         // Cleanup rate limiters
         cleanupRateLimiters();
+
+        // Evict abandoned per-player game state so the maps don't grow without bound.
+        cleanupStaleBlackjackGames();
+        cleanupStaleFreeSpins();
 
         if (removedPlayers > 0 || removedRooms > 0) {
             console.log(`[Cleanup] Removed ${removedPlayers} orphaned players, ${removedRooms} empty rooms`);

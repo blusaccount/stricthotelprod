@@ -304,3 +304,20 @@ export async function addDiamonds(playerName, count = 1, reason = 'reward', meta
 }
 
 export { STARTING_BALANCE };
+
+/**
+ * Run a wallet mutation that needs deduct + add to be atomic (casino spin,
+ * roulette, plinko, …). In DB mode the callback runs inside one transaction
+ * and gets a `client` to pass into deductBalance/addBalance — a crash mid-
+ * sequence rolls back the bet so the ledger never shows a deducted-but-
+ * unpaid spin. In memory mode the callback runs with `client = null`
+ * (memory storage has no real consistency guarantees anyway).
+ *
+ * The callback may return any value; throwing rolls back the transaction.
+ */
+export async function withWallet(callback) {
+    if (!isDatabaseEnabled()) {
+        return callback(null);
+    }
+    return withTransaction(callback);
+}

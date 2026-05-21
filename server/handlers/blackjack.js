@@ -1,5 +1,5 @@
 import { randomInt } from 'crypto';
-import { addBalance, deductBalance, getBalance } from '../currency.js';
+import { addBalance, deductBalance, getBalance, withWallet } from '../currency.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
 import { STANDARD_CASINO_BETS, validateCasinoBet, emitToUser } from '../socket-utils.js';
@@ -22,7 +22,17 @@ const NUM_DECKS = 6;
 const RESHUFFLE_AT = 80;
 
 // Per-player active game state, keyed by player name.
+// Each game carries `lastActiveAt` so cleanupStaleBlackjackGames() can
+// evict abandoned hands instead of leaving them in memory forever.
 const games = new Map();
+const BLACKJACK_GAME_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+export function cleanupStaleBlackjackGames() {
+    const cutoff = Date.now() - BLACKJACK_GAME_TTL_MS;
+    for (const [name, g] of games) {
+        if (!g.lastActiveAt || g.lastActiveAt < cutoff) games.delete(name);
+    }
+}
 
 // Shared shoe (one shoe for the server). Could be per-table for fairness in
 // multi-table setups, but for a single-player blackjack hub one shoe is fine.
@@ -174,7 +184,8 @@ export function registerBlackjackHandlers(socket, io, deps) {
             dealerHand: [deal(), deal()],
             bet,
             doubled: false,
-            finished: false
+            finished: false,
+            lastActiveAt: Date.now()
         };
         games.set(player.name, g);
 
@@ -200,6 +211,7 @@ export function registerBlackjackHandlers(socket, io, deps) {
             return;
         }
         g.playerHand.push(deal());
+        g.lastActiveAt = Date.now();
         if (isBust(g.playerHand) || handTotal(g.playerHand).total === 21) {
             await finishGame(player.name, socket, null, io, onlinePlayers);
             return;
@@ -243,11 +255,33 @@ export function registerBlackjackHandlers(socket, io, deps) {
             socket.emit('bj-error', { message: 'Not enough coins to double' });
             return;
         }
+        const originalBet = g.bet;
         g.doubled = true;
         g.bet = g.bet * 2;
         g.playerHand.push(deal());
+        g.lastActiveAt = Date.now();
         emitToUser(io, player.name, 'balance-update', { balance: balanceAfterDouble });
-        await finishGame(player.name, socket, null, io, onlinePlayers);
+        try {
+            await finishGame(player.name, socket, null, io, onlinePlayers);
+        } catch (finishErr) {
+            // finishGame crashed (DB hiccup etc.) AFTER we already booked the
+            // double-down stake. Roll back the extra stake and leave the
+            // hand resolvable so the player isn't stuck mid-game.
+            console.error('bj-double finish error:', finishErr.message);
+            try {
+                const refunded = await addBalance(player.name, originalBet, 'blackjack_double_refund', { bet: originalBet });
+                if (refunded !== null) {
+                    emitToUser(io, player.name, 'balance-update', { balance: refunded });
+                }
+            } catch (refundErr) {
+                console.error('bj-double refund failed:', refundErr.message);
+            }
+            g.doubled = false;
+            g.bet = originalBet;
+            // Pop the auto-drawn card so the player can hit/stand again.
+            g.playerHand.pop();
+            socket.emit('bj-error', { message: 'Double failed — stake refunded.' });
+        }
     } catch (err) {
         console.error('bj-double error:', err.message);
         socket.emit('bj-error', { message: 'Double failed.' });

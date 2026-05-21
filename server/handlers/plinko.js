@@ -1,5 +1,5 @@
 import { randomInt } from 'crypto';
-import { addBalance, deductBalance } from '../currency.js';
+import { addBalance, deductBalance, withWallet } from '../currency.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
 import { STANDARD_CASINO_BETS, validateCasinoBet, emitToUser } from '../socket-utils.js';
@@ -71,23 +71,31 @@ export function registerPlinkoHandlers(socket, io, deps) {
         const risk = typeof data?.risk === 'string' && RISK_LEVELS.includes(data.risk)
             ? data.risk : 'medium';
 
-        const balanceAfterBet = await deductBalance(player.name, bet, 'plinko_bet', { bet, risk });
-        if (balanceAfterBet === null) {
+        // Deduct + ball drop + payout in one tx — see strictly7s for rationale.
+        const dropResult = await withWallet(async (client) => {
+            const balanceAfterBet = await deductBalance(player.name, bet, 'plinko_bet', { bet, risk }, client);
+            if (balanceAfterBet === null) return { ok: false };
+
+            const { path, bucket } = dropBall();
+            const payout = evaluate(bucket, risk, bet);
+            const multiplier = PAYTABLE[risk][bucket];
+
+            let finalBalance = balanceAfterBet;
+            if (payout > 0) {
+                const updated = await addBalance(player.name, payout, 'plinko_payout', {
+                    bet, risk, bucket, multiplier, payout
+                }, client);
+                if (updated !== null) finalBalance = updated;
+            }
+            return { ok: true, path, bucket, payout, multiplier, finalBalance };
+        });
+
+        if (!dropResult || !dropResult.ok) {
             socket.emit('plinko-error', { message: 'Not enough coins' });
             return;
         }
 
-        const { path, bucket } = dropBall();
-        const payout = evaluate(bucket, risk, bet);
-        const multiplier = PAYTABLE[risk][bucket];
-
-        let finalBalance = balanceAfterBet;
-        if (payout > 0) {
-            const updated = await addBalance(player.name, payout, 'plinko_payout', {
-                bet, risk, bucket, multiplier, payout
-            });
-            if (updated !== null) finalBalance = updated;
-        }
+        const { path, bucket, payout, multiplier, finalBalance } = dropResult;
 
         // Achievement bumps
         const unlocks = [];
