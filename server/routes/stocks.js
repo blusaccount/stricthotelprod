@@ -152,7 +152,7 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled }) {
 
                 // Primary: v8 chart endpoint (no crumb → works on Render).
                 try {
-                    const { quotes, errors } = await fetchQuotesViaChart(symbols, { concurrency: 6 });
+                    const { quotes, errors } = await fetchQuotesViaChart(symbols);
                     diag.lastResultCount = quotes.length;
                     if (errors.length > 0) {
                         diag.lastError = `chart endpoint: ${errors.length} of ${symbols.length} symbols failed (${errors[0].symbol}: ${errors[0].message})`;
