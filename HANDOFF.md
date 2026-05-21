@@ -4,6 +4,45 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Docs refresh — sync guide/events with current handler set (2026-05-21)
+
+## What Changed
+Docs-only sweep, no code touched. The previous LLM_AGENT_GUIDE.md, docs/EVENTS.md and HANDOFF.md still described a 12-handler / 9-game shape with a "Strict Club" room that no longer exists. Updated to match what's actually wired in [server/socket-handlers.js](server/socket-handlers.js).
+
+### docs/EVENTS.md
+- Removed the dead "Strict Club" section (no `server/handlers/strict-club.js`, no `club-*` events in code).
+- Added sections for every handler that was missing: Lobby Watch Party, Plinko, Crash, Blackjack, Roulette, Tierlist, Daily Streak, Achievements, Activity Feed, Food Guessr.
+- Merged the standalone "Mäxchen Betting (Deprecated?)" stub into the main Mäxchen section.
+- Added the `lobby-rain-effect` broadcast and the `register-player` reminder to currency/lobby sections.
+
+### LLM_AGENT_GUIDE.md
+- Quick repo map now lists all 21 socket handlers grouped by Core / Games / Casino.
+- Games directory lists 16 entries (added blackjack, casino, crash, food-guessr, plinko, roulette, tierlist).
+- Public + shared/js module lists refreshed (achievements.html, nostalgiabait/, shell.js, lobby-watchparty.js, ambient.js, achievement-toast.js, starfield-parallax.js, stock-ticker.js, tts.js etc.).
+- Server top-level module list expanded (db, sql/, stock-providers/, stock-price-cache, food-/brain-/tierlist-/pictochat- stores, keep-alive, log-buffer, cleanup, activity-feed, achievements, daily-streak).
+- "Database modules" fixed — the file is `server/currency.js`, not `currency-store.js`.
+- Test count bumped from "207+" to "~325+ across 22 files".
+- New "Casino Hub" + "Engagement Loop" core-flow sections; pitfalls extended with crash phases, free-spin volatility, achievement bump recursion.
+
+### docs/ cleanup
+- Deleted `docs/mvp-umsetzungs-checkliste.md` — superseded German MVP checklist that the 2026-02-15 entry claimed was already removed.
+- Deleted `docs/persistence-plan.md` — persistence is implemented.
+
+## Status Corrections to Prior Handoffs
+- **Strict Club is not in the codebase.** Earlier handoffs (2026-05-02) listed an "in-memory Strict Club queue" as an open risk. The handler, client, and routes are gone; that risk no longer applies.
+- The "207+ tests" baseline in the previous guide was stale — current suite is ~325 tests across 22 files.
+
+## Drift Captured but Not Documented Here
+The May commit run (Food Guessr Add → Rate → Wiki → Community modes + persistent scores, Stocks provider cascade overhaul with Stooq primary + v8 chart + v7 spark + persistent cache + `/api/_stock-diag`, Watch Party portal pattern + sync fixes + mini-player, Activity feed coverage expansion, Render keep-alive cron + 12-min ping + earlier start, `/admin/logs` ring-buffer endpoint with `LOGS_TOKEN` auth, Aero-Glass shell redesign + revert) is in `git log` but never got its own handoff entry. Surface what you need on a per-feature basis from the commit history; this docs-refresh is not a substitute for a real handoff on those features.
+
+## How to Verify
+- `grep -r "strict-club\|club-join" server/ public/ shared/ games/` returns nothing.
+- `ls docs/` shows only `EVENTS.md`.
+- `ls server/handlers/` matches the handler list in the guide (21 files).
+- `git diff HEAD~1 -- LLM_AGENT_GUIDE.md docs/EVENTS.md HANDOFF.md` for review.
+
+---
+
 # Handoff: Streak rebalance + max-bet bump + 27 new achievements (2026-05-02 evening)
 
 ## What Changed
