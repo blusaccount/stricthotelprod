@@ -8,6 +8,21 @@
     const socket = io();
     const $ = (id) => document.getElementById(id);
 
+    // ============================
+    // DEBUG LOGGING
+    // Toggle in console with window.STOCK_DEBUG = false
+    // ============================
+    window.STOCK_DEBUG = window.STOCK_DEBUG !== false;
+    const dlog = (...args) => { if (window.STOCK_DEBUG) console.log('[stocks]', ...args); };
+    const dwarn = (...args) => { if (window.STOCK_DEBUG) console.warn('[stocks]', ...args); };
+    const dgroup = (label, payload) => {
+        if (!window.STOCK_DEBUG) return;
+        console.groupCollapsed('[stocks] ' + label);
+        if (payload !== undefined) console.log(payload);
+        console.groupEnd();
+    };
+    dlog('module init at', new Date().toISOString());
+
     const balanceEl = $('balance-display');
     const portfolioValueEl = $('portfolio-value');
     const portfolioGainEl = $('portfolio-gain');
@@ -115,10 +130,16 @@
         window.StrictHotelSocket.registerPlayer(socket, 'stocks');
     };
 
-    socket.on('connect', register);
+    socket.on('connect', () => {
+        dlog('socket connected, id=', socket.id);
+        register();
+    });
+    socket.on('disconnect', (reason) => dwarn('socket disconnect:', reason));
+    socket.on('connect_error', (err) => dwarn('socket connect_error:', err && err.message));
 
     // --- Balance ---
     socket.on('balance-update', (data) => {
+        dlog('event: balance-update', data);
         if (data && typeof data.balance === 'number') {
             currentBalance = data.balance;
             balanceEl.textContent = formatNumber(data.balance);
@@ -129,7 +150,17 @@
 
     // --- Portfolio ---
     socket.on('stock-portfolio', (data) => {
-        if (!data) return;
+        dgroup('event: stock-portfolio', data);
+        if (!data) { dwarn('stock-portfolio: empty payload'); return; }
+        if (Array.isArray(data.holdings)) {
+            const total = data.holdings.length;
+            const stale = data.holdings.filter(h => h.priceStale).length;
+            const live = total - stale;
+            dlog(`holdings: ${total} total, ${live} live, ${stale} stale`);
+            for (const h of data.holdings) {
+                dlog(`  ${h.symbol.padEnd(10)} shares=${h.shares} avg=${h.avgCost} price=${h.currentPrice} value=${h.marketValue} G/L=${h.gainLoss} (${h.gainLossPct}%) stale=${!!h.priceStale}`);
+            }
+        }
         portfolioData = data;
         renderPortfolio();
         updateNetWorth();
@@ -137,21 +168,30 @@
 
     // --- Errors ---
     socket.on('stock-error', (data) => {
+        dwarn('event: stock-error', data);
         showToast(data.error || 'Error', 'error');
     });
 
     // --- Fetch market data ---
     const fetchMarket = () => {
+        dlog('fetchMarket: GET /api/ticker');
+        const t0 = performance.now();
         fetch('/api/ticker')
-            .then((r) => r.json())
+            .then((r) => {
+                dlog(`fetchMarket: HTTP ${r.status} (${Math.round(performance.now() - t0)}ms)`);
+                return r.json();
+            })
             .then((data) => {
                 if (Array.isArray(data) && data.length > 0) {
+                    dlog(`fetchMarket: got ${data.length} quotes; e.g.`, data[0]);
                     marketData = data;
                     renderMarket();
                     updateMarketStatus(data);
+                } else {
+                    dwarn('fetchMarket: empty/invalid response, keeping fallback data', data);
                 }
             })
-            .catch(() => { /* use fallback if already rendered */ });
+            .catch((err) => { dwarn('fetchMarket: fetch failed', err && err.message); });
     };
 
     // --- Market status indicator ---
@@ -318,6 +358,7 @@
             if (h[i].priceStale) anyStale = true;
             else totalGain += h[i].gainLoss;
         }
+        dlog('renderPortfolio:', h.length, 'holdings,', anyStale ? 'SOME STALE' : 'all live', 'totalValue=$' + portfolioData.totalValue, 'sumGain=' + totalGain);
         if (anyStale && totalGain === 0) {
             portfolioGainEl.textContent = '—';
             portfolioGainEl.className = 'summary-value';
@@ -503,12 +544,19 @@
     const myName = window.StrictHotelSocket.getPlayerName();
 
     socket.on('stock-leaderboard', (data) => {
-        if (!Array.isArray(data)) return;
+        dgroup('event: stock-leaderboard (' + (Array.isArray(data) ? data.length : '?') + ' players)', data);
+        if (!Array.isArray(data)) { dwarn('stock-leaderboard: not an array'); return; }
+        for (const p of data) {
+            const total = (p.holdings || []).length;
+            const stale = (p.holdings || []).filter(h => h.priceStale).length;
+            dlog(`  ${p.name.padEnd(20)} portfolio=$${p.portfolioValue} cash=$${p.cash} net=$${p.netWorth} holdings=${total} (stale=${stale})`);
+        }
         renderLeaderboard(data);
     });
 
     socket.on('stock-performance-leaderboard', (data) => {
-        if (!Array.isArray(data)) return;
+        dgroup('event: stock-performance-leaderboard (' + (Array.isArray(data) ? data.length : '?') + ' players)', data);
+        if (!Array.isArray(data)) { dwarn('stock-performance-leaderboard: not an array'); return; }
         renderPerformanceLeaderboard(data);
     });
 
@@ -763,19 +811,33 @@
         });
     };
 
+    const requestPortfolioRefresh = (reason) => {
+        dlog('emit stock-get-portfolio (', reason, ')');
+        socket.emit('stock-get-portfolio');
+        dlog('emit stock-get-leaderboard (', reason, ')');
+        socket.emit('stock-get-leaderboard');
+    };
+
+    // Console helpers — call from devtools:
+    //   __stocks.refresh()  → request fresh portfolio + leaderboard
+    //   __stocks.ticker()   → fetch /api/ticker and print
+    //   __stocks.state()    → dump current client state
+    window.__stocks = {
+        refresh: () => requestPortfolioRefresh('manual'),
+        ticker: () => fetch('/api/ticker').then(r => r.json()).then(d => { console.log('/api/ticker →', d); return d; }),
+        state: () => ({ currentBalance, portfolioData, marketDataSample: marketData.slice(0, 3) }),
+    };
+    dlog('console helpers: window.__stocks.refresh() / .ticker() / .state(); toggle logs with window.STOCK_DEBUG=false');
+
     // --- Init ---
     renderMarket();
     fetchMarket();
     setInterval(() => {
         fetchMarket();
-        socket.emit('stock-get-portfolio');
-        socket.emit('stock-get-leaderboard');
+        requestPortfolioRefresh('60s tick');
     }, 60 * 1000);
 
     socket.on('connect', () => {
-        setTimeout(() => {
-            socket.emit('stock-get-portfolio');
-            socket.emit('stock-get-leaderboard');
-        }, 500);
+        setTimeout(() => requestPortfolioRefresh('post-connect'), 500);
     });
 })();
