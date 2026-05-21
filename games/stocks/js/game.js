@@ -831,7 +831,7 @@
         probe: () => fetch('/api/_stock-diag?probe=1').then(r => r.json()).then(d => { console.log('/api/_stock-diag?probe=1 →', d); return d; }),
         state: () => ({ currentBalance, portfolioData, marketDataSample: marketData.slice(0, 3) }),
     };
-    dlog('console helpers: window.__stocks.refresh() / .ticker() / .state(); toggle logs with window.STOCK_DEBUG=false');
+    dlog('console helpers: window.__stocks.{refresh,ticker,diag,probe,state}; toggle logs with window.STOCK_DEBUG=false');
 
     // --- Init ---
     renderMarket();
