@@ -95,6 +95,41 @@ describe('fetchTickerQuotes merge behavior', () => {
         expect(result[0].symbol).toBe('AAPL');
     });
 
+    it('falls back to stale cache when Yahoo returns empty (no exception)', async () => {
+        // Bug regression: previously a successful-but-empty Yahoo response
+        // wiped the served cache to [], making every portfolio's G/L flatline.
+        const mockQuote = vi.fn()
+            .mockResolvedValueOnce([makeQuote('AAPL', 150)])
+            .mockResolvedValueOnce([]); // Yahoo "succeeded" but returned nothing
+        const router = makeRouter(mockQuote);
+
+        await router.fetchTickerQuotes();
+        vi.advanceTimersByTime(6 * 60 * 1000);
+
+        const result = await router.fetchTickerQuotes();
+        expect(result).toHaveLength(1);
+        expect(result[0].symbol).toBe('AAPL');
+        expect(result[0].price).toBe(150);
+    });
+
+    it('falls back to stale cache when every quote in the batch has null price', async () => {
+        const mockQuote = vi.fn()
+            .mockResolvedValueOnce([makeQuote('AAPL', 150)])
+            .mockResolvedValueOnce([
+                { symbol: 'AAPL', regularMarketPrice: null, shortName: 'Apple' },
+                { symbol: 'MSFT', regularMarketPrice: null, shortName: 'Microsoft' },
+            ]);
+        const router = makeRouter(mockQuote);
+
+        await router.fetchTickerQuotes();
+        vi.advanceTimersByTime(6 * 60 * 1000);
+
+        const result = await router.fetchTickerQuotes();
+        expect(result).toHaveLength(1);
+        expect(result[0].symbol).toBe('AAPL');
+        expect(result[0].price).toBe(150);
+    });
+
     it('skips symbols with null regularMarketPrice', async () => {
         const mockQuote = vi.fn().mockResolvedValueOnce([
             makeQuote('AAPL', 150),

@@ -21,6 +21,7 @@ async function getYahooFinance() {
 import { rooms, onlinePlayers } from './room-manager.js';
 import { registerSocketHandlers } from './socket-handlers.js';
 import { initSchema } from './db.js';
+import { loadCacheFromDb as loadStockPriceCache } from './stock-price-cache.js';
 import { startMatchChecker, stopMatchChecker } from './lol-match-checker.js';
 
 import { createAuthRouter, authMiddleware } from './routes/auth.js';
@@ -174,6 +175,14 @@ try {
     console.error('Database schema init error:', err);
 }
 
+// Warm stock price cache from DB so cold starts don't lose all prices
+// when Yahoo Finance is rate-limited on the first request.
+try {
+    await loadStockPriceCache();
+} catch (err) {
+    console.error('Stock price cache load error:', err.message);
+}
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, async () => {
     console.log(`✓ StrictHotel Server: http://localhost:${PORT}`);
@@ -186,6 +195,18 @@ server.listen(PORT, async () => {
         startMatchChecker(io);
     } catch (err) {
         console.error('LoL Match Checker error:', err.message);
+    }
+
+    // Background-refresh the ticker every 5 min so the cache stays warm
+    // even when no user has the Stocks tab open.
+    if (GAME_ENABLED && stocksRouter.fetchTickerQuotes) {
+        setInterval(() => {
+            stocksRouter.fetchTickerQuotes().catch((err) => {
+                console.error('[ticker bg-refresh]', err.message);
+            });
+        }, 5 * 60 * 1000);
+        // Kick off one immediate fetch so the cache is hot before the first user opens Stocks
+        stocksRouter.fetchTickerQuotes().catch(() => {});
     }
 
     // Self-ping to keep Render free-tier instance awake during 10:00–02:00 Berlin

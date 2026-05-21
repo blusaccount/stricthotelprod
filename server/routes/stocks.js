@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { upsertQuotes, getAllCached } from '../stock-price-cache.js';
 
 const TICKER_SYMBOLS = [
     // ETFs / Indices
@@ -75,7 +76,35 @@ const SINGLE_QUOTE_CACHE_MS = 2 * 60 * 1000; // 2 minutes
 export function createStocksRouter({ getYahooFinance, isStockGameEnabled }) {
     const router = Router();
 
+    // Seed in-memory ticker cache from the persisted DB cache so the very
+    // first request (or a cold start where Yahoo is rate-limited) still
+    // has prices to serve. Only ticker-board symbols are seeded — custom
+    // user positions are served from the persistent cache via
+    // getQuoteForSymbol instead. ts=0 forces the next call to refresh.
+    function seedFromDbCache() {
+        if (tickerCache.data) return;
+        const tickerWanted = new Set(TICKER_SYMBOLS.map(s => s.symbol.replace('^', '')));
+        const nameMap = new Map(TICKER_SYMBOLS.map(s => [s.symbol.replace('^', ''), s.name]));
+        const seeded = [];
+        for (const p of getAllCached()) {
+            if (!tickerWanted.has(p.symbol)) continue;
+            seeded.push({
+                symbol: p.symbol,
+                name: nameMap.get(p.symbol) || p.name || p.symbol,
+                price: p.price,
+                change: 0,
+                pct: 0,
+                currency: p.currency || 'USD',
+                marketState: null,
+            });
+        }
+        if (seeded.length === 0) return;
+        tickerCache = { data: seeded, ts: 0 };
+    }
+
     async function fetchTickerQuotes() {
+        seedFromDbCache();
+
         const now = Date.now();
         if (tickerCache.data && now - tickerCache.ts < TICKER_CACHE_MS) {
             return tickerCache.data;
@@ -127,10 +156,16 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled }) {
                         }
                     }
                     tickerCache = { data: results, ts: Date.now() };
-                } else {
-                    console.warn('[fetchTickerQuotes] Yahoo returned no usable quotes; portfolio G/L will show "—" until next successful fetch');
+                    // Persist for DB-backed cold-start recovery
+                    upsertQuotes(results).catch(() => {});
+                    return results;
                 }
-                return results;
+
+                // Yahoo answered but had no usable quotes (rate-limit, partial outage).
+                // Bug fix: don't return [] — fall back to whatever we last had so the
+                // UI doesn't silently lose every price.
+                console.warn('[fetchTickerQuotes] Yahoo returned no usable quotes; serving previous cache');
+                return tickerCache.data || [];
             } catch (err) {
                 console.error('[fetchTickerQuotes] Error:', err.message);
                 return tickerCache.data || [];
@@ -239,6 +274,8 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled }) {
                 const oldest = singleQuoteCache.keys().next().value;
                 singleQuoteCache.delete(oldest);
             }
+
+            upsertQuotes([{ symbol: data.symbol, name: data.name, price: data.price, currency: data.currency }]).catch(() => {});
 
             res.json(data);
         } catch (err) {

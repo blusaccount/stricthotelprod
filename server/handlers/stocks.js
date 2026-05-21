@@ -6,11 +6,14 @@ import { emitStockError, emitBalanceUpdate, emitToUser } from '../socket-utils.j
 import { getBalance } from '../currency.js';
 import { getCharactersByNames } from '../character-store.js';
 import { pushActivity } from '../activity-feed.js';
+import { upsertQuotes, getCachedQuote } from '../stock-price-cache.js';
 
 const STOCK_TRADE_FEED_THRESHOLD = 1000; // SC traded
 
 const stockQuoteCache = new Map(); // symbol -> { quote, ts }
-const STOCK_QUOTE_CACHE_MS = 60 * 1000;
+// 5 min: long enough that we don't hammer Yahoo on every snapshot, short
+// enough that prices stay reasonably fresh while the market is open.
+const STOCK_QUOTE_CACHE_MS = 5 * 60 * 1000;
 
 let _stockGameEnabled = true;
 let _fetchTickerQuotes = null;
@@ -33,22 +36,33 @@ async function getQuoteForSymbol(symbol, quotes, _getYahooFinance) {
         return cached.quote;
     }
 
-    if (!_getYahooFinance) return null;
-    try {
-        const yf = await _getYahooFinance();
-        const q = await yf.quote(symbol);
-        if (q && q.regularMarketPrice != null) {
-            quote = {
-                symbol: (q.symbol || symbol).replace('^', ''),
-                name: q.shortName || q.longName || symbol,
-                price: parseFloat(q.regularMarketPrice.toFixed(2)),
-            };
-            stockQuoteCache.set(symbol, { quote, ts: Date.now() });
-            return quote;
+    if (_getYahooFinance) {
+        try {
+            const yf = await _getYahooFinance();
+            const q = await yf.quote(symbol);
+            if (q && q.regularMarketPrice != null) {
+                quote = {
+                    symbol: (q.symbol || symbol).replace('^', ''),
+                    name: q.shortName || q.longName || symbol,
+                    price: parseFloat(q.regularMarketPrice.toFixed(2)),
+                    currency: q.currency || 'USD',
+                };
+                stockQuoteCache.set(symbol, { quote, ts: Date.now() });
+                upsertQuotes([quote]).catch(() => {});
+                return quote;
+            }
+        } catch (e) {
+            console.error(`[getQuoteForSymbol] Failed to fetch ${symbol}:`, e.message);
         }
-    } catch (e) {
-        console.error(`[getQuoteForSymbol] Failed to fetch ${symbol}:`, e.message);
-        return null;
+    }
+
+    // Yahoo unavailable or returned nothing — fall back to the persistent
+    // cache (last known live price). Better stale than missing.
+    const persisted = getCachedQuote(symbol);
+    if (persisted) {
+        const fallback = { symbol: persisted.symbol, name: persisted.name, price: persisted.price };
+        stockQuoteCache.set(symbol, { quote: fallback, ts: Date.now() });
+        return fallback;
     }
 
     return null;

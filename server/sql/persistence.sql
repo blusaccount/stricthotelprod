@@ -196,3 +196,15 @@ create index if not exists food_ratings_dish_idx
 
 create index if not exists food_ratings_player_idx
   on food_ratings (player_name);
+
+-- ============================================================================
+-- Stock price cache — last-known live prices, persisted so portfolio G/L
+-- survives Yahoo Finance outages and free-tier cold starts.
+-- ============================================================================
+create table if not exists stock_price_cache (
+  symbol text primary key,
+  name text,
+  price numeric(20,6) not null,
+  currency text,
+  updated_at timestamptz not null default now()
+);
