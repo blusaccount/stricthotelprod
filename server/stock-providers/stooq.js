@@ -7,7 +7,10 @@
 // surfaced as a per-symbol error so the caller can try another provider.
 
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
-const DEFAULT_TIMEOUT_MS = 10000;
+// Stooq is unreachable from some cloud hosts (e.g. Render). Keep this
+// short so it fails fast and the cascade falls through to the next
+// provider rather than blocking the request for ~10s per symbol.
+const DEFAULT_TIMEOUT_MS = 3000;
 const STOOQ_BATCH_SIZE = 25;
 
 function withTimeout(ms) {

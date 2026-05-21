@@ -38,29 +38,10 @@ async function getQuoteForSymbol(symbol, quotes, _getYahooFinance) {
         return cached.quote;
     }
 
-    // Provider cascade: Stooq → Yahoo v8 chart → yahoo-finance2 quote().
-    // First success wins. On Render, only Stooq is expected to work because
-    // Yahoo locks out the egress IP.
-    const providers = [
-        async () => {
-            const q = await fetchSingleQuoteViaStooq(symbol);
-            return {
-                symbol: (q.symbol || symbol).replace('^', ''),
-                name: q.shortName || symbol,
-                price: parseFloat(q.price.toFixed(2)),
-                currency: q.currency || 'USD',
-            };
-        },
-        async () => {
-            const q = await fetchSingleQuoteViaChart(symbol);
-            return {
-                symbol: (q.symbol || symbol).replace('^', ''),
-                name: q.shortName || symbol,
-                price: parseFloat(q.price.toFixed(2)),
-                currency: q.currency || 'USD',
-            };
-        },
-    ];
+    // Provider cascade. yf.quote() is fastest when its crumb cookie is
+    // hot (sub-100ms) so we try it first; when crumb gets 429'd on a
+    // refresh it fails fast and we fall through to the alternatives.
+    const providers = [];
     if (_getYahooFinance) {
         providers.push(async () => {
             const yf = await _getYahooFinance();
@@ -74,6 +55,26 @@ async function getQuoteForSymbol(symbol, quotes, _getYahooFinance) {
             };
         });
     }
+    providers.push(
+        async () => {
+            const q = await fetchSingleQuoteViaChart(symbol);
+            return {
+                symbol: (q.symbol || symbol).replace('^', ''),
+                name: q.shortName || symbol,
+                price: parseFloat(q.price.toFixed(2)),
+                currency: q.currency || 'USD',
+            };
+        },
+        async () => {
+            const q = await fetchSingleQuoteViaStooq(symbol);
+            return {
+                symbol: (q.symbol || symbol).replace('^', ''),
+                name: q.shortName || symbol,
+                price: parseFloat(q.price.toFixed(2)),
+                currency: q.currency || 'USD',
+            };
+        }
+    );
     const providerErrors = [];
     for (const fn of providers) {
         try {

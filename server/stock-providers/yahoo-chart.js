@@ -16,7 +16,7 @@ const CHART_URL = (symbol) =>
 
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
 
-const DEFAULT_TIMEOUT_MS = 10000;
+const DEFAULT_TIMEOUT_MS = 4000;
 const SPARK_BATCH_SIZE = 25; // keep URL length reasonable
 
 function withTimeout(ms) {

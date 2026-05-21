@@ -164,25 +164,38 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled }) {
                     };
                 };
 
-                // Primary: Stooq — free, no crumb, no API key, works from
-                // datacenter IPs that Yahoo locks out.
+                // Primary: yahoo-finance2 quote() — fastest when crumb is
+                // cached (single batch HTTP call vs N per-symbol fetches
+                // for stooq/spark). Fails fast (~100ms) when crumb is 429'd
+                // so the cascade can fall through quickly.
                 try {
-                    const { quotes, errors } = await fetchQuotesViaStooq(symbols);
-                    diag.lastResultCount = quotes.length;
-                    if (errors.length > 0) {
-                        diag.lastError = `stooq: ${errors.length} of ${symbols.length} symbols failed (${errors[0].symbol}: ${errors[0].message})`;
-                        diag.lastErrorAt = Date.now();
+                    const yf = await getYahooFinance();
+                    const yfQuotes = await yf.quote(symbols);
+                    const list = Array.isArray(yfQuotes) ? yfQuotes : [yfQuotes];
+                    const yfResults = [];
+                    for (const q of list) {
+                        if (!q || q.regularMarketPrice == null) continue;
+                        const rawSymbol = q.symbol || '';
+                        yfResults.push({
+                            symbol: rawSymbol.replace('^', ''),
+                            name: nameMap.get(rawSymbol) || q.shortName || rawSymbol.replace('^', ''),
+                            price: parseFloat(q.regularMarketPrice.toFixed(2)),
+                            change: parseFloat((q.regularMarketChange ?? 0).toFixed(2)),
+                            pct: parseFloat((q.regularMarketChangePercent ?? 0).toFixed(2)),
+                            currency: q.currency || 'USD',
+                            marketState: q.marketState || null,
+                        });
                     }
-                    if (quotes.length > 0) {
-                        return commit(quotes.map(mapToTickerRow));
+                    if (yfResults.length > 0) {
+                        diag.lastResultCount = yfResults.length;
+                        return commit(yfResults);
                     }
-                } catch (err) {
-                    diag.lastError = `stooq threw: ${err.message}`;
+                } catch (yfErr) {
+                    diag.lastError = `yf.quote: ${yfErr.message}`;
                     diag.lastErrorAt = Date.now();
                 }
 
-                // Fallback 1: Yahoo v7 spark batch (works from most IPs,
-                // sometimes 429'd from cloud hosts).
+                // Fallback 1: Yahoo v7 spark batch (no crumb).
                 try {
                     const { quotes, errors } = await fetchQuotesViaChart(symbols);
                     if (quotes.length > 0) {
@@ -198,37 +211,25 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled }) {
                     diag.lastErrorAt = Date.now();
                 }
 
-                // Fallback: yf.quote (typically crumb-429'd on cloud IPs).
+                // Fallback 2: Stooq (often unreachable from cloud egress IPs,
+                // 3s timeout per chunk keeps the slow case bounded).
                 try {
-                    const yf = await getYahooFinance();
-                    const yfQuotes = await yf.quote(symbols);
-                    const list = Array.isArray(yfQuotes) ? yfQuotes : [yfQuotes];
-                    const fallback = [];
-                    for (const q of list) {
-                        if (!q || q.regularMarketPrice == null) continue;
-                        const rawSymbol = q.symbol || '';
-                        fallback.push({
-                            symbol: rawSymbol.replace('^', ''),
-                            name: nameMap.get(rawSymbol) || q.shortName || rawSymbol.replace('^', ''),
-                            price: parseFloat(q.regularMarketPrice.toFixed(2)),
-                            change: parseFloat((q.regularMarketChange ?? 0).toFixed(2)),
-                            pct: parseFloat((q.regularMarketChangePercent ?? 0).toFixed(2)),
-                            currency: q.currency || 'USD',
-                            marketState: q.marketState || null,
-                        });
+                    const { quotes, errors } = await fetchQuotesViaStooq(symbols);
+                    if (quotes.length > 0) {
+                        diag.lastResultCount = quotes.length;
+                        return commit(quotes.map(mapToTickerRow));
                     }
-                    if (fallback.length > 0) {
-                        return commit(fallback);
+                    if (errors.length > 0) {
+                        diag.lastError = `stooq: ${errors.length} of ${symbols.length} symbols failed (${errors[0].symbol}: ${errors[0].message})`;
+                        diag.lastErrorAt = Date.now();
                     }
-                } catch (yfErr) {
-                    diag.errorCount++;
-                    diag.lastError = `chart and yf.quote both failed; yf: ${yfErr.message}`;
+                } catch (err) {
+                    diag.lastError = `stooq threw: ${err.message}`;
                     diag.lastErrorAt = Date.now();
-                    console.error('[fetchTickerQuotes]', diag.lastError);
                 }
 
                 diag.emptyCount++;
-                console.warn('[fetchTickerQuotes] both chart and yf.quote returned nothing; serving previous cache');
+                console.warn('[fetchTickerQuotes] all providers (yf.quote, spark, stooq) returned nothing; serving previous cache');
                 return tickerCache.data || [];
             } finally {
                 tickerFetchPromise = null;
