@@ -537,15 +537,6 @@
             $('fg-rate-name').textContent = currentDish.name;
             $('fg-rate-desc').textContent = currentDish.description;
             $('fg-rate-country').textContent = currentDish.country;
-            var badge = $('fg-rate-badge');
-            if (badge) {
-                if (currentDish.controversial) {
-                    badge.style.display = 'inline-block';
-                    badge.textContent = '🌶️ DIVISIVE';
-                } else {
-                    badge.style.display = 'none';
-                }
-            }
             var agg = communityAggregates[currentDish.wikiTitle];
             var score = communityScore(agg);
             $('fg-rate-comm').textContent = agg && agg.total > 0
