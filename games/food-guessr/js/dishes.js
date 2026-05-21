@@ -315,7 +315,189 @@ window.FG_DISHES = [
     { name: "Bacalhau à Brás", wikiTitle: "Bacalhau_à_Brás", country: "Portugal", emoji: "🐟",
       description: "Salt-cod shredded with onions, straw potatoes and scrambled eggs." },
     { name: "Spätzle", wikiTitle: "Spätzle", country: "Germany", emoji: "🍝",
-      description: "Soft egg-noodle dumplings, often served with cheese (Käsespätzle) and fried onions." }
+      description: "Soft egg-noodle dumplings, often served with cheese (Käsespätzle) and fried onions." },
+
+    // ============================================================
+    // 🌶️ DIVISIVE TIER — acquired tastes, offal, fermented goods,
+    // insects, meme foods. These are flagged `controversial: true`
+    // so the Rate UI can warn the voter before they swipe.
+    // ============================================================
+
+    // ─── Asian acquired tastes ───
+    { name: "Durian", wikiTitle: "Durian", country: "Malaysia", emoji: "🦨", controversial: true,
+      description: "Spiky tropical fruit infamous for its overpowering, sulfur-and-onion stench — banned on many subways." },
+    { name: "Nattō", wikiTitle: "Nattō", country: "Japan", emoji: "🫘", controversial: true,
+      description: "Fermented soybeans bound by sticky, stringy slime — pungent, ammoniac, slimy, divisive." },
+    { name: "Balut", wikiTitle: "Balut_(food)", country: "Philippines", emoji: "🥚", controversial: true,
+      description: "Fertilised duck egg boiled and eaten with the partly-formed embryo inside the shell." },
+    { name: "Century Egg", wikiTitle: "Century_egg", country: "China", emoji: "🥚", controversial: true,
+      description: "Duck egg cured for weeks until the yolk turns dark green and the white becomes a translucent black jelly." },
+    { name: "Stinky Tofu", wikiTitle: "Stinky_tofu", country: "Taiwan", emoji: "🧀", controversial: true,
+      description: "Fermented tofu deep-fried until crisp — smells like a dumpster in summer, beloved across Taiwan." },
+    { name: "Sannakji", wikiTitle: "Sannakji", country: "South Korea", emoji: "🐙", controversial: true,
+      description: "Freshly-cut octopus tentacles served still wriggling, with suction cups that grip your tongue." },
+    { name: "Hongeo-hoe", wikiTitle: "Hongeo-hoe", country: "South Korea", emoji: "🐟", controversial: true,
+      description: "Skate fermented in its own urea — releases ammonia so strong it makes your eyes water." },
+    { name: "Beondegi", wikiTitle: "Beondegi", country: "South Korea", emoji: "🐛", controversial: true,
+      description: "Boiled silkworm pupae — soft, slightly nutty, with a chewy popping shell. Sold from street carts." },
+    { name: "Bird's Nest Soup", wikiTitle: "Edible_bird's_nest", country: "China", emoji: "🪺", controversial: true,
+      description: "Soup made from nests that swiftlets build entirely out of their own hardened saliva." },
+    { name: "Fugu", wikiTitle: "Fugu", country: "Japan", emoji: "🐡", controversial: true,
+      description: "Pufferfish sashimi — the wrong cut contains enough tetrodotoxin to kill an adult in minutes." },
+
+    // ─── Scandinavian / Icelandic fermented stuff ───
+    { name: "Surströmming", wikiTitle: "Surströmming", country: "Sweden", emoji: "🥫", controversial: true,
+      description: "Baltic herring fermented in the tin until it bulges — opened outdoors because the smell can clear a room." },
+    { name: "Hákarl", wikiTitle: "Hákarl", country: "Iceland", emoji: "🦈", controversial: true,
+      description: "Greenland shark buried for months until the toxic urea breaks down — eaten in small ammonia-soaked cubes." },
+    { name: "Lutefisk", wikiTitle: "Lutefisk", country: "Norway", emoji: "🐟", controversial: true,
+      description: "Whitefish soaked in lye until it becomes a translucent, jelly-textured slab. Christmas tradition." },
+    { name: "Smalahove", wikiTitle: "Smalahove", country: "Norway", emoji: "🐑", controversial: true,
+      description: "Whole sheep's head — singed, salted, smoked — eaten eyeball, ear and tongue first." },
+    { name: "Salty Liquorice", wikiTitle: "Salty_liquorice", country: "Finland", emoji: "🍬", controversial: true,
+      description: "Liquorice dosed with ammonium chloride — tastes like burnt rubber dipped in salt to outsiders." },
+
+    // ─── British / Irish divisive classics ───
+    { name: "Jellied Eels", wikiTitle: "Jellied_eels", country: "United Kingdom", emoji: "🐍", controversial: true,
+      description: "Chopped eels boiled in spiced stock that sets into a cold, savoury jelly. East End classic." },
+    { name: "Mushy Peas", wikiTitle: "Mushy_peas", country: "United Kingdom", emoji: "🟢", controversial: true,
+      description: "Marrowfat peas soaked, simmered and mashed into a thick green sludge served beside chippy fish." },
+    { name: "Spotted Dick", wikiTitle: "Spotted_dick", country: "United Kingdom", emoji: "🍮", controversial: true,
+      description: "Suet sponge studded with currants, steamed for hours and drowned in custard." },
+    { name: "Black Pudding", wikiTitle: "Black_pudding", country: "United Kingdom", emoji: "⚫", controversial: true,
+      description: "Sausage of pork blood, oats and fat — sliced and fried in a Full English breakfast." },
+    { name: "Marmite on Toast", wikiTitle: "Marmite", country: "United Kingdom", emoji: "🟤", controversial: true,
+      description: "Sticky black yeast extract spread thin on buttered toast. Their slogan literally says you either love it or hate it." },
+    { name: "Stargazy Pie", wikiTitle: "Stargazy_pie", country: "United Kingdom", emoji: "🐟", controversial: true,
+      description: "Cornish pie with whole sardine heads poking up through the crust as if staring at the stars." },
+    { name: "Haggis Neeps Tatties", wikiTitle: "Haggis", country: "United Kingdom", emoji: "🥘", controversial: true,
+      description: "Sheep's pluck minced with oats and spices, traditionally cooked inside the stomach. Burns Night standard." },
+    { name: "Deep-Fried Mars Bar", wikiTitle: "Deep-fried_Mars_bar", country: "United Kingdom", emoji: "🍫", controversial: true,
+      description: "A regular Mars bar dipped in fish-and-chip batter and deep-fried until the chocolate melts inside." },
+
+    // ─── Offal & exotic meat cuts ───
+    { name: "Trippa alla Romana", wikiTitle: "Tripe", country: "Italy", emoji: "🫀", controversial: true,
+      description: "Beef stomach lining slow-simmered in tomato with mint and pecorino — chewy, honeycomb texture." },
+    { name: "Kokoreç", wikiTitle: "Kokoreç", country: "Turkey", emoji: "🌯", controversial: true,
+      description: "Seasoned lamb intestines wrapped around offal and grilled on a spit, sliced into bread." },
+    { name: "Andouillette", wikiTitle: "Andouillette", country: "France", emoji: "🌭", controversial: true,
+      description: "Coarse pork-tripe sausage with a distinctly barnyard, ammonia-tinged aroma. Lyon specialty." },
+    { name: "Steak and Kidney Pie", wikiTitle: "Steak_and_kidney_pie", country: "United Kingdom", emoji: "🥧", controversial: true,
+      description: "Diced beef braised with chopped lamb or pork kidneys, baked under a pastry lid. Kidney funk included." },
+    { name: "Lengua Tacos", wikiTitle: "Lengua", country: "Mexico", emoji: "👅", controversial: true,
+      description: "Soft, slow-braised beef tongue diced fine and tucked into corn tortillas with onion and cilantro." },
+    { name: "Brain Sandwich", wikiTitle: "Brain_sandwich", country: "United States", emoji: "🧠", controversial: true,
+      description: "Battered, deep-fried calf-brain slices in a bun with pickle and onion. St. Louis throwback." },
+    { name: "Chicken Feet", wikiTitle: "Chicken_feet", country: "China", emoji: "🐓", controversial: true,
+      description: "Braised in black-bean sauce or steamed at dim sum — all skin, tendon and tiny bones." },
+    { name: "Sweetbreads", wikiTitle: "Sweetbread", country: "France", emoji: "🥩", controversial: true,
+      description: "Thymus or pancreas glands, blanched and pan-fried — pale, creamy, faintly metallic." },
+    { name: "Czernina", wikiTitle: "Czernina", country: "Poland", emoji: "🦆", controversial: true,
+      description: "Sweet-sour duck-blood soup with dried fruit and noodles — traditionally served to rejected suitors." },
+
+    // ─── Insects & extreme ───
+    { name: "Chapulines", wikiTitle: "Chapulines", country: "Mexico", emoji: "🦗", controversial: true,
+      description: "Grasshoppers toasted on a comal with chilli, lime and salt — crunchy bar snack from Oaxaca." },
+    { name: "Escamoles", wikiTitle: "Escamoles", country: "Mexico", emoji: "🐜", controversial: true,
+      description: "Pale, plump ant larvae from agave roots — Aztec caviar, sautéed in butter and folded into tacos." },
+    { name: "Witchetty Grub", wikiTitle: "Witchetty_grub", country: "Australia", emoji: "🐛", controversial: true,
+      description: "Fat white wood-eating larvae eaten raw or briefly roasted — tastes like almond-buttered egg yolk." },
+    { name: "Casu Marzu", wikiTitle: "Casu_martzu", country: "Italy", emoji: "🧀", controversial: true,
+      description: "Pecorino deliberately infested with cheese-fly larvae that wriggle through it — illegal in the EU." },
+
+    // ─── Meme / polarising / fusion ───
+    { name: "Hawaiian Pizza", wikiTitle: "Hawaiian_pizza", country: "Canada", emoji: "🍍", controversial: true,
+      description: "Ham, mozzarella, tomato sauce — and chunks of canned pineapple. Invented in Ontario, hated in Naples." },
+    { name: "Spam Musubi", wikiTitle: "Spam_musubi", country: "United States", emoji: "🥢", controversial: true,
+      description: "A slab of grilled Spam over a brick of sushi rice, belted with a strip of nori. Hawaii's gas-station hero." },
+    { name: "Vegemite on Toast", wikiTitle: "Vegemite", country: "Australia", emoji: "🟫", controversial: true,
+      description: "Salty-bitter brewer's-yeast paste smeared (very thinly!) on buttered toast for Australian breakfast." },
+    { name: "Frog Legs", wikiTitle: "Frog_legs", country: "France", emoji: "🐸", controversial: true,
+      description: "Pan-fried in garlic butter — supposedly tastes like chicken, looks like little drumsticks." },
+    { name: "Escargots de Bourgogne", wikiTitle: "Escargot", country: "France", emoji: "🐌", controversial: true,
+      description: "Land snails baked in their shells with parsley-garlic butter, plucked out with a tiny fork." },
+    { name: "Candy Corn", wikiTitle: "Candy_corn", country: "United States", emoji: "🌽", controversial: true,
+      description: "Tri-colour Halloween candy of fondant, marshmallow and wax. Either nostalgic or universally hated." },
+    { name: "Filipino Spaghetti", wikiTitle: "Filipino_spaghetti", country: "Philippines", emoji: "🍝", controversial: true,
+      description: "Spaghetti in a sweet banana-ketchup tomato sauce with hot dogs and grated cheddar. Birthday-party staple." },
+    { name: "Bunny Chow", wikiTitle: "Bunny_chow", country: "South Africa", emoji: "🥖", controversial: true,
+      description: "Hollowed-out half loaf of white bread filled to the brim with curry — eaten with bare hands." },
+
+    // ============================================================
+    // 🏟️ STADIUM / CHIPPY / FAIRGROUND TIER — the matchday food that
+    // fans actually argue about. Cheap, greasy, regional. Also flagged
+    // `controversial: true` so the Rate UI marks them as divisive.
+    // ============================================================
+
+    // ─── British chippy / matchday ───
+    { name: "Cornish Pasty", wikiTitle: "Cornish_pasty", country: "United Kingdom", emoji: "🥟", controversial: true,
+      description: "Crimped half-moon pastry stuffed with diced beef, swede, potato and onion. Miner's lunch turned national icon." },
+    { name: "Sausage Roll", wikiTitle: "Sausage_roll", country: "United Kingdom", emoji: "🥐", controversial: true,
+      description: "Seasoned pork sausagemeat wrapped in flaky puff pastry. Greggs queue forms at 7 a.m." },
+    { name: "Scotch Egg", wikiTitle: "Scotch_egg", country: "United Kingdom", emoji: "🥚", controversial: true,
+      description: "Hard-boiled egg wrapped in sausagemeat, breadcrumbed and deep-fried — picnic and pub staple." },
+    { name: "Chip Butty", wikiTitle: "Chip_butty", country: "United Kingdom", emoji: "🍞", controversial: true,
+      description: "Hot chips piled inside a buttered white-bread roll. Carbs on carbs. Often with ketchup or brown sauce." },
+    { name: "Battered Sausage", wikiTitle: "Battered_sausage", country: "United Kingdom", emoji: "🌭", controversial: true,
+      description: "Pork sausage dunked in chip-shop batter and deep-fried alongside the fish. Crispy on the outside, snappy inside." },
+    { name: "Pickled Egg", wikiTitle: "Pickled_egg", country: "United Kingdom", emoji: "🥚", controversial: true,
+      description: "Hard-boiled egg preserved in spiced vinegar, kept in a giant jar on the chippy counter." },
+    { name: "Beans on Toast", wikiTitle: "Beans_on_toast", country: "United Kingdom", emoji: "🫘", controversial: true,
+      description: "Tinned baked beans poured over hot buttered toast. Cheap, fast, surprisingly polarising worldwide." },
+    { name: "Steak and Ale Pie", wikiTitle: "Meat_pie", country: "United Kingdom", emoji: "🥧", controversial: true,
+      description: "Diced beef slow-braised in dark ale under a shortcrust lid — staple of every matchday concourse." },
+    { name: "Toad in the Hole", wikiTitle: "Toad_in_the_hole", country: "United Kingdom", emoji: "🐸", controversial: true,
+      description: "Pork sausages baked into a giant Yorkshire pudding batter, drowned in onion gravy." },
+    { name: "Saveloy", wikiTitle: "Saveloy", country: "United Kingdom", emoji: "🌭", controversial: true,
+      description: "Bright red, smoked pork sausage from the chippy — heated in the warmer, often eaten with chips and curry sauce." },
+
+    // ─── American stadium / fairground / diner ───
+    { name: "Corn Dog", wikiTitle: "Corn_dog", country: "United States", emoji: "🌭", controversial: true,
+      description: "Hot dog jammed onto a stick, dipped in sweet cornmeal batter, deep-fried until golden. State-fair classic." },
+    { name: "Funnel Cake", wikiTitle: "Funnel_cake", country: "United States", emoji: "🍩", controversial: true,
+      description: "Ribbons of batter poured into hot oil through a funnel, then dusted with mountains of powdered sugar." },
+    { name: "Frito Pie", wikiTitle: "Frito_pie", country: "United States", emoji: "🌶️", controversial: true,
+      description: "Chili poured straight into a slit-open bag of Fritos, topped with cheese and onions. Eaten with a plastic fork." },
+    { name: "Tater Tots", wikiTitle: "Tater_tots", country: "United States", emoji: "🥔", controversial: true,
+      description: "Cylinders of shredded potato deep-fried to a crisp shell — school-cafeteria icon." },
+    { name: "Sloppy Joe", wikiTitle: "Sloppy_joe", country: "United States", emoji: "🍔", controversial: true,
+      description: "Loose ground beef in a sweet tomato sauce, piled into a soft hamburger bun until it inevitably spills." },
+    { name: "Philly Cheesesteak", wikiTitle: "Cheesesteak", country: "United States", emoji: "🥖", controversial: true,
+      description: "Thin-sliced ribeye on a hoagie roll with melted Cheez Whiz and griddled onions. Wiz vs. Provolone wars never end." },
+    { name: "Loaded Nachos", wikiTitle: "Nachos", country: "United States", emoji: "🧀", controversial: true,
+      description: "Tortilla chips drowned in neon cheese sauce, jalapeños and ground beef. Stadium concession staple." },
+    { name: "Buffalo Wings", wikiTitle: "Buffalo_wing", country: "United States", emoji: "🌶️", controversial: true,
+      description: "Deep-fried chicken wings tossed in vinegary cayenne-butter sauce, served with celery and blue-cheese dip." },
+    { name: "Cracker Jack", wikiTitle: "Cracker_Jack", country: "United States", emoji: "🍿", controversial: true,
+      description: "Caramel-glazed popcorn and peanuts in a striped box — handed out at baseball games since 1896." },
+
+    // ─── Canadian / Wisconsin ───
+    { name: "Cheese Curds", wikiTitle: "Cheese_curds", country: "Canada", emoji: "🧀", controversial: true,
+      description: "Fresh, squeaky curds of cheddar before pressing — eaten by the handful or deep-fried for stadium snacks." },
+
+    // ─── German / Austrian Imbiss / Stadion ───
+    { name: "Käsekrainer", wikiTitle: "Käsekrainer", country: "Austria", emoji: "🧀", controversial: true,
+      description: "Smoked pork sausage flecked with cheese cubes that bubble out when bitten. Vienna stand-up classic." },
+    { name: "Leberkäse Semmel", wikiTitle: "Leberkäse", country: "Germany", emoji: "🥪", controversial: true,
+      description: "Slab of warm, finely ground 'meat loaf' (no liver, no cheese) tucked into a crispy bread roll with mustard." },
+    { name: "Mettbrötchen", wikiTitle: "Mett", country: "Germany", emoji: "🐷", controversial: true,
+      description: "Raw seasoned minced pork piled on a bread roll, topped with raw onion rings. Yes, raw. Yes, eaten cold." },
+    { name: "Strammer Max", wikiTitle: "Strammer_Max", country: "Germany", emoji: "🍳", controversial: true,
+      description: "Slice of dark bread heaped with ham and topped with a sunny-side-up egg. Stout-friendly Imbiss order." },
+    { name: "Bockwurst", wikiTitle: "Bockwurst", country: "Germany", emoji: "🌭", controversial: true,
+      description: "Pale, smooth veal-and-pork sausage simmered in water, eaten with mustard and a Brötchen." },
+
+    // ─── Italian quick / fast ───
+    { name: "Arancini", wikiTitle: "Arancini", country: "Italy", emoji: "🍙", controversial: true,
+      description: "Sicilian risotto balls stuffed with ragù or mozzarella, breadcrumbed and deep-fried. Sold from train-station counters." },
+    { name: "Calzone", wikiTitle: "Calzone", country: "Italy", emoji: "🥟", controversial: true,
+      description: "Pizza dough folded into a half-moon over mozzarella, ricotta and salami, baked until puffed." },
+
+    // ─── Latin American street ───
+    { name: "Elote", wikiTitle: "Elote", country: "Mexico", emoji: "🌽", controversial: true,
+      description: "Grilled corn on the cob slathered in mayo, crema, cotija cheese, chilli powder and lime. Sold from carts." },
+    { name: "Choripán", wikiTitle: "Choripán", country: "Argentina", emoji: "🌭", controversial: true,
+      description: "Chorizo butterflied and grilled hot, slapped between crusty bread with bright green chimichurri." }
 ];
 
 // ============================================================

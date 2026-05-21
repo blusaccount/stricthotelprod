@@ -288,6 +288,17 @@
             background: var(--fg-bg); border: 1px dashed var(--fg-border);
             padding: 6px 8px;
         }
+        .fg-rate-badge {
+            background: var(--fg-pink); color: #000;
+            border: 2px solid var(--fg-border);
+            padding: 4px 8px; font-size: 8px; letter-spacing: 1px;
+            margin: 0 0 10px;
+            animation: fg-badge-pulse 1.6s infinite alternate;
+        }
+        @keyframes fg-badge-pulse {
+            0%   { transform: rotate(-2deg) scale(1); }
+            100% { transform: rotate(2deg) scale(1.04); }
+        }
 
         .fg-rate-actions {
             display: grid;
@@ -645,6 +656,7 @@
                 </div>
                 <div class="fg-rate-info">
                     <div class="fg-rate-name" id="fg-rate-name">—</div>
+                    <span class="fg-rate-badge" id="fg-rate-badge" style="display:none;">🌶️ DIVISIVE</span>
                     <div class="fg-rate-country" id="fg-rate-country">—</div>
                     <div class="fg-rate-desc" id="fg-rate-desc">—</div>
                     <div class="fg-rate-comm" id="fg-rate-comm">—</div>
