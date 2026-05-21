@@ -821,10 +821,14 @@
     // Console helpers — call from devtools:
     //   __stocks.refresh()  → request fresh portfolio + leaderboard
     //   __stocks.ticker()   → fetch /api/ticker and print
+    //   __stocks.diag()     → server-side cache + last Yahoo error
+    //   __stocks.probe()    → force a live Yahoo call on the server right now
     //   __stocks.state()    → dump current client state
     window.__stocks = {
         refresh: () => requestPortfolioRefresh('manual'),
         ticker: () => fetch('/api/ticker').then(r => r.json()).then(d => { console.log('/api/ticker →', d); return d; }),
+        diag: () => fetch('/api/_stock-diag').then(r => r.json()).then(d => { console.log('/api/_stock-diag →', d); return d; }),
+        probe: () => fetch('/api/_stock-diag?probe=1').then(r => r.json()).then(d => { console.log('/api/_stock-diag?probe=1 →', d); return d; }),
         state: () => ({ currentBalance, portfolioData, marketDataSample: marketData.slice(0, 3) }),
     };
     dlog('console helpers: window.__stocks.refresh() / .ticker() / .state(); toggle logs with window.STOCK_DEBUG=false');

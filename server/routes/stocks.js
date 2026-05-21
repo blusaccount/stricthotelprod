@@ -67,6 +67,19 @@ let tickerCache = { data: null, ts: 0 };
 let tickerFetchPromise = null;
 const TICKER_CACHE_MS = 5 * 60 * 1000; // 5 minutes
 
+// Diagnostic state — exposed via /api/_stock-diag so we can see why Yahoo
+// fails on production without needing log access.
+const diag = {
+    lastAttemptAt: 0,
+    lastSuccessAt: 0,
+    lastError: null,
+    lastErrorAt: 0,
+    lastResultCount: null,
+    successCount: 0,
+    errorCount: 0,
+    emptyCount: 0,
+};
+
 const searchCache = new Map();
 const SEARCH_CACHE_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -114,10 +127,12 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled }) {
         if (tickerFetchPromise) return tickerFetchPromise;
 
         tickerFetchPromise = (async () => {
+            diag.lastAttemptAt = Date.now();
             try {
                 const symbols = TICKER_SYMBOLS.map(s => s.symbol);
                 const yf = await getYahooFinance();
                 const quotes = await yf.quote(symbols);
+                diag.lastResultCount = Array.isArray(quotes) ? quotes.length : (quotes ? 1 : 0);
 
                 const nameMap = new Map(TICKER_SYMBOLS.map(s => [s.symbol, s.name]));
                 const results = [];
@@ -156,6 +171,8 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled }) {
                         }
                     }
                     tickerCache = { data: results, ts: Date.now() };
+                    diag.lastSuccessAt = Date.now();
+                    diag.successCount++;
                     // Persist for DB-backed cold-start recovery
                     upsertQuotes(results).catch(() => {});
                     return results;
@@ -164,10 +181,16 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled }) {
                 // Yahoo answered but had no usable quotes (rate-limit, partial outage).
                 // Bug fix: don't return [] — fall back to whatever we last had so the
                 // UI doesn't silently lose every price.
-                console.warn('[fetchTickerQuotes] Yahoo returned no usable quotes; serving previous cache');
+                diag.emptyCount++;
+                diag.lastError = 'Yahoo returned no usable quotes (' + diag.lastResultCount + ' raw items)';
+                diag.lastErrorAt = Date.now();
+                console.warn('[fetchTickerQuotes]', diag.lastError, '— serving previous cache');
                 return tickerCache.data || [];
             } catch (err) {
-                console.error('[fetchTickerQuotes] Error:', err.message);
+                diag.errorCount++;
+                diag.lastError = (err && err.name ? err.name + ': ' : '') + (err && err.message ? err.message : String(err));
+                diag.lastErrorAt = Date.now();
+                console.error('[fetchTickerQuotes] Error:', diag.lastError);
                 return tickerCache.data || [];
             } finally {
                 tickerFetchPromise = null;
@@ -282,6 +305,61 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled }) {
             console.error('[StockQuote] Error:', err.message);
             res.status(502).json({ error: 'Failed to fetch quote' });
         }
+    });
+
+    // Diagnostic endpoint — no auth (state is non-sensitive: counts, error
+    // messages, cache size). Lets us see from the browser exactly why the
+    // ticker is empty on production.
+    router.get('/api/_stock-diag', async (req, res) => {
+        const ageMs = (ts) => (ts ? Date.now() - ts : null);
+        const out = {
+            now: new Date().toISOString(),
+            tickerCache: {
+                size: tickerCache.data ? tickerCache.data.length : 0,
+                ageMs: ageMs(tickerCache.ts),
+                sample: (tickerCache.data || []).slice(0, 3),
+            },
+            dbCache: {
+                size: getAllCached().length,
+                sample: getAllCached().slice(0, 3),
+            },
+            yahoo: {
+                lastAttemptAgoMs: ageMs(diag.lastAttemptAt),
+                lastSuccessAgoMs: ageMs(diag.lastSuccessAt),
+                lastErrorAgoMs: ageMs(diag.lastErrorAt),
+                lastError: diag.lastError,
+                lastResultCount: diag.lastResultCount,
+                successCount: diag.successCount,
+                errorCount: diag.errorCount,
+                emptyCount: diag.emptyCount,
+            },
+        };
+
+        // If ?probe=1, fire a fresh Yahoo request right now and capture what comes back.
+        if (req.query.probe === '1') {
+            try {
+                const yf = await getYahooFinance();
+                const t0 = Date.now();
+                const q = await yf.quote('AAPL');
+                out.probe = {
+                    ok: true,
+                    elapsedMs: Date.now() - t0,
+                    symbol: q?.symbol,
+                    price: q?.regularMarketPrice,
+                    currency: q?.currency,
+                    marketState: q?.marketState,
+                };
+            } catch (e) {
+                out.probe = {
+                    ok: false,
+                    name: e && e.name,
+                    message: e && e.message,
+                    stack: (e && e.stack || '').split('\n').slice(0, 4).join('\n'),
+                };
+            }
+        }
+
+        res.json(out);
     });
 
     // Expose fetchTickerQuotes for socket handlers
