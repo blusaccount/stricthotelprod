@@ -60,6 +60,16 @@ describe('stock-game portfolio snapshot', () => {
         expect(snap.holdings).toHaveLength(1);
         expect(snap.holdings[0].currentPrice).toBe(120);
         expect(snap.holdings[0].marketValue).toBe(100);
+        // Flag the fallback so the UI can render "—" instead of a misleading +0.00 G/L
+        expect(snap.holdings[0].priceStale).toBe(true);
+    });
+
+    it('does not flag priceStale when a live quote is available', async () => {
+        await buyStock('alice', 'AAPL', 150, 100);
+        const quotes = [{ symbol: 'AAPL', name: 'Apple', price: 160 }];
+        const snap = await getPortfolioSnapshot('alice', quotes);
+
+        expect(snap.holdings[0].priceStale).toBe(false);
     });
 
     it('uses fetchMissingPrice callback for non-ticker stocks', async () => {

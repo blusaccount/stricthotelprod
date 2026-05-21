@@ -127,6 +127,8 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled }) {
                         }
                     }
                     tickerCache = { data: results, ts: Date.now() };
+                } else {
+                    console.warn('[fetchTickerQuotes] Yahoo returned no usable quotes; portfolio G/L will show "—" until next successful fetch');
                 }
                 return results;
             } catch (err) {
