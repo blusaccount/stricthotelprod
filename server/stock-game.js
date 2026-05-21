@@ -276,6 +276,7 @@ export async function getLeaderboardSnapshot(currentPrices, fetchMissingPrice) {
                     quote = await fetchMissingPrice(symbol);
                     if (quote) priceMap.set(symbol, quote);
                 }
+                const priceStale = !quote;
                 const currentPrice = quote ? quote.price : pos.avgCost;
                 const marketValue = pos.shares * currentPrice;
                 const costBasis = pos.shares * pos.avgCost;
@@ -291,6 +292,7 @@ export async function getLeaderboardSnapshot(currentPrices, fetchMissingPrice) {
                     marketValue: parseFloat(marketValue.toFixed(2)),
                     gainLoss: parseFloat(gainLoss.toFixed(2)),
                     gainLossPct: parseFloat(gainLossPct.toFixed(2)),
+                    priceStale,
                 });
                 totalValue += marketValue;
             }
@@ -342,6 +344,7 @@ export async function getLeaderboardSnapshot(currentPrices, fetchMissingPrice) {
                 quote = await fetchMissingPrice(symbol);
                 if (quote) priceMap.set(symbol, quote);
             }
+            const priceStale = !quote;
             const currentPrice = quote ? quote.price : avgCost;
             const marketValue = shares * currentPrice;
             const costBasis = shares * avgCost;
@@ -357,6 +360,7 @@ export async function getLeaderboardSnapshot(currentPrices, fetchMissingPrice) {
                 marketValue: parseFloat(marketValue.toFixed(2)),
                 gainLoss: parseFloat(gainLoss.toFixed(2)),
                 gainLossPct: parseFloat(gainLossPct.toFixed(2)),
+                priceStale,
             });
             totalValue += marketValue;
         }
@@ -414,6 +418,7 @@ export async function getPortfolioSnapshot(playerName, currentPrices, fetchMissi
                 quote = await fetchMissingPrice(symbol);
                 if (quote) priceMap.set(symbol, quote);
             }
+            const priceStale = !quote;
             const currentPrice = quote ? quote.price : pos.avgCost;
             const marketValue = pos.shares * currentPrice;
             const costBasis = pos.shares * pos.avgCost;
@@ -429,6 +434,7 @@ export async function getPortfolioSnapshot(playerName, currentPrices, fetchMissi
                 marketValue: parseFloat(marketValue.toFixed(2)),
                 gainLoss: parseFloat(gainLoss.toFixed(2)),
                 gainLossPct: parseFloat(gainLossPct.toFixed(2)),
+                priceStale,
             });
 
             totalValue += marketValue;
@@ -460,6 +466,7 @@ export async function getPortfolioSnapshot(playerName, currentPrices, fetchMissi
             resolvedQuote = await fetchMissingPrice(symbol);
             if (resolvedQuote) priceMap.set(symbol, resolvedQuote);
         }
+        const priceStale = !resolvedQuote;
         const currentPrice = resolvedQuote ? resolvedQuote.price : avgCost;
         const marketValue = shares * currentPrice;
         const costBasis = shares * avgCost;
@@ -475,6 +482,7 @@ export async function getPortfolioSnapshot(playerName, currentPrices, fetchMissi
             marketValue: parseFloat(marketValue.toFixed(2)),
             gainLoss: parseFloat(gainLoss.toFixed(2)),
             gainLossPct: parseFloat(gainLossPct.toFixed(2)),
+            priceStale,
         });
 
         totalValue += marketValue;

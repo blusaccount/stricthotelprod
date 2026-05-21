@@ -313,11 +313,19 @@
         portfolioValueEl.textContent = formatNumber(portfolioData.totalValue);
 
         let totalGain = 0;
+        let anyStale = false;
         for (let i = 0; i < h.length; i++) {
-            totalGain += h[i].gainLoss;
+            if (h[i].priceStale) anyStale = true;
+            else totalGain += h[i].gainLoss;
         }
-        portfolioGainEl.textContent = (totalGain >= 0 ? '+' : '') + formatNumber(totalGain);
-        portfolioGainEl.className = `summary-value ${totalGain >= 0 ? 'positive' : 'negative'}`;
+        if (anyStale && totalGain === 0) {
+            portfolioGainEl.textContent = '—';
+            portfolioGainEl.className = 'summary-value';
+        } else {
+            portfolioGainEl.textContent = (totalGain >= 0 ? '+' : '') + formatNumber(totalGain)
+                + (anyStale ? ' *' : '');
+            portfolioGainEl.className = `summary-value ${totalGain >= 0 ? 'positive' : 'negative'}`;
+        }
 
         if (h.length === 0) {
             holdingsContainer.innerHTML = '<div class="no-holdings">No investments yet.</div>';
@@ -332,14 +340,20 @@
         for (let j = 0; j < h.length; j++) {
             const p = h[j];
             const cls = p.gainLoss >= 0 ? 'positive' : 'negative';
+            const stale = !!p.priceStale;
+            const priceCell = stale ? '—' : `$${formatNumber(p.currentPrice)}`;
+            const valueCell = stale ? '—' : `$${formatNumber(p.marketValue)}`;
+            const glCell = stale
+                ? '<span title="Live-Kurs nicht verfügbar">—</span>'
+                : `${p.gainLoss >= 0 ? '+' : ''}${formatNumber(p.gainLoss)} (${p.gainLossPct >= 0 ? '+' : ''}${formatNumber(p.gainLossPct)}%)`;
+            const glCls = stale ? '' : cls;
             html += `<tr>`
                 + `<td class="symbol">${escapeHtml(p.symbol)}<br><span style="color:var(--ds-text-dim);font-size:6px">${escapeHtml(p.name)}</span></td>`
                 + `<td>${formatNumber(p.shares, 4)}</td>`
                 + `<td>$${formatNumber(p.avgCost)}</td>`
-                + `<td>$${formatNumber(p.currentPrice)}</td>`
-                + `<td>$${formatNumber(p.marketValue)}</td>`
-                + `<td class="${cls}">${p.gainLoss >= 0 ? '+' : ''}${formatNumber(p.gainLoss)}`
-                + ` (${p.gainLossPct >= 0 ? '+' : ''}${formatNumber(p.gainLossPct)}%)</td>`
+                + `<td>${priceCell}</td>`
+                + `<td>${valueCell}</td>`
+                + `<td class="${glCls}">${glCell}</td>`
                 + `<td><button class="btn-sell-row" data-symbol="${escapeAttr(p.symbol)}">SELL</button></td>`
                 + `</tr>`;
         }
@@ -516,12 +530,15 @@
                     + '</tr></thead><tbody>';
                 for (let j = 0; j < p.holdings.length; j++) {
                     const h = p.holdings[j];
-                    const cls = h.gainLoss >= 0 ? 'positive' : 'negative';
+                    const stale = !!h.priceStale;
+                    const cls = stale ? '' : (h.gainLoss >= 0 ? 'positive' : 'negative');
+                    const valueCell = stale ? '—' : `$${formatNumber(h.marketValue)}`;
+                    const glCell = stale ? '—' : `${h.gainLoss >= 0 ? '+' : ''}${formatNumber(h.gainLoss)}`;
                     holdingsHtml += `<tr>`
                         + `<td style="font-weight:700;">${escapeHtml(h.symbol)}</td>`
                         + `<td>${formatNumber(h.shares, 4)}</td>`
-                        + `<td>$${formatNumber(h.marketValue)}</td>`
-                        + `<td class="${cls}">${h.gainLoss >= 0 ? '+' : ''}${formatNumber(h.gainLoss)}</td>`
+                        + `<td>${valueCell}</td>`
+                        + `<td class="${cls}">${glCell}</td>`
                         + `</tr>`;
                 }
                 holdingsHtml += '</tbody></table>';
@@ -567,12 +584,15 @@
                     + '</tr></thead><tbody>';
                 for (let j = 0; j < p.holdings.length; j++) {
                     const h = p.holdings[j];
-                    const gainLossCls = h.gainLoss >= 0 ? 'positive' : 'negative';
+                    const stale = !!h.priceStale;
+                    const gainLossCls = stale ? '' : (h.gainLoss >= 0 ? 'positive' : 'negative');
+                    const valueCell = stale ? '—' : `$${formatNumber(h.marketValue)}`;
+                    const glCell = stale ? '—' : `${h.gainLoss >= 0 ? '+' : ''}${formatNumber(h.gainLoss)}`;
                     holdingsHtml += `<tr>`
                         + `<td style="font-weight:700;">${escapeHtml(h.symbol)}</td>`
                         + `<td>${formatNumber(h.shares, 4)}</td>`
-                        + `<td>$${formatNumber(h.marketValue)}</td>`
-                        + `<td class="${gainLossCls}">${h.gainLoss >= 0 ? '+' : ''}${formatNumber(h.gainLoss)}</td>`
+                        + `<td>${valueCell}</td>`
+                        + `<td class="${gainLossCls}">${glCell}</td>`
                         + `</tr>`;
                 }
                 holdingsHtml += '</tbody></table>';
