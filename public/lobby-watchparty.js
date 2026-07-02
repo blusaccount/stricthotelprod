@@ -33,9 +33,14 @@
     const placeholder = $('lobby-wp-placeholder');
     const urlInput = $('lobby-wp-url');
     const loadBtn = $('lobby-wp-load');
+    const queueBtn = $('lobby-wp-queue-btn');
+    const nextBtn = $('lobby-wp-next');
     const clearBtn = $('lobby-wp-clear');
     const statusEl = $('lobby-wp-status');
     const nowPlaying = $('lobby-wp-now');
+    const queueBox = $('lobby-wp-queue');
+    const queueTitle = $('lobby-wp-queue-title');
+    const queueList = $('lobby-wp-queue-list');
 
     // --- Mini player (rail) — portal pattern ---
     // The playerWrap lives permanently at body level with position:fixed.
@@ -251,15 +256,17 @@
         if (Date.now() < suppressUntil) return;
         const YTState = window.YT && window.YT.PlayerState;
         if (!YTState) return;
-        // ENDED is a deterministic terminal state. Pin the server to
-        // "paused at duration" so heartbeats don't keep advancing
+        // ENDED is a deterministic terminal state. Report it so the server
+        // can auto-advance to the next queued video, or — if the queue is
+        // empty — pin "paused at duration" so heartbeats don't keep advancing
         // expectedTime past the end of the video. Bypass the debounce —
-        // there's no buffering bounce to absorb here.
+        // there's no buffering bounce to absorb here. The server dedupes
+        // concurrent reports from multiple clients via the videoId echo.
         if (event.data === YTState.ENDED) {
             cancelPendingState();
             try {
                 const dur = player.getDuration ? player.getDuration() : 0;
-                socket.emit('lobby-wp-control', { action: 'pause', time: dur });
+                socket.emit('lobby-wp-ended', { videoId: currentVideoId, time: dur });
             } catch (_) {}
             return;
         }
@@ -290,8 +297,42 @@
         return serverState.time + elapsed;
     }
 
+    // --- Queue rendering ---
+    function myName() {
+        try {
+            if (window.StrictHotelLobby && typeof window.StrictHotelLobby.getName === 'function') {
+                return window.StrictHotelLobby.getName() || '';
+            }
+        } catch (_) {}
+        return '';
+    }
+
+    function renderQueue(queue) {
+        if (!queueBox || !queueList) return;
+        const items = Array.isArray(queue) ? queue : [];
+        if (nextBtn) nextBtn.hidden = items.length === 0;
+        if (items.length === 0) {
+            queueBox.hidden = true;
+            queueList.innerHTML = '';
+            return;
+        }
+        queueBox.hidden = false;
+        if (queueTitle) queueTitle.textContent = `UP NEXT (${items.length})`;
+        const me = myName();
+        queueList.innerHTML = items.map((e) => {
+            const vid = escapeHtml(e.videoId);
+            const removable = me && e.addedBy === me;
+            return `<li class="lobby-wp-queue-item">
+                <img class="lobby-wp-queue-thumb" src="https://i.ytimg.com/vi/${vid}/default.jpg" alt="" loading="lazy">
+                <span class="lobby-wp-queue-meta">added by <strong>${escapeHtml(e.addedBy)}</strong></span>
+                ${removable ? `<button type="button" class="lobby-wp-queue-remove" data-queue-id="${Number(e.queueId)}" title="Remove from queue">✕</button>` : ''}
+            </li>`;
+        }).join('');
+    }
+
     function applyServerState(s) {
         lastServerState = s;
+        renderQueue(s && s.queue);
         // No video → tear down.
         if (!s || !s.videoId) {
             if (placeholder) placeholder.style.display = '';
@@ -391,20 +432,50 @@
     }
 
     // --- UI wiring ---
+    // Grab the pasted URL as a video ID, or show an error and return ''.
+    function consumeInput() {
+        const id = extractVideoId(urlInput ? urlInput.value : '');
+        if (!id) {
+            setStatus('Could not parse a YouTube ID from that link.', 'error');
+            return '';
+        }
+        urlInput.value = '';
+        return id;
+    }
+
     if (loadBtn && urlInput) {
         const submit = () => {
-            const id = extractVideoId(urlInput.value);
-            if (!id) {
-                setStatus('Could not parse a YouTube ID from that link.', 'error');
-                return;
-            }
+            const id = consumeInput();
+            if (!id) return;
             socket.emit('lobby-wp-load', { videoId: id });
-            urlInput.value = '';
             setStatus('Loading video…', 'loading');
         };
         loadBtn.addEventListener('click', submit);
         urlInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') { e.preventDefault(); submit(); }
+        });
+    }
+    if (queueBtn && urlInput) {
+        queueBtn.addEventListener('click', () => {
+            const id = consumeInput();
+            if (!id) return;
+            socket.emit('lobby-wp-queue-add', { videoId: id });
+            setStatus('Added to queue.', 'idle');
+        });
+    }
+    if (nextBtn) {
+        nextBtn.addEventListener('click', () => {
+            socket.emit('lobby-wp-next');
+        });
+    }
+    if (queueList) {
+        queueList.addEventListener('click', (e) => {
+            const btn = e.target.closest('.lobby-wp-queue-remove');
+            if (!btn) return;
+            const queueId = Number(btn.dataset.queueId);
+            if (Number.isFinite(queueId)) {
+                socket.emit('lobby-wp-queue-remove', { queueId });
+            }
         });
     }
     if (clearBtn) {

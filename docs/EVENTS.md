@@ -91,16 +91,20 @@ S->C:
 ## Lobby Watch Party (Right-Rail Mini-Player)
 **Handler:** [server/handlers/lobby-watchparty.js](../server/handlers/lobby-watchparty.js)
 
-Single shared lobby video that everyone in the lobby can watch from the right rail. Host of the load action controls playback.
+Single shared lobby video that everyone in the lobby can watch from the right rail. Host of the load action controls playback. A shared queue (max 20 entries, deduped against the playing video) auto-advances when the current video ends.
 
 C->S:
 - `lobby-wp-state` - Request current state
-- `lobby-wp-load` - Load a YouTube video (rate-limited)
+- `lobby-wp-load` - Load a YouTube video immediately (rate-limited)
 - `lobby-wp-control` - Play/pause/seek control
-- `lobby-wp-clear` - Clear the current video
+- `lobby-wp-queue-add` - Append a video to the queue; starts playback directly if nothing is playing (1s per-socket cooldown)
+- `lobby-wp-queue-remove` - Remove one of your own queue entries (`{ queueId }`)
+- `lobby-wp-next` - Skip to the next queued video (3s video-change cooldown)
+- `lobby-wp-ended` - Report the current video finished (`{ videoId, time }`); server advances the queue or pins paused-at-duration. Idempotent across clients via the videoId echo.
+- `lobby-wp-clear` - Clear the current video and the queue
 
 S->C:
-- `lobby-wp-state-result` - Full state snapshot
+- `lobby-wp-state-result` - Full state snapshot (includes `queue`)
 - `lobby-wp-error` - Error response
 
 ## Pictochat (Lobby Drawing)

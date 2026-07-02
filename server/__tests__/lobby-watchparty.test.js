@@ -164,6 +164,192 @@ describe('lobby-watchparty handler', () => {
         });
     });
 
+    describe('queue', () => {
+        // 11-char ids from the YouTube alphabet, distinct per index.
+        const vid = (i) => `${String(i).padStart(2, '0')}aaaaaaaaa`;
+
+        // Bypass the per-socket queue-add cooldown between adds.
+        function queueAdd(id) {
+            cleanupLobbyWatchpartyOnDisconnect(env.socket.id);
+            env.socket.trigger('lobby-wp-queue-add', { videoId: id });
+        }
+
+        function lastSnapshot() {
+            const calls = env.io.roomEmit.mock.calls.filter(c => c[0] === 'lobby-wp-state-result');
+            return calls.length ? calls[calls.length - 1][1] : null;
+        }
+
+        beforeEach(() => {
+            clearVideo(env);
+            cleanupLobbyWatchpartyOnDisconnect(env.socket.id);
+        });
+
+        it('snapshot includes an empty queue by default', () => {
+            env.socket.trigger('lobby-wp-state');
+            const snap = env.socket.emit.mock.calls.find(c => c[0] === 'lobby-wp-state-result')[1];
+            expect(snap.queue).toEqual([]);
+        });
+
+        it('queue-add with no video playing starts playback immediately', () => {
+            env.socket.trigger('lobby-wp-queue-add', { videoId: 'dQw4w9WgXcQ' });
+            const snap = lastSnapshot();
+            expect(snap.videoId).toBe('dQw4w9WgXcQ');
+            expect(snap.videoState).toBe('playing');
+            expect(snap.setBy).toBe('Alice');
+            expect(snap.queue).toEqual([]);
+        });
+
+        it('queue-add while a video plays appends to the queue', () => {
+            queueAdd('dQw4w9WgXcQ');            // starts playing
+            queueAdd(vid(1));                   // queued
+            const snap = lastSnapshot();
+            expect(snap.videoId).toBe('dQw4w9WgXcQ');
+            expect(snap.queue).toHaveLength(1);
+            expect(snap.queue[0].videoId).toBe(vid(1));
+            expect(snap.queue[0].addedBy).toBe('Alice');
+            expect(snap.queue[0].queueId).toEqual(expect.any(Number));
+        });
+
+        it('rejects duplicates of the playing video and queued entries', () => {
+            queueAdd('dQw4w9WgXcQ');
+            queueAdd(vid(1));
+            env.socket.emit.mockClear();
+            queueAdd('dQw4w9WgXcQ');            // currently playing
+            queueAdd(vid(1));                   // already queued
+            const errs = env.socket.emit.mock.calls.filter(c => c[0] === 'lobby-wp-error');
+            expect(errs).toHaveLength(2);
+            expect(errs[0][1].message).toMatch(/already/i);
+        });
+
+        it('enforces the per-socket add cooldown', () => {
+            queueAdd('dQw4w9WgXcQ');
+            // No cooldown cleanup here — second add within 1s must fail.
+            env.socket.emit.mockClear();
+            env.socket.trigger('lobby-wp-queue-add', { videoId: vid(1) });
+            const err = env.socket.emit.mock.calls.find(c => c[0] === 'lobby-wp-error');
+            expect(err).toBeTruthy();
+            expect(err[1].message).toMatch(/slow down/i);
+        });
+
+        it('caps the queue at 20 entries', () => {
+            queueAdd('dQw4w9WgXcQ');
+            for (let i = 1; i <= 20; i++) queueAdd(vid(i));
+            expect(lastSnapshot().queue).toHaveLength(20);
+            env.socket.emit.mockClear();
+            queueAdd(vid(21));
+            const err = env.socket.emit.mock.calls.find(c => c[0] === 'lobby-wp-error');
+            expect(err[1].message).toMatch(/full/i);
+            expect(lastSnapshot().queue).toHaveLength(20);
+        });
+
+        it('queue-remove lets the owner remove their entry', () => {
+            queueAdd('dQw4w9WgXcQ');
+            queueAdd(vid(1));
+            const entry = lastSnapshot().queue[0];
+            env.socket.trigger('lobby-wp-queue-remove', { queueId: entry.queueId });
+            expect(lastSnapshot().queue).toEqual([]);
+        });
+
+        it('queue-remove rejects non-owners', () => {
+            queueAdd('dQw4w9WgXcQ');
+            queueAdd(vid(1));
+            const entry = lastSnapshot().queue[0];
+
+            const bob = createMockSocket('sock-B');
+            const bobPlayers = new Map([['sock-B', { name: 'Bob' }]]);
+            registerLobbyWatchpartyHandlers(bob, env.io, {
+                checkRateLimit: vi.fn(() => true), onlinePlayers: bobPlayers
+            });
+            bob.trigger('lobby-wp-queue-remove', { queueId: entry.queueId });
+
+            const err = bob.emit.mock.calls.find(c => c[0] === 'lobby-wp-error');
+            expect(err[1].message).toMatch(/own/i);
+            expect(lastSnapshot().queue).toHaveLength(1);
+        });
+
+        it('ended advances to the next queued video', () => {
+            queueAdd('dQw4w9WgXcQ');
+            queueAdd(vid(1));
+            env.socket.trigger('lobby-wp-ended', { videoId: 'dQw4w9WgXcQ', time: 213 });
+            const snap = lastSnapshot();
+            expect(snap.videoId).toBe(vid(1));
+            expect(snap.videoState).toBe('playing');
+            expect(snap.time).toBe(0);
+            expect(snap.setBy).toBe('Alice');
+            expect(snap.queue).toEqual([]);
+        });
+
+        it('ended with empty queue pins paused-at-duration', () => {
+            queueAdd('dQw4w9WgXcQ');
+            env.socket.trigger('lobby-wp-ended', { videoId: 'dQw4w9WgXcQ', time: 213 });
+            const snap = lastSnapshot();
+            expect(snap.videoId).toBe('dQw4w9WgXcQ');
+            expect(snap.videoState).toBe('paused');
+            expect(snap.time).toBe(213);
+        });
+
+        it('ended for a stale videoId is ignored (multi-client dedupe)', () => {
+            queueAdd('dQw4w9WgXcQ');
+            queueAdd(vid(1));
+            env.socket.trigger('lobby-wp-ended', { videoId: 'dQw4w9WgXcQ', time: 213 });
+            env.io.roomEmit.mockClear();
+            // Second client reports the same ended video after the advance.
+            env.socket.trigger('lobby-wp-ended', { videoId: 'dQw4w9WgXcQ', time: 213 });
+            expect(env.io.roomEmit).not.toHaveBeenCalled();
+        });
+
+        it('duplicate ended reports while paused are ignored', () => {
+            queueAdd('dQw4w9WgXcQ');
+            env.socket.trigger('lobby-wp-ended', { videoId: 'dQw4w9WgXcQ', time: 213 });
+            env.io.roomEmit.mockClear();
+            env.socket.trigger('lobby-wp-ended', { videoId: 'dQw4w9WgXcQ', time: 213 });
+            expect(env.io.roomEmit).not.toHaveBeenCalled();
+        });
+
+        it('next skips to the queued video', () => {
+            queueAdd('dQw4w9WgXcQ');
+            queueAdd(vid(1));
+            cleanupLobbyWatchpartyOnDisconnect(env.socket.id); // bypass change cooldown
+            env.socket.trigger('lobby-wp-next');
+            const snap = lastSnapshot();
+            expect(snap.videoId).toBe(vid(1));
+            expect(snap.videoState).toBe('playing');
+            expect(snap.queue).toEqual([]);
+        });
+
+        it('next errors when the queue is empty', () => {
+            queueAdd('dQw4w9WgXcQ');
+            cleanupLobbyWatchpartyOnDisconnect(env.socket.id);
+            env.socket.emit.mockClear();
+            env.socket.trigger('lobby-wp-next');
+            const err = env.socket.emit.mock.calls.find(c => c[0] === 'lobby-wp-error');
+            expect(err[1].message).toMatch(/empty/i);
+        });
+
+        it('next honors the video-change cooldown', () => {
+            queueAdd('dQw4w9WgXcQ');
+            queueAdd(vid(1));
+            queueAdd(vid(2));
+            cleanupLobbyWatchpartyOnDisconnect(env.socket.id);
+            env.socket.trigger('lobby-wp-next');
+            env.socket.emit.mockClear();
+            env.socket.trigger('lobby-wp-next'); // within 3s → blocked
+            const err = env.socket.emit.mock.calls.find(c => c[0] === 'lobby-wp-error');
+            expect(err[1].message).toMatch(/slow down/i);
+            expect(lastSnapshot().queue).toHaveLength(1);
+        });
+
+        it('clear wipes the queue too', () => {
+            queueAdd('dQw4w9WgXcQ');
+            queueAdd(vid(1));
+            cleanupLobbyWatchpartyOnDisconnect(env.socket.id);
+            env.socket.trigger('lobby-wp-clear');
+            const snap = lastSnapshot();
+            expect(snap.videoId).toBeNull();
+            expect(snap.queue).toEqual([]);
+        });
+    });
+
     describe('expectedTime contract', () => {
         // Mirror of the formula in public/lobby-watchparty.js:expectedTime.
         // Kept here so the contract is testable; if the client formula

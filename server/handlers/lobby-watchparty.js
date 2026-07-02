@@ -9,10 +9,17 @@ import { pushActivity } from '../activity-feed.js';
 //
 // Per-socket cooldown for video changes (3s) so people can't spam-change
 // each other's video. Play/pause/seek are unrestricted.
+//
+// Queue: anyone can append videos (capped, deduped). When the current video
+// ends, clients report `lobby-wp-ended` and the server auto-advances to the
+// next queued entry — the videoId echo makes duplicate reports from multiple
+// clients idempotent (only the first one for the current video wins).
 // ============================================================================
 
 const VIDEO_CHANGE_COOLDOWN_MS = 3000;
 const SEEK_COOLDOWN_MS = 250;
+const QUEUE_ADD_COOLDOWN_MS = 1000;
+const QUEUE_MAX = 20;
 const ROOM_NAME = 'lobby-watchparty';
 
 const state = {
@@ -20,11 +27,15 @@ const state = {
     videoState: 'paused',  // 'playing' | 'paused'
     time: 0,
     updatedAt: Date.now(),
-    setBy: null            // last player who changed the video
+    setBy: null,           // last player who changed the video
+    queue: []              // [{ queueId, videoId, addedBy, addedAt }]
 };
+
+let nextQueueId = 1;
 
 const videoChangeCooldown = new Map(); // socketId -> ts
 const seekCooldown = new Map();        // socketId -> ts
+const queueAddCooldown = new Map();    // socketId -> ts
 
 function snapshot() {
     return {
@@ -33,8 +44,23 @@ function snapshot() {
         time: state.time,
         updatedAt: state.updatedAt,
         serverTime: Date.now(),
-        setBy: state.setBy
+        setBy: state.setBy,
+        queue: state.queue.slice()
     };
+}
+
+function playVideo(videoId, setBy, now) {
+    state.videoId = videoId;
+    state.videoState = 'playing';
+    state.time = 0;
+    state.updatedAt = now;
+    state.setBy = setBy;
+}
+
+// True if the id is currently playing or already waiting in the queue.
+function isKnownVideo(videoId) {
+    if (state.videoId === videoId) return true;
+    return state.queue.some(e => e.videoId === videoId);
 }
 
 function broadcast(io) {
@@ -72,11 +98,7 @@ export function registerLobbyWatchpartyHandlers(socket, io, deps) {
             return;
         }
 
-        state.videoId = id;
-        state.videoState = 'playing';
-        state.time = 0;
-        state.updatedAt = now;
-        state.setBy = player.name;
+        playVideo(id, player.name, now);
 
         io.to(ROOM_NAME).emit('lobby-wp-state-result', snapshot());
 
@@ -123,6 +145,123 @@ export function registerLobbyWatchpartyHandlers(socket, io, deps) {
         socket.to(ROOM_NAME).emit('lobby-wp-state-result', snapshot());
     } catch (err) { console.error('lobby-wp-control error:', err.message); } });
 
+    socket.on('lobby-wp-queue-add', (data) => { try {
+        if (!checkRateLimit(socket, 5)) return;
+        const player = onlinePlayers.get(socket.id);
+        if (!player || !player.name) return;
+
+        const now = Date.now();
+        const last = queueAddCooldown.get(socket.id) || 0;
+        if (now - last < QUEUE_ADD_COOLDOWN_MS) {
+            socket.emit('lobby-wp-error', { message: 'Slow down — try again in a moment.' });
+            return;
+        }
+        queueAddCooldown.set(socket.id, now);
+
+        const id = validateYouTubeId(data && data.videoId);
+        if (!id || id.length !== 11) {
+            socket.emit('lobby-wp-error', { message: 'Invalid YouTube video ID.' });
+            return;
+        }
+        if (isKnownVideo(id)) {
+            socket.emit('lobby-wp-error', { message: 'Already playing or in the queue.' });
+            return;
+        }
+
+        // Nothing playing → start right away instead of queueing into a void.
+        if (!state.videoId) {
+            videoChangeCooldown.set(socket.id, now);
+            playVideo(id, player.name, now);
+            io.to(ROOM_NAME).emit('lobby-wp-state-result', snapshot());
+            pushActivity({
+                type: 'lobby_watchparty', player: player.name,
+                text: `Started a Watch Party video`,
+                icon: '📺', color: 'cyan',
+                meta: { videoId: id }
+            });
+            console.log(`[LobbyWP] ${player.name} queue-started ${id}`);
+            return;
+        }
+
+        if (state.queue.length >= QUEUE_MAX) {
+            socket.emit('lobby-wp-error', { message: 'Queue is full.' });
+            return;
+        }
+
+        state.queue.push({ queueId: nextQueueId++, videoId: id, addedBy: player.name, addedAt: now });
+        broadcast(io);
+        console.log(`[LobbyWP] ${player.name} queued ${id} (${state.queue.length} in queue)`);
+    } catch (err) { console.error('lobby-wp-queue-add error:', err.message); } });
+
+    socket.on('lobby-wp-queue-remove', (data) => { try {
+        if (!checkRateLimit(socket, 5)) return;
+        const player = onlinePlayers.get(socket.id);
+        if (!player || !player.name) return;
+        if (!data || typeof data !== 'object') return;
+
+        const queueId = Number(data.queueId);
+        const idx = state.queue.findIndex(e => e.queueId === queueId);
+        if (idx === -1) return;
+        if (state.queue[idx].addedBy !== player.name) {
+            socket.emit('lobby-wp-error', { message: 'You can only remove your own queue entries.' });
+            return;
+        }
+
+        state.queue.splice(idx, 1);
+        broadcast(io);
+    } catch (err) { console.error('lobby-wp-queue-remove error:', err.message); } });
+
+    socket.on('lobby-wp-next', () => { try {
+        if (!checkRateLimit(socket, 5)) return;
+        const player = onlinePlayers.get(socket.id);
+        if (!player || !player.name) return;
+        if (state.queue.length === 0) {
+            socket.emit('lobby-wp-error', { message: 'Queue is empty.' });
+            return;
+        }
+
+        const now = Date.now();
+        const last = videoChangeCooldown.get(socket.id) || 0;
+        if (now - last < VIDEO_CHANGE_COOLDOWN_MS) {
+            socket.emit('lobby-wp-error', { message: 'Slow down — try again in a moment.' });
+            return;
+        }
+        videoChangeCooldown.set(socket.id, now);
+
+        const entry = state.queue.shift();
+        playVideo(entry.videoId, entry.addedBy, now);
+        io.to(ROOM_NAME).emit('lobby-wp-state-result', snapshot());
+        console.log(`[LobbyWP] ${player.name} skipped to ${entry.videoId}`);
+    } catch (err) { console.error('lobby-wp-next error:', err.message); } });
+
+    // Clients report that the current video finished. The videoId echo makes
+    // this idempotent across N watching clients: the first report advances the
+    // queue (or pins the pause), every later one no longer matches state.
+    socket.on('lobby-wp-ended', (data) => { try {
+        if (!checkRateLimit(socket, 10)) return;
+        const player = onlinePlayers.get(socket.id);
+        if (!player || !player.name) return;
+
+        const id = validateYouTubeId(data && data.videoId);
+        if (!id || id !== state.videoId) return;
+        if (state.videoState !== 'playing') return;
+
+        const now = Date.now();
+        if (state.queue.length > 0) {
+            const entry = state.queue.shift();
+            playVideo(entry.videoId, entry.addedBy, now);
+            console.log(`[LobbyWP] auto-advance to ${entry.videoId} (queued by ${entry.addedBy})`);
+        } else {
+            // Pin "paused at duration" so heartbeats stop advancing
+            // expectedTime past the end of the video.
+            const t = Number(data && data.time);
+            state.videoState = 'paused';
+            state.time = Number.isFinite(t) && t >= 0 ? t : state.time;
+            state.updatedAt = now;
+        }
+        io.to(ROOM_NAME).emit('lobby-wp-state-result', snapshot());
+    } catch (err) { console.error('lobby-wp-ended error:', err.message); } });
+
     socket.on('lobby-wp-clear', () => { try {
         if (!checkRateLimit(socket, 3)) return;
         const player = onlinePlayers.get(socket.id);
@@ -137,12 +276,14 @@ export function registerLobbyWatchpartyHandlers(socket, io, deps) {
         state.time = 0;
         state.updatedAt = now;
         state.setBy = null;
+        state.queue = [];
         io.to(ROOM_NAME).emit('lobby-wp-state-result', snapshot());
-        console.log(`[LobbyWP] ${player.name} cleared the video`);
+        console.log(`[LobbyWP] ${player.name} cleared the video and queue`);
     } catch (err) { console.error('lobby-wp-clear error:', err.message); } });
 }
 
 export function cleanupLobbyWatchpartyOnDisconnect(socketId) {
     videoChangeCooldown.delete(socketId);
     seekCooldown.delete(socketId);
+    queueAddCooldown.delete(socketId);
 }

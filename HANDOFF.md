@@ -4,6 +4,41 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Watch Party queue + auto-advance (2026-07-02)
+
+## What Changed
+
+### Server ([server/handlers/lobby-watchparty.js](server/handlers/lobby-watchparty.js))
+- New `state.queue` (`[{ queueId, videoId, addedBy, addedAt }]`, cap 20) included in every snapshot.
+- New events:
+  - `lobby-wp-queue-add` — validates the ID, dedupes against the playing video + queue, 1s per-socket cooldown. If nothing is playing it starts playback directly (same activity-feed push as a load).
+  - `lobby-wp-queue-remove` — only the player who added an entry may remove it.
+  - `lobby-wp-next` — manual skip to the next queued video; reuses the 3s video-change cooldown.
+  - `lobby-wp-ended` — replaces the old client-side "pause at duration" emit. If the queue has entries the server auto-advances (new video plays from 0, `setBy` = whoever queued it); otherwise it pins paused-at-duration as before. Idempotent across N clients because the report must echo the *current* `state.videoId` while it's still `playing` — the first report wins, later ones no-op.
+- `lobby-wp-clear` now also wipes the queue.
+
+### Client ([public/lobby-watchparty.js](public/lobby-watchparty.js))
+- YT `ENDED` now emits `lobby-wp-ended { videoId, time }` instead of a pause control.
+- Queue UI: QUEUE button next to LOAD, NEXT button (hidden while the queue is empty), "UP NEXT (n)" list under the status line with `i.ytimg.com` thumbnails, adder name, and a remove ✕ on your own entries (ownership is enforced server-side; the client just hides the button for others).
+
+### HTML/CSS
+- [public/index.html](public/index.html): QUEUE/NEXT buttons + queue list markup.
+- [public/lobby.css](public/lobby.css): `.lobby-wp-btn-cyan` + `.lobby-wp-queue-*` styles matching the arcade theme.
+
+### Tests
+- 16 new cases in [server/__tests__/lobby-watchparty.test.js](server/__tests__/lobby-watchparty.test.js): immediate-start on empty state, append, dedupe, add-cooldown, 20-cap, owner-only removal, ended auto-advance / pause-pin / stale-report dedupe, next + cooldown + empty-queue error, clear-wipes-queue. Suite: 359 tests across 22 files, all green.
+
+## Known Limits / Open Ideas
+- Queue entries show thumbnails but no titles (needs oEmbed lookup — separate feature).
+- If someone pauses manually in the same instant a video ends, the ended report is dropped and the queue doesn't auto-advance; the NEXT button covers that edge.
+- No viewer presence / vote-skip yet — queue-remove is owner-only, NEXT is open to everyone (cooldown-limited).
+
+## How to Verify
+- `npx vitest run server/__tests__/lobby-watchparty.test.js` (31 tests).
+- Manual: two browsers on `/`, queue two videos, let the first end → both clients switch together; NEXT skips; CLEAR empties player + queue.
+
+---
+
 # Handoff: Docs refresh — sync guide/events with current handler set (2026-05-21)
 
 ## What Changed
