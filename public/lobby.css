@@ -1031,11 +1031,80 @@ body .ticker-change.down { color: var(--arcade-loss); }
     border-color: var(--arcade-loss);
     background: rgba(255, 106, 122, 0.1);
 }
+.lobby-wp-btn-cyan {
+    background: var(--arcade-cyan);
+    color: #001a15;
+    border-color: var(--arcade-cyan);
+    box-shadow: 0 0 14px rgba(62, 255, 225, 0.35);
+}
+.lobby-wp-btn-cyan:hover {
+    background: #7dffef;
+    border-color: #7dffef;
+}
 .lobby-wp-status {
     color: var(--arcade-dim);
     font-size: 9px;
     letter-spacing: 1px;
     min-height: 14px;
+}
+.lobby-wp-queue {
+    border-top: 1px dashed var(--arcade-border);
+    padding-top: 10px;
+}
+.lobby-wp-queue-title {
+    color: var(--arcade-cyan);
+    font-size: 9px;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+}
+.lobby-wp-queue-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+.lobby-wp-queue-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #0a0613;
+    border: 1px solid var(--arcade-border);
+    padding: 6px 8px;
+}
+.lobby-wp-queue-thumb {
+    width: 60px;
+    height: 34px;
+    object-fit: cover;
+    border: 1px solid var(--arcade-border);
+    flex-shrink: 0;
+}
+.lobby-wp-queue-meta {
+    flex: 1;
+    color: var(--arcade-dim);
+    font-size: 9px;
+    letter-spacing: 0.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.lobby-wp-queue-meta strong { color: var(--arcade-ink); }
+.lobby-wp-queue-remove {
+    background: transparent;
+    color: var(--arcade-dim);
+    border: 1px solid var(--arcade-border);
+    font-family: inherit;
+    font-size: 10px;
+    padding: 4px 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.lobby-wp-queue-remove:hover {
+    color: var(--arcade-loss);
+    border-color: var(--arcade-loss);
 }
 .lobby-wp-status[data-kind="playing"] { color: var(--arcade-win); }
 .lobby-wp-status[data-kind="paused"]  { color: var(--arcade-cyan); }

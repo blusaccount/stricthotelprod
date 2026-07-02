@@ -157,9 +157,15 @@
                     <div class="lobby-wp-controls">
                         <input id="lobby-wp-url" type="text" placeholder="https://youtube.com/watch?v=..." autocomplete="off">
                         <button id="lobby-wp-load" type="button" class="lobby-wp-btn">LOAD</button>
-                        <button id="lobby-wp-clear" type="button" class="lobby-wp-btn lobby-wp-btn-ghost" title="Clear video">CLEAR</button>
+                        <button id="lobby-wp-queue-btn" type="button" class="lobby-wp-btn lobby-wp-btn-cyan" title="Add to queue">QUEUE</button>
+                        <button id="lobby-wp-next" type="button" class="lobby-wp-btn lobby-wp-btn-ghost" title="Skip to next queued video" hidden>NEXT ▸</button>
+                        <button id="lobby-wp-clear" type="button" class="lobby-wp-btn lobby-wp-btn-ghost" title="Clear video and queue">CLEAR</button>
                     </div>
                     <div class="lobby-wp-status" id="lobby-wp-status">Connecting…</div>
+                    <div class="lobby-wp-queue" id="lobby-wp-queue" hidden>
+                        <div class="lobby-wp-queue-title" id="lobby-wp-queue-title">UP NEXT</div>
+                        <ul class="lobby-wp-queue-list" id="lobby-wp-queue-list"></ul>
+                    </div>
                 </div>
             </div>
         </section>
