@@ -3,27 +3,29 @@
 StrictHotel is an experimental minigame collection in a **neal.fun-inspired** style: fast, visual web experiences with multiplayer chaos and nostalgic flair.
 
 ## Highlights
-- **13 Games/Experiences**: Mäxchen, Watch Party, Stock Market, Strictly7s, Loop Machine, LoL Betting, Strict Brain, Türkçe, Strict Club, Nostalgiabait, Shopping, Contacts, The Hotel
+- **15+ Games & Experiences**: A full casino suite (Mäxchen, Strictly7s 2.0, Blackjack, Roulette, Plinko, Crash), Stock Market, Watch Party, Strict Brain, Food Guessr, Thing of the Week (tierlist), Loop Machine, Türkçe, LoL Betting, Nostalgiabait, and more
 - **Multiplayer Rooms**: Lobby system with Socket.IO for real-time gameplay
-- **Virtual Economy**: StrictCoins currency system with earning and spending mechanics
-- **Social Features**: Pictochat-style doodle board, soundboard, contacts app, character creator
-- **Persistent Data**: PostgreSQL database for player profiles, portfolios, and game history
-- **Login Protection**: Session-based authentication with password gate
+- **Virtual Economy**: StrictCoins + Diamonds with server-authoritative, transactional wallets
+- **Engagement Loop**: 59 achievements with unlock toasts, daily login streak, global activity feed
+- **Social Features**: Pictochat-style doodle board, soundboard, lobby watch-party mini-player with shared queue, contacts app, character creator
+- **Persistent Data**: PostgreSQL database for player profiles, portfolios, and game history (in-memory fallback for local dev)
+- **Login Protection**: Session-based password gate plus trust-on-first-use name ownership (owner tokens)
 
 ## Repo Structure
 - **Server**: `server.js` starts [server/index.js](server/index.js) (Express + Socket.IO)
-  - [server/handlers](server/handlers) - Socket event handlers for each game/feature
+  - [server/handlers](server/handlers) - 21 socket handlers, one per game/feature
   - [server/routes](server/routes) - Express routes (auth, stocks, turkish, nostalgiabait)
-  - Database modules: `currency-store.js`, `stock-game.js`, `character-store.js`, etc.
-- **Public UI**: [public](public) - Landing page, login, lobby, contacts, shop
-- **Games**: [games](games) - 9 game frontends (Mäxchen, Watchparty, Stocks, Strictly7s, Loop Machine, LoL Betting, StrictBrain, Turkish, Shopping)
+  - Server modules: `currency.js`, `stock-game.js`, `character-store.js`, `identity.js`, `achievements.js`, `daily-streak.js`, etc.
+- **Public UI**: [public](public) - Landing page/lobby, login, contacts, shop, achievements, nostalgiabait
+- **Games**: [games](games) - 16 game frontends (casino hub + blackjack, crash, food-guessr, lol-betting, loop-machine, maexchen, plinko, roulette, stocks, strictbrain, strictly7s, tierlist, turkish, watchparty, shopping)
 - **Shared**: [shared](shared) - Reusable client modules (chat, lobby, avatars, creator, CSS, audio)
+- **Tests**: [server/__tests__](server/__tests__) - 359 Vitest tests across 22 files
 
 ## LLM Agent Notes
 When LLM agents work in this repo, use these files:
 - [AGENTS.md](AGENTS.md): entry point and rules
 - [LLM_AGENT_GUIDE.md](LLM_AGENT_GUIDE.md): repo mental model, do/don'ts
-- [EVENTS.md](EVENTS.md): socket event overview
+- [docs/EVENTS.md](docs/EVENTS.md): socket event catalog
 - [PLANS.md](PLANS.md): ExecPlan template for larger tasks
 - [HANDOFF.md](HANDOFF.md): short log of changes and risks
 
@@ -59,41 +61,57 @@ See `.env.example` for all available options. Key variables:
 
 **Core:**
 - `SESSION_SECRET` - Session encryption key (required in production)
-- `SITE_PASSWORD` - Login password (default: ADMIN)
+- `SITE_PASSWORD` - Login password (code default: ADMIN; `.env.example` ships STRICT)
 - `DATABASE_URL` - PostgreSQL connection string (optional, uses in-memory fallback if not set)
+- `PORT` - HTTP port (default: 3000)
 
 **Features:**
 - `GAME_ENABLED` (default: `true`) - Toggles stock market APIs and socket events
   - `true`: Stock APIs and socket events are active
   - `false`: Stock APIs return `503` with `{ code: "GAME_DISABLED" }`
 - `ADMIN_PASSWORD` - Required for admin actions (e.g., LoL bet resolution)
-- `RIOT_API_KEY` - For LoL betting feature (optional)
+- `RIOT_API_KEY` / `RIOT_REGION` - For the LoL betting feature (optional)
+- `LOL_BET_TIMEOUT_MS` - Auto-refund timeout for unresolved LoL bets (default: 50 min)
+
+**Ops:**
+- `LOGS_TOKEN` - Grants access to the `/admin/logs` ring-buffer endpoint (session-auth exempt)
+- `KEEP_ALIVE_URL` / `RENDER_EXTERNAL_URL` - Self-ping target to keep free-tier hosting awake
 
 ## Games & Features
 
-**Multiplayer Games:**
-- 🎲 **Mäxchen** - Dice bluffing game (Liar's Dice variant)
-- 📺 **Watch Party** - Synchronized YouTube viewing with friends
-- 🧠 **Strict Brain** - Memory, math, reaction time challenges
+**Strict Casino** (hub at `/games/casino/`, shared bet ladder 5-500 SC, server-authoritative RNG):
+- 🎲 **Mäxchen** - Multiplayer dice bluffing game (Liar's Dice variant) with round betting
+- 🎰 **Strictly7s 2.0** - 5×3 slot machine, 10 paylines, expanding wilds, free spins (~96% RTP)
+- 🃏 **Blackjack** - 6-deck shoe, S17 dealer, 3:2 blackjack, double-down
+- 🎡 **Roulette** - European single-zero wheel, 13 bet types
+- 📍 **Plinko** - Three risk profiles, server-simulated ball drop
+- 🚀 **Crash** - Shared multiplayer rounds with live bet feed and auto-cashout
+
+**Multiplayer & Social Games:**
+- 📺 **Watch Party** - Synchronized YouTube viewing in rooms, plus a lobby mini-player with a shared auto-advancing queue
+- 🧠 **Strict Brain** - Memory, math, and reaction challenges with daily test, leaderboards, and versus mode
+- 🏆 **Thing of the Week** - Shared persistent community tierlist
+- 🎹 **Loop Machine** - Collaborative 16-step sequencer with 14 instruments, persisted across restarts
 
 **Single-Player Games:**
-- 📈 **Stock Market** - Real-time stock trading with leaderboards
-- 🎰 **Strictly7s 2.0** - 5×3 slot machine, 10 paylines, expanding wilds, free spins (96% RTP)
-- 🎹 **Loop Machine** - 16-step sequencer with 14 instruments (including 808s)
-- ⚔️ **LoL Betting** - Bet on League of Legends player outcomes
-- 🇹🇷 **Türkçe** - Turkish language learning game
+- 📈 **Stock Market** - Trading with real market prices (incl. crypto), portfolios, and leaderboards
+- 🍜 **Food Guessr** - Guess the country from a dish photo; Classic, Rate, and Scrandle modes
+- ⚔️ **LoL Betting** - Bet on League of Legends player outcomes (Riot API)
+- 🇹🇷 **Türkçe** - Turkish language learning game with streaks
 
-**Social & Utility:**
-- 🎧 **Strict Club** - Shared music listening room
+**Pages & Extras:**
 - 📇 **Contacts** - View online players and their characters
-- 💎 **Shop** - Spend StrictCoins on premium items
-- 📼 **Nostalgiabait** - Retro boot experiences (Windows XP, GameCube, etc.)
+- 💎 **Shop** - Spend StrictCoins on diamonds and premium items
+- 🏅 **Achievements** - 59 achievements with progress tracking and unlock toasts
+- 📼 **Nostalgiabait** - Retro boot experiences (PS1/PS2, GameCube, Wii)
 - 🏨 **The Hotel** - External game link
 
 **Lobby Features:**
 - Character creator with pixel art editor
 - Pictochat-style collaborative drawing board
 - Soundboard with ambient audio controls
+- Daily login streak with escalating rewards (up to 150 SC + 1 💎)
+- Global activity feed (logins, big wins, achievement unlocks, trades)
 - StrictCoins currency system with "Make It Rain" animations
 
 ## In Short
