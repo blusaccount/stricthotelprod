@@ -4,6 +4,48 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Docs sweep — sync all docs with post-hardening codebase (2026-07-17)
+
+## What Changed
+Docs-only sweep, no code touched. Captures the drift from the identity/wallet hardening commit (64042ca) and general staleness in README + copilot instructions.
+
+### README.md
+- Rewrote Highlights + Games & Features around the actual shell nav: casino suite (6 games), Food Guessr, Thing of the Week (tierlist), achievements/daily streak/activity feed. Removed "Strict Club" (deleted long ago) and the "13 games / 9 frontends" counts.
+- Fixed the broken `EVENTS.md` link (file lives at `docs/EVENTS.md`).
+- Fixed module name `currency-store.js` → `currency.js`; added identity.js.
+- Env section: noted code default SITE_PASSWORD=ADMIN vs `.env.example` STRICT, added `LOL_BET_TIMEOUT_MS`, `LOGS_TOKEN`, `KEEP_ALIVE_URL`/`RENDER_EXTERNAL_URL`.
+
+### docs/EVENTS.md — event names now verified against code
+A scripted diff of `socket.on(...)`/`emit(...)` names vs the catalog found ~17 documented events that don't exist and ~30 real events that were missing. All fixed; the diff is now empty both ways. Highlights:
+- Loop Machine S->C: `loop-state`/`loop-*-changed` → `loop-sync`, `loop-*-updated`, `loop-listeners`.
+- Strict Brain S->C: `brain-versus-joined/left/started/score` → `brain-versus-lobby/game-start/scores/result/player-left`, plus `brain-daily-cooldown`, `brain-game-leaderboards`.
+- LoL S->C: `lol-username-validated`/`lol-error`/`lol-bet-status` → `lol-username-result`, `lol-bet-error`, `lol-bet-check-result`, plus `lol-bet-refunded`, `lol-bet-warning`, `lol-bet-resolved-confirm`.
+- Watch Party S->C: load/playpause/seek broadcasts → `watchparty-video` + `watchparty-sync` (+`watchparty-error`).
+- Mäxchen: moved chat/emote/drawing to the lobby section (they're lobby.js events), added `start-game` (it lives in maexchen.js, not lobby.js), `maexchen-believed`, `bets-update`; removed nonexistent `player-challenged`/`reaction`.
+- Registration moved to the Currency section with `ownerToken` + `register-player-error` (TOFU identity).
+- Stocks: added `stock-portfolio-history`, `stock-performance-leaderboard`.
+
+### LLM_AGENT_GUIDE.md
+- Added `identity.js` + TOFU identity flow, `currency.withWallet()` transactional wallet note.
+- Achievements 53 → 59 (hardening commit added tiers), tests "~325+" → 359, casino "five tiles" → six.
+- New pitfalls: never trust names from payloads (resolve from registered socket), brain-training anti-grind (~20s cooldown, 200 SC/day cap), 24h eviction of stale Blackjack/free-spin state.
+
+### .github/copilot-instructions.md
+- Overview rewritten (no Strict Club, casino suite listed), `currency-store.js` → `currency.js`, 9 → 16 game frontends, 207+ → 359 tests.
+
+### .env.example
+- Added `LOL_BET_TIMEOUT_MS`, `LOGS_TOKEN`, `KEEP_ALIVE_URL` (all verified against code).
+
+## Notes
+- `games/shopping/` (Strict Shopping Channel) exists but is not linked from the shell nav — left in the frontend list; consider linking or removing it.
+- GitHub repo description ("This repository bundles a playable website...") matches the README's "In Short" line; still accurate.
+
+## How to Verify
+- `npm test` → 359 tests across 22 files, all green (run on this branch).
+- Event-name diff: extract `socket.on('...')` and `emit('...')` names from `server/` and compare against the backticked event list in docs/EVENTS.md — both directions come back empty.
+
+---
+
 # Handoff: Watch Party queue + auto-advance (2026-07-02)
 
 ## What Changed

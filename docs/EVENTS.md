@@ -8,15 +8,16 @@ This is a practical catalog of Socket.IO events. Source of truth is handler file
 - If you add or change an event, update this file
 
 ## Core Lobby & Room Management
-**Handler:** [server/handlers/lobby.js](../server/handlers/lobby.js)
+**Handler:** [server/handlers/lobby.js](../server/handlers/lobby.js) (room lifecycle broadcasts live in [server/room-manager.js](../server/room-manager.js))
 
 C->S:
-- `register-player` - Register username and character
 - `get-lobbies` - Request list of active rooms
-- `create-room` - Create new game room
+- `create-room` - Create new game room (player name comes from the registered socket, not the payload)
 - `join-room` - Join existing room
-- `start-game` - Start game (host only)
 - `leave-room` - Leave current room
+- `chat-message` - Send chat message (in-room)
+- `emote` - Send emote reaction (in-room)
+- `drawing-note` - Draw on shared canvas (in-room)
 
 S->C:
 - `online-players` - Broadcast of all connected players
@@ -25,12 +26,18 @@ S->C:
 - `room-joined` - Player joined room
 - `room-update` - Room state changed
 - `player-left` - Player left room
+- `player-disconnected` - Player dropped mid-game
 - `game-started` - Game beginning
+- `chat-broadcast` - Chat message broadcast
+- `emote-broadcast` - Emote broadcast
+- `drawing-note` - Drawing broadcast
+- `error` - Generic error response
 
-## Currency System
+## Currency System & Registration
 **Handler:** [server/handlers/currency.js](../server/handlers/currency.js)
 
 C->S:
+- `register-player` - Register username, character, and `ownerToken` (TOFU identity via [server/identity.js](../server/identity.js))
 - `get-balance` - Fetch player's StrictCoin balance
 - `get-player-character` - Fetch character data
 - `get-player-diamonds` - Fetch another player's diamond count by name (contacts list); responds via `player-diamonds`
@@ -39,6 +46,7 @@ C->S:
 - `lobby-make-it-rain` - Spend coins for lobby animation
 
 S->C:
+- `register-player-error` - Name claim rejected (missing/mismatched owner token)
 - `balance-update` - Balance changed
 - `player-character` - Character data response
 - `player-diamonds` - Diamond count for a looked-up player (response to `get-player-diamonds`)
@@ -49,27 +57,27 @@ S->C:
 **Handler:** [server/handlers/maexchen.js](../server/handlers/maexchen.js)
 
 C->S:
+- `start-game` - Start the game (host only)
 - `roll` - Roll dice
 - `announce` - Announce dice value (truthful or bluff)
 - `challenge` - Challenge previous player's announcement
 - `believe-maexchen` - Accept Mäxchen claim
-- `emote` - Send emote reaction
-- `chat-message` - Send chat message
-- `drawing-note` - Draw on shared canvas
-- `place-bet` - Place bet on Mäxchen round outcome
+- `place-bet` - Place bet on Mäxchen round outcome (wrapped in a wallet transaction)
 
 S->C:
+- `game-started` - Game beginning
 - `dice-rolled` - Dice roll animation trigger
 - `roll-result` - Actual dice values (to current player only)
 - `player-announced` - Announcement broadcast
-- `player-challenged` - Challenge initiated
 - `challenge-result` - Challenge outcome
-- `player-disconnected` - Player left game
-- `game-over` - Game ended
-- `chat-broadcast` - Chat message broadcast
-- `drawing-note` - Drawing broadcast
-- `reaction` - Emote broadcast
-- `turn-start` - Turn changed
+- `maexchen-believed` - Mäxchen claim accepted broadcast
+- `bets-update` - Round bets changed
+- `turn-start` - Turn changed (from room-manager)
+- `game-over` - Game ended, pot awarded (from room-manager)
+- `player-disconnected` - Player left game (from room-manager)
+- `error` - Error response
+
+Chat, emotes, and drawing notes inside a Mäxchen room use the lobby-level events (`chat-message`/`chat-broadcast`, `emote`/`emote-broadcast`, `drawing-note`).
 
 ## Watch Party
 **Handler:** [server/handlers/watchparty.js](../server/handlers/watchparty.js)
@@ -82,11 +90,10 @@ C->S:
 - `watchparty-heartbeat` - Keep-alive ping (prevents server spin-down)
 
 S->C:
-- `watchparty-load` - Video loaded broadcast
-- `watchparty-playpause` - Play/pause broadcast (with `serverTime`)
-- `watchparty-seek` - Seek broadcast (with `serverTime`)
-- `watchparty-sync` - Sync state response
+- `watchparty-video` - Video loaded broadcast / full state response to `watchparty-request-sync`
+- `watchparty-sync` - Play/pause/seek state broadcast (with `serverTime` for latency offset)
 - `watchparty-heartbeat-ack` - Heartbeat acknowledgment
+- `watchparty-error` - Error response (e.g. invalid video ID)
 
 ## Lobby Watch Party (Right-Rail Mini-Player)
 **Handler:** [server/handlers/lobby-watchparty.js](../server/handlers/lobby-watchparty.js)
@@ -156,8 +163,10 @@ C->S:
 
 S->C:
 - `stock-portfolio` - Portfolio data
-- `stock-leaderboard` - Leaderboard data
-- `stock-error` - Error response
+- `stock-portfolio-history` - Historical portfolio values
+- `stock-leaderboard` - Net worth leaderboard data
+- `stock-performance-leaderboard` - Performance leaderboard data
+- `stock-error` - Error response (with `code`, e.g. `GAME_DISABLED`, `TRADE_COOLDOWN`)
 - `balance-update` - Balance changed after trade
 
 ## Strictly7s 2.0 (Slot Machine)
@@ -259,15 +268,14 @@ C->S:
 - `loop-clear` - Clear all cells
 
 S->C:
-- `loop-state` - Full sequencer state
-- `loop-cell-toggled` - Cell state changed
-- `loop-play-pause` - Playback state changed
-- `loop-bpm-changed` - BPM changed
-- `loop-bars-changed` - Bar count changed
-- `loop-synth-changed` - Synth params changed
-- `loop-bass-changed` - Bass params changed
-- `loop-volume-changed` - Volume changed
-- `loop-cleared` - Grid cleared
+- `loop-sync` - Full sequencer state (on join, bar-count change, and clear)
+- `loop-listeners` - Listener count update
+- `loop-cell-updated` - Cell state changed
+- `loop-state-updated` - Playback state changed (play/pause)
+- `loop-bpm-updated` - BPM changed
+- `loop-synth-updated` - Synth params changed
+- `loop-bass-updated` - Bass params changed
+- `loop-master-volume-updated` - Master volume changed
 
 ## LoL Betting
 **Handler:** [server/handlers/lol-betting.js](../server/handlers/lol-betting.js)
@@ -281,21 +289,26 @@ C->S:
 - `lol-admin-resolve-bet` - Admin manual resolution (requires ADMIN_PASSWORD)
 
 S->C:
-- `lol-username-validated` - Username validation result
-- `lol-bet-placed` - Bet confirmed
+- `lol-username-result` - Username validation result
+- `lol-bet-placed` - Bet confirmed (PUUID is resolved server-side via the Riot API)
 - `lol-bets-update` - Active bets list
 - `lol-history-update` - Bet history
-- `lol-bet-status` - Bet status response
-- `lol-bet-resolved` - Bet resolved notification
-- `lol-error` - Error response
+- `lol-bet-check-result` - Bet status response
+- `lol-bet-resolved` - Bet resolved notification (also from the background match checker)
+- `lol-bet-resolved-confirm` - Admin resolution confirmed
+- `lol-bet-refunded` - Bet refunded (auto-timeout, default 50 min via `LOL_BET_TIMEOUT_MS`)
+- `lol-bet-warning` - Non-fatal warning
+- `lol-bet-error` - Error response
 
 ## Strict Brain (Brain Training)
 **Handler:** [server/handlers/brain-versus.js](../server/handlers/brain-versus.js)
 
+Player names for scores and versus rooms are derived from the registered socket (anti-spoofing). `brain-training-score` has a ~20s per-name cooldown and a 200 SC/day payout cap.
+
 C->S:
 - `brain-training-score` - Submit training mode score
-- `brain-submit-score` - Submit challenge score
-- `brain-get-leaderboard` - Fetch leaderboard
+- `brain-submit-score` - Submit daily test score
+- `brain-get-leaderboard` - Fetch leaderboards
 - `brain-versus-create` - Create versus room
 - `brain-versus-join` - Join versus room
 - `brain-versus-leave` - Leave versus room
@@ -304,13 +317,17 @@ C->S:
 - `brain-versus-finished` - Submit final score
 
 S->C:
-- `brain-leaderboard` - Leaderboard data
+- `brain-leaderboard` - Overall leaderboard data
+- `brain-game-leaderboards` - Per-game leaderboards data
+- `brain-daily-cooldown` - Daily test reward already claimed today
 - `brain-versus-created` - Room created
-- `brain-versus-joined` - Player joined
-- `brain-versus-left` - Player left
-- `brain-versus-started` - Match started
-- `brain-versus-score` - Score updated
-- `brain-versus-finished` - Match ended
+- `brain-versus-lobby` - Versus lobby state (players joined/left)
+- `brain-versus-game-start` - Match started
+- `brain-versus-scores` - Live score update
+- `brain-versus-result` - Match ended with results
+- `brain-versus-player-left` - Player left mid-match
+- `error` - Error response
+- `balance-update` - Balance changed (score rewards)
 
 ## Tierlist (Shared Lobby Tierlist)
 **Handler:** [server/handlers/tierlist.js](../server/handlers/tierlist.js)
@@ -347,7 +364,7 @@ S->C:
 ## Achievements
 **Handler:** [server/handlers/achievements.js](../server/handlers/achievements.js)
 
-53 achievements with progress counters, recursive `bump()` for meta-achievements (e.g. "Achievement Hunter" at 10 unlocks), gold/magenta toast on unlock.
+59 achievements with progress counters, recursive `bump()` for meta-achievements (e.g. "Achievement Hunter" at 10 unlocks), gold/magenta toast on unlock. Counter updates use a single CTE UPSERT so concurrent bumps don't collapse.
 
 C->S:
 - `achievements-catalog` - Fetch the full achievement catalog

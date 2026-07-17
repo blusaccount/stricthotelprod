@@ -2,7 +2,7 @@
 
 ## Project overview
 
-StrictHotel is a multiplayer minigame collection powered by Node.js, Express, and Socket.IO with a vanilla JavaScript frontend. It features 13 games/experiences including Mäxchen (dice bluffing), Watch Party, Stock Market, Strictly7s (slots), Loop Machine (step sequencer), LoL Betting, Strict Brain, Türkçe (Turkish quiz), Strict Club, and more. Data is persisted in PostgreSQL with in-memory fallback for local dev.
+StrictHotel is a multiplayer minigame collection powered by Node.js, Express, and Socket.IO with a vanilla JavaScript frontend. It features 15+ games/experiences including a casino suite (Mäxchen dice bluffing, Strictly7s slots, Blackjack, Roulette, Plinko, Crash), Watch Party, Stock Market, Loop Machine (step sequencer), LoL Betting, Strict Brain, Food Guessr, Thing of the Week (tierlist), Türkçe (Turkish quiz), Nostalgiabait, and more, plus achievements, daily streaks, and an activity feed. Data is persisted in PostgreSQL with in-memory fallback for local dev.
 
 ## Tech stack
 
@@ -37,10 +37,10 @@ There is no build step; the project serves vanilla JS directly.
 - In-memory room state lives in `server/room-manager.js`.
 - DB operations use `async`/`await` with in-memory fallback when `DATABASE_URL` is unset.
 - Express routes in `server/routes/` (auth, stocks, turkish, nostalgiabait).
-- Database modules: `currency-store.js`, `stock-game.js`, `character-store.js`, etc.
+- Database modules: `currency.js`, `stock-game.js`, `character-store.js`, `identity.js`, etc.
 - Shared client modules in `shared/js/`; shared styles in `shared/css/theme.css`.
-- Game frontends in `games/<game-name>/` (9 games total).
-- Public pages in `public/` (landing, login, contacts, shop).
+- Game frontends in `games/<game-name>/` (16 directories, including the casino hub).
+- Public pages in `public/` (landing/lobby, login, contacts, shop, achievements, nostalgiabait).
 - See `docs/EVENTS.md` for complete socket event catalog.
 
 ## Testing
@@ -61,6 +61,6 @@ There is no build step; the project serves vanilla JS directly.
 - Read `HANDOFF.md` before starting work to understand recent changes and open risks.
 - Check `docs/EVENTS.md` for socket event contracts.
 - Read `LLM_AGENT_GUIDE.md` for detailed repo structure and common pitfalls.
-- Run `npm test` before committing (207+ tests should pass).
+- Run `npm test` before committing (359 tests across 22 files should pass).
 - Record what you changed, why, and how to verify it in `HANDOFF.md` when done.
 - For large or risky changes, create an execution plan in `PLANS.md`.
