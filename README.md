@@ -1,13 +1,13 @@
 # StrictHotel
 
-StrictHotel is an experimental minigame collection in a **neal.fun-inspired** style: fast, visual web experiences with multiplayer chaos and nostalgic flair.
+StrictHotel is an experimental minigame collection: fast, visual web experiences with multiplayer chaos and nostalgic flair.
 
 ## Highlights
 - **15+ Games & Experiences**: A full casino suite (Mäxchen, Strictly7s 2.0, Blackjack, Roulette, Plinko, Crash), Stock Market, Watch Party, Strict Brain, Food Guessr, Thing of the Week (tierlist), Loop Machine, Türkçe, LoL Betting, Nostalgiabait, and more
 - **Multiplayer Rooms**: Lobby system with Socket.IO for real-time gameplay
 - **Virtual Economy**: StrictCoins + Diamonds with server-authoritative, transactional wallets
 - **Engagement Loop**: 59 achievements with unlock toasts, daily login streak, global activity feed
-- **Social Features**: Pictochat-style doodle board, soundboard, lobby watch-party mini-player with shared queue, contacts app, character creator
+- **Social Features**: Collaborative pixel doodle board, soundboard, lobby watch-party mini-player with shared queue, contacts app, character creator
 - **Persistent Data**: PostgreSQL database for player profiles, portfolios, and game history (in-memory fallback for local dev)
 - **Login Protection**: Session-based password gate plus trust-on-first-use name ownership (owner tokens)
 
@@ -103,12 +103,12 @@ See `.env.example` for all available options. Key variables:
 - 📇 **Contacts** - View online players and their characters
 - 💎 **Shop** - Spend StrictCoins on diamonds and premium items
 - 🏅 **Achievements** - 59 achievements with progress tracking and unlock toasts
-- 📼 **Nostalgiabait** - Retro boot experiences (PS1/PS2, GameCube, Wii)
+- 📼 **Nostalgiabait** - Retro console boot experiences
 - 🏨 **The Hotel** - External game link
 
 **Lobby Features:**
 - Character creator with pixel art editor
-- Pictochat-style collaborative drawing board
+- Collaborative pixel drawing board
 - Soundboard with ambient audio controls
 - Daily login streak with escalating rewards (up to 150 SC + 1 💎)
 - Global activity feed (logins, big wins, achievement unlocks, trades)
