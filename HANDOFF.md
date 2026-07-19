@@ -4,6 +4,47 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Admin escape hatch for stranded name ownership (2026-07-19)
+
+## Problem
+TOFU identity strands names: the owner token lives in localStorage, so clearing
+site data or renaming from a second device leaves a name bound to a token
+nobody holds anymore. The real owner then gets `NAME_TAKEN` on their own name
+forever (reported for "Lukas": renamed to "Lukass" on a laptop, can't rename
+back).
+
+## What Changed
+- [server/identity.js](server/identity.js): new `releaseName(playerName)` —
+  nulls `players.owner_token` (memory-mode: deletes the map entry). Player data
+  (balance, achievements, character) untouched; only the ownership binding
+  resets, so the next `register-player` re-claims the name with that browser's
+  current token.
+- [server/index.js](server/index.js): new `POST /admin/release-name`
+  (body `{ "name": "..." }`), guarded by the same `LOGS_TOKEN` timing-safe
+  check as `/admin/logs`. 503 without config, 401 bad token, 400 bad name,
+  404 unknown player.
+- [server/routes/auth.js](server/routes/auth.js): path exempted from the
+  session-auth middleware (it carries its own operator token).
+- New [server/__tests__/identity.test.js](server/__tests__/identity.test.js):
+  9 tests — token validation, claim/re-claim/taken, release-then-reclaim
+  (the stranded-name scenario), verifyOwner binding.
+
+## How to Verify
+- `npm test` → 368 tests across 23 files, all green.
+- Live fix for the reported case:
+  `curl -X POST "https://<host>/admin/release-name?token=$LOGS_TOKEN" -H 'Content-Type: application/json' -d '{"name":"Lukas"}'`
+  → then log in / rename to "Lukas" from the affected browser; the claim binds
+  to that browser's token.
+
+## Open Risks
+- Release is operator-only by design: SITE_PASSWORD is shared among all
+  players, so any self-service release UI would let anyone steal any name.
+- Multi-device use of one name remains first-browser-wins; a second device
+  needs the same localStorage token (or an operator release) — token
+  export/import would be the proper follow-up feature.
+
+---
+
 # Handoff: Docs sweep — sync all docs with post-hardening codebase (2026-07-17)
 
 ## What Changed
