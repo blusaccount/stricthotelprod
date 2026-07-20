@@ -9,7 +9,8 @@ import {
     normalizePoint,
     sanitizeColor,
     sanitizeSize,
-    getSocketIp
+    getSocketIp,
+    isValidDataUrl
 } from '../socket-utils.js';
 
 describe('sanitizeName', () => {
@@ -71,6 +72,52 @@ describe('validateCharacter', () => {
 
     it('rejects character with no pixels and no dataURL', () => {
         expect(validateCharacter({ evil: 'data' })).toBeNull();
+    });
+
+    // Regression test for #154 (stored XSS): a dataURL that breaks out of the
+    // `src="..."` HTML attribute used to pass because only the `data:image/`
+    // prefix was checked. It must now be stripped entirely so the malicious
+    // payload is never persisted or broadcast to other players.
+    it('strips attribute-breakout dataURL payloads (#154 stored XSS)', () => {
+        const payloads = [
+            'data:image/png" onerror="alert(1)',
+            'data:image/png"><script>alert(document.cookie)</script>',
+            'data:image/svg+xml;base64,PHN2Zz48c2NyaXB0PmFsZXJ0KDEpPC9zY3JpcHQ+PC9zdmc+', // svg not whitelisted (can embed <script>)
+        ];
+        for (const dataURL of payloads) {
+            const result = validateCharacter({ pixels: [[1]], dataURL });
+            expect(result).not.toHaveProperty('dataURL');
+            // The rest of the character (pixels) is still preserved.
+            expect(result).toHaveProperty('pixels');
+        }
+    });
+});
+
+describe('isValidDataUrl', () => {
+    it('accepts well-formed base64 image data URLs', () => {
+        expect(isValidDataUrl('data:image/png;base64,iVBORw0KGgoAAAA=')).toBe(true);
+        expect(isValidDataUrl('data:image/jpeg;base64,abcd')).toBe(true);
+        expect(isValidDataUrl('data:image/jpg;base64,abcd')).toBe(true);
+        expect(isValidDataUrl('data:image/gif;base64,abcd')).toBe(true);
+        expect(isValidDataUrl('data:image/webp;base64,abcd')).toBe(true);
+    });
+
+    it('rejects the #154 attribute-breakout stored-XSS payload', () => {
+        expect(isValidDataUrl('data:image/png" onerror="alert(1)')).toBe(false);
+        expect(isValidDataUrl('data:image/png"><script>alert(1)</script>')).toBe(false);
+        expect(isValidDataUrl("data:image/png' onerror='alert(1)")).toBe(false);
+    });
+
+    it('rejects non-whitelisted mime types and non-data-URLs', () => {
+        expect(isValidDataUrl('data:image/svg+xml;base64,abcd')).toBe(false);
+        expect(isValidDataUrl('data:text/html;base64,abcd')).toBe(false);
+        expect(isValidDataUrl('javascript:alert(1)')).toBe(false);
+    });
+
+    it('rejects non-string input', () => {
+        expect(isValidDataUrl(null)).toBe(false);
+        expect(isValidDataUrl(undefined)).toBe(false);
+        expect(isValidDataUrl(123)).toBe(false);
     });
 });
 

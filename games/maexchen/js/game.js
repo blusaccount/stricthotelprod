@@ -3,7 +3,7 @@
 // ============================
 
 (function() {
-    const { socket, $, showScreen, state } = window.MaexchenApp;
+    const { socket, $, showScreen, state, escapeAttr } = window.MaexchenApp;
 
     function escapeHtml(s) {
         const d = document.createElement('div');
@@ -692,7 +692,7 @@
 
             // Use dataURL for pixel art, or placeholder
             const avatarContent = char.dataURL
-                ? `<img src="${char.dataURL}" class="pixel-avatar-img" alt="${p.name}">`
+                ? `<img src="${escapeAttr(char.dataURL)}" class="pixel-avatar-img" alt="${escapeAttr(p.name)}">`
                 : `<div class="pixel-avatar-placeholder">?</div>`;
 
             playerEl.innerHTML = `

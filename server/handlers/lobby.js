@@ -2,7 +2,8 @@ import {
     validateGameType,
     validateRoomCode,
     sanitizeName,
-    validateCharacter
+    validateCharacter,
+    isValidDataUrl
 } from '../socket-utils.js';
 
 import {
@@ -209,7 +210,7 @@ export function registerLobbyHandlers(socket, io, { checkRateLimit, onlinePlayer
         const player = room.players.find(p => p.socketId === socket.id);
         if (!player) return;
 
-        if (!dataURL || typeof dataURL !== 'string' || !dataURL.startsWith('data:image/')) return;
+        if (!dataURL || typeof dataURL !== 'string' || !isValidDataUrl(dataURL)) return;
         if (dataURL.length > 70000) return;
         if (typeof target !== 'string' || target.length > 20) return;
 
