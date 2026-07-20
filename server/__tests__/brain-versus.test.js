@@ -41,6 +41,9 @@ function createMockIo() {
     };
 }
 
+// Score-updates from the same player are rate-limited to one per 150ms.
+const tick = () => new Promise((r) => setTimeout(r, 160));
+
 function setupMatch(gameId = 'math') {
     const io = createMockIo();
     const alice = createMockSocket('sock-A');
@@ -76,6 +79,99 @@ describe('brain-versus handlers', () => {
         const { code } = setupMatch();
         const room = rooms.get(code);
         expect(room.game.status).toBe('running');
+        expect(room.game.players.every((p) => p.score === 0 && !p.finished)).toBe(true);
+    });
+
+    describe('regular completion', () => {
+        it('determines the winner from server-tracked scores and pays each player exactly once', async () => {
+            const { io, alice, bob } = setupMatch('math');
+
+            alice.trigger('brain-versus-score-update', { score: 1 });
+            await tick();
+            alice.trigger('brain-versus-score-update', { score: 2 });
+            await tick();
+            alice.trigger('brain-versus-score-update', { score: 3 });
+            bob.trigger('brain-versus-score-update', { score: 1 });
+
+            await alice.trigger('brain-versus-finished');
+            await bob.trigger('brain-versus-finished');
+
+            const aliceCalls = mockAddBalance.mock.calls.filter((c) => c[0] === 'Alice');
+            const bobCalls = mockAddBalance.mock.calls.filter((c) => c[0] === 'Bob');
+            expect(aliceCalls).toHaveLength(1);
+            expect(aliceCalls[0][1]).toBe(20);
+            expect(aliceCalls[0][2]).toBe('brain_versus_reward');
+            expect(bobCalls).toHaveLength(1);
+            expect(bobCalls[0][1]).toBe(5);
+
+            const result = io.emits.find((e) => e.event === 'brain-versus-result');
+            expect(result.data.winner).toBe('Alice');
+            expect(result.data.isDraw).toBe(false);
+            expect(mockBump).toHaveBeenCalledWith('Alice', 'brain_versus_wins', 1);
+        });
+
+        it('a draw pays both players the draw amount once', async () => {
+            const { io, alice, bob } = setupMatch('math');
+
+            alice.trigger('brain-versus-score-update', { score: 1 });
+            bob.trigger('brain-versus-score-update', { score: 1 });
+
+            await alice.trigger('brain-versus-finished');
+            await bob.trigger('brain-versus-finished');
+
+            expect(mockAddBalance.mock.calls.filter((c) => c[0] === 'Alice')).toHaveLength(1);
+            expect(mockAddBalance.mock.calls.filter((c) => c[0] === 'Bob')).toHaveLength(1);
+            for (const call of mockAddBalance.mock.calls) expect(call[1]).toBe(10);
+
+            const result = io.emits.find((e) => e.event === 'brain-versus-result');
+            expect(result.data.isDraw).toBe(true);
+        });
+    });
+
+    describe('client-authoritative score exploit (#157)', () => {
+        it('rejects an implausible score-update jump and ignores a forged finished payload', async () => {
+            const { io, alice, bob } = setupMatch('math');
+
+            // Alice never actually answers anything, but tries to fake a
+            // huge score directly through the live-update channel.
+            alice.trigger('brain-versus-score-update', { score: 99999 });
+            bob.trigger('brain-versus-score-update', { score: 1 });
+
+            // And again through the finished event — the handler doesn't
+            // even read this payload anymore.
+            await alice.trigger('brain-versus-finished', { score: 99999 });
+            await bob.trigger('brain-versus-finished', { score: 0 });
+
+            const result = io.emits.find((e) => e.event === 'brain-versus-result');
+            expect(result.data.winner).toBe('Bob');
+            expect(result.data.players.find((p) => p.name === 'Alice').score).toBe(0);
+            expect(result.data.players.find((p) => p.name === 'Bob').score).toBe(1);
+
+            const aliceCalls = mockAddBalance.mock.calls.filter((c) => c[0] === 'Alice');
+            expect(aliceCalls[0][1]).toBe(5); // Alice loses, gets the loser payout only
+        });
+
+        it('a huge one-shot score-update is dropped, not clamped-and-accepted', () => {
+            const { code, alice } = setupMatch('math');
+            alice.trigger('brain-versus-score-update', { score: 9999 });
+            const room = rooms.get(code);
+            const player = room.game.players.find((p) => p.name === 'Alice');
+            expect(player.score).toBe(0);
+        });
+
+        it('reaction: a player who never lands a valid click gets the worst-case score, not 0', async () => {
+            const { io, alice, bob } = setupMatch('reaction');
+            // Alice sends nothing (all timeouts in real play). Bob genuinely
+            // lands one fast click.
+            bob.trigger('brain-versus-score-update', { score: 300 });
+
+            await alice.trigger('brain-versus-finished');
+            await bob.trigger('brain-versus-finished');
+
+            const result = io.emits.find((e) => e.event === 'brain-versus-result');
+            expect(result.data.winner).toBe('Bob'); // lower ms wins in reaction
+            expect(result.data.players.find((p) => p.name === 'Alice').score).toBe(10000);
+        });
     });
 
     describe('duplicate forfeit payout (#156)', () => {
