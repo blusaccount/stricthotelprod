@@ -4,6 +4,33 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Full repo review completed — file-for-file pass, tool sweep, spot-check verification (2026-07-20)
+
+## What Changed
+Closes out the multi-session repo review that ran across several prior handoff entries (code-review completion, audit pass, findings verification, spot-check, Nachtrag verification). No code touched — this entry documents scope and moves the review artifacts into `docs/review-2026-07/`.
+
+## Scope of the Review
+- **Full file-for-file review**: every server handler, route, and client game module read and assessed individually.
+- **Tool-assisted audit pass**: `npm test`, lint, targeted `grep` sweeps for known risk patterns (client-authoritative state, missing locks, `Math.random()` in gambling code), `npm audit`.
+- **Spot-check verification**: 10 randomly sampled files independently re-reviewed to sanity-check the file-for-file pass, plus a consolidated verification of all critical/high findings against the actual code (file:line anchors added, one weak rejection flagged).
+- **3 Nachträge (follow-up addenda)**: three additional findings verified and folded into the report after the initial pass closed — brain-versus rate-limit gap, roulette disconnect handling, and roulette dead code — including a displacement check against the existing Top-10 fix list (no displacement; folded into the MEDIUM group).
+
+## Artifacts
+Moved from repo root to `docs/review-2026-07/`:
+- `docs/review-2026-07/REVIEW_PROGRESS.md`
+- `docs/review-2026-07/REVIEW_FINDINGS.md`
+- `docs/review-2026-07/REVIEW_REPORT.md` — consolidated, verified report; start here. Top finding is a systemic TOCTOU/reentrancy pattern across casino socket handlers (no lock between the synchronous pre-check and the `await` balance mutation).
+
+## Tracking
+Findings from the review are tracked as GitHub issues **#152–#161**.
+
+## How to Verify
+- `ls docs/review-2026-07/` shows the three review files.
+- Read `docs/review-2026-07/REVIEW_REPORT.md` for the prioritized Top-10 fix list and full findings by severity.
+- Cross-check open issues #152–#161 against the report's Top-10 + HIGH/MEDIUM sections.
+
+---
+
 # Handoff: Docs sweep — sync all docs with post-hardening codebase (2026-07-17)
 
 ## What Changed
