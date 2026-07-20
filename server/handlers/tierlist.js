@@ -21,6 +21,34 @@ const tierlistState = {
     hydrated: new Set() // set of weekKeys that have been hydrated from DB
 };
 
+// Per-week mutex serializing every state transition (hydrate / place / remove)
+// for a given week. Mirrors `withStockTradeLock` (Fix #160): the cache is the
+// single source of truth for reads/broadcasts, but a check-then-act without a
+// lock lets `hydrateWeek`'s cache overwrite drop a concurrently-placed item
+// (DB has it, cache doesn't, `hydrated` stays set → divergence until restart)
+// and lets two concurrent writes broadcast a state that differs from what the
+// cache ends up holding. Running each transition to completion under this lock
+// keeps DB, cache, and broadcast in lockstep. Keyed on weekKey (not playerName)
+// because the community aggregation spans all players of the week.
+const weekLocks = new Map(); // weekKey -> Promise
+
+async function withWeekLock(weekKey, fn) {
+    while (weekLocks.has(weekKey)) {
+        await weekLocks.get(weekKey);
+    }
+
+    let resolve;
+    const lockPromise = new Promise(r => { resolve = r; });
+    weekLocks.set(weekKey, lockPromise);
+
+    try {
+        return await fn();
+    } finally {
+        weekLocks.delete(weekKey);
+        resolve();
+    }
+}
+
 // ─── Week Key (must match client-side algorithm) ───
 
 function getWeekKey() {
@@ -121,10 +149,32 @@ function computeSingleItemAgg(weekKey, itemIndex) {
 
 async function hydrateWeek(weekKey) {
     if (tierlistState.hydrated.has(weekKey)) return;
-    const placements = await getAllPlacementsForWeek(weekKey);
-    tierlistState.weekCache.set(weekKey, placements);
-    tierlistState.hydrated.add(weekKey);
-    pruneOldWeeks(weekKey);
+    await withWeekLock(weekKey, async () => {
+        // Re-check inside the lock: another join may have hydrated while we
+        // were queued behind it.
+        if (tierlistState.hydrated.has(weekKey)) return;
+
+        const placements = await getAllPlacementsForWeek(weekKey);
+
+        // Merge into the existing cache instead of overwriting it wholesale, so
+        // any placement written before this hydration acquired the lock is
+        // preserved rather than clobbered.
+        const existing = tierlistState.weekCache.get(weekKey);
+        if (!existing) {
+            tierlistState.weekCache.set(weekKey, placements);
+        } else {
+            for (const [playerName, itemMap] of placements) {
+                if (!existing.has(playerName)) existing.set(playerName, new Map());
+                const target = existing.get(playerName);
+                for (const [itemIndex, tier] of itemMap) {
+                    target.set(itemIndex, tier);
+                }
+            }
+        }
+
+        tierlistState.hydrated.add(weekKey);
+        pruneOldWeeks(weekKey);
+    });
 }
 
 // Ensure week exists in cache
@@ -214,27 +264,34 @@ export function registerTierlistHandlers(socket, io, { checkRateLimit, onlinePla
         if (!VALID_TIERS.includes(tier)) return;
 
         const weekKey = getWeekKey();
-        ensureWeekCache(weekKey);
 
-        // Persist
-        await upsertPlacement(playerName, weekKey, itemIndex, tier);
+        // Persist + cache mutation + aggregation + broadcast run to completion
+        // under the per-week lock so the emitted community aggregation always
+        // matches what is persisted and cached (no interleaving with a
+        // concurrent place/remove or an in-flight hydration).
+        await withWeekLock(weekKey, async () => {
+            ensureWeekCache(weekKey);
 
-        // Update in-memory cache
-        const weekData = tierlistState.weekCache.get(weekKey);
-        if (!weekData.has(playerName)) weekData.set(playerName, new Map());
-        weekData.get(playerName).set(itemIndex, tier);
+            // Persist
+            await upsertPlacement(playerName, weekKey, itemIndex, tier);
 
-        // Compute updated aggregation for this item
-        const itemAgg = computeSingleItemAgg(weekKey, itemIndex);
-        const rankerCount = weekData.size;
+            // Update in-memory cache
+            const weekData = tierlistState.weekCache.get(weekKey);
+            if (!weekData.has(playerName)) weekData.set(playerName, new Map());
+            weekData.get(playerName).set(itemIndex, tier);
 
-        // Broadcast to all
-        io.to(TIERLIST_ROOM).emit('tierlist-item-placed', {
-            itemIndex: itemIndex,
-            tier: tier,
-            playerName: playerName,
-            community: itemAgg,
-            rankerCount: rankerCount
+            // Compute updated aggregation for this item
+            const itemAgg = computeSingleItemAgg(weekKey, itemIndex);
+            const rankerCount = weekData.size;
+
+            // Broadcast to all
+            io.to(TIERLIST_ROOM).emit('tierlist-item-placed', {
+                itemIndex: itemIndex,
+                tier: tier,
+                playerName: playerName,
+                community: itemAgg,
+                rankerCount: rankerCount
+            });
         });
 
         // Achievement
@@ -254,31 +311,50 @@ export function registerTierlistHandlers(socket, io, { checkRateLimit, onlinePla
         if (!Number.isInteger(itemIndex) || itemIndex < 0 || itemIndex >= MAX_ITEMS) return;
 
         const weekKey = getWeekKey();
-        ensureWeekCache(weekKey);
 
-        // Persist removal
-        await removePlacement(playerName, weekKey, itemIndex);
+        // Same per-week lock as place-item so removal, its cache mutation, and
+        // the broadcast aggregation stay atomic w.r.t. concurrent transitions.
+        await withWeekLock(weekKey, async () => {
+            ensureWeekCache(weekKey);
 
-        // Update in-memory cache
-        const weekData = tierlistState.weekCache.get(weekKey);
-        if (weekData && weekData.has(playerName)) {
-            weekData.get(playerName).delete(itemIndex);
-            if (weekData.get(playerName).size === 0) weekData.delete(playerName);
-        }
+            // Persist removal
+            await removePlacement(playerName, weekKey, itemIndex);
 
-        // Compute updated aggregation for this item
-        const itemAgg = computeSingleItemAgg(weekKey, itemIndex);
-        const rankerCount = weekData ? weekData.size : 0;
+            // Update in-memory cache
+            const weekData = tierlistState.weekCache.get(weekKey);
+            if (weekData && weekData.has(playerName)) {
+                weekData.get(playerName).delete(itemIndex);
+                if (weekData.get(playerName).size === 0) weekData.delete(playerName);
+            }
 
-        // Broadcast
-        io.to(TIERLIST_ROOM).emit('tierlist-item-removed', {
-            itemIndex: itemIndex,
-            playerName: playerName,
-            community: itemAgg,
-            rankerCount: rankerCount
+            // Compute updated aggregation for this item
+            const itemAgg = computeSingleItemAgg(weekKey, itemIndex);
+            const rankerCount = weekData ? weekData.size : 0;
+
+            // Broadcast
+            io.to(TIERLIST_ROOM).emit('tierlist-item-removed', {
+                itemIndex: itemIndex,
+                playerName: playerName,
+                community: itemAgg,
+                rankerCount: rankerCount
+            });
         });
 
     } catch (err) { console.error('tierlist-remove-item error:', err.message); } });
+}
+
+// ─── Test hooks ───
+// Exposed for unit tests to inspect the authoritative cache and reset the
+// module-level state between cases. Not used by production code.
+export function __getTierlistState() {
+    return tierlistState;
+}
+
+export function __resetTierlistState() {
+    tierlistState.listeners.clear();
+    tierlistState.weekCache.clear();
+    tierlistState.hydrated.clear();
+    weekLocks.clear();
 }
 
 export function cleanupTierlistOnDisconnect(socketId, io) {
