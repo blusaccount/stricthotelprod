@@ -15,14 +15,6 @@
     var communityData = {};  // itemIndex -> { S,A,B,C,D,F,total,avgTier,avgScore }
     var currentView = 'my';  // 'my' | 'community'
 
-    var SORT_MODES = ['week', 'category', 'name'];
-    var SORT_STORAGE_KEY = 'tierlist-unranked-sort';
-    var unrankedSort = 'week';
-    try {
-        var savedSort = localStorage.getItem(SORT_STORAGE_KEY);
-        if (SORT_MODES.indexOf(savedSort) !== -1) unrankedSort = savedSort;
-    } catch (e) { /* localStorage unavailable */ }
-
     // ─── Within-Tier Ordering ───
     // The server only stores itemIndex -> tier (order inside a tier is
     // personal presentation, not part of the community aggregation), so the
@@ -154,21 +146,6 @@
 
     // ─── Render Functions ───
 
-    function sortUnrankedItems(items) {
-        if (unrankedSort === 'category') {
-            return items.slice().sort(function (a, b) {
-                if (a.category !== b.category) return a.category < b.category ? -1 : 1;
-                return a.name.localeCompare(b.name);
-            });
-        }
-        if (unrankedSort === 'name') {
-            return items.slice().sort(function (a, b) {
-                return a.name.localeCompare(b.name);
-            });
-        }
-        return items; // 'week' — keep the weekly shuffle order
-    }
-
     function renderMyView() {
         reconcileTierOrder();
 
@@ -190,22 +167,11 @@
         });
 
         // Everything unplaced goes to the pool
-        var unranked = weeklyItems.filter(function (item) {
+        weeklyItems.forEach(function (item) {
             var tier = myPlacements[item.index];
-            return !(tier && TIERS.indexOf(tier) !== -1);
-        });
-
-        // Fill the unranked pool in the chosen sort order
-        var lastCategory = null;
-        sortUnrankedItems(unranked).forEach(function (item) {
-            if (unrankedSort === 'category' && item.category !== lastCategory) {
-                lastCategory = item.category;
-                var label = document.createElement('div');
-                label.className = 'pool-category-label';
-                label.textContent = item.category.toUpperCase();
-                $unrankedPool.appendChild(label);
+            if (!(tier && TIERS.indexOf(tier) !== -1)) {
+                $unrankedPool.appendChild(createItemCard(item));
             }
-            $unrankedPool.appendChild(createItemCard(item));
         });
     }
 
@@ -294,29 +260,6 @@
         $communityView.style.display = '';
         renderCommunityView();
     });
-
-    // ─── Unranked Sort Controls ───
-
-    var $sortBtns = document.querySelectorAll('.sort-btn');
-
-    function updateSortButtons() {
-        $sortBtns.forEach(function (btn) {
-            btn.classList.toggle('active', btn.dataset.sort === unrankedSort);
-        });
-    }
-
-    $sortBtns.forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var mode = btn.dataset.sort;
-            if (SORT_MODES.indexOf(mode) === -1 || mode === unrankedSort) return;
-            unrankedSort = mode;
-            try { localStorage.setItem(SORT_STORAGE_KEY, mode); } catch (e) { /* ignore */ }
-            updateSortButtons();
-            renderMyView();
-        });
-    });
-
-    updateSortButtons();
 
     // ─── Edge Auto-Scroll while dragging ───
     // The browser's native drag auto-scroll zone is tiny (or absent for touch),
