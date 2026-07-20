@@ -4,7 +4,7 @@ Checkliste aller Repository-Dateien (aus `git ls-files`), gruppiert nach Modulen
 
 ## 1. server/ Kernmodule
 
-- [ ] server.js
+- [x] server.js
 - [x] server/achievements.js
 - [x] server/activity-feed.js
 - [x] server/brain-leaderboards.js
@@ -33,31 +33,31 @@ Checkliste aller Repository-Dateien (aus `git ls-files`), gruppiert nach Modulen
 - [x] server/tierlist-store.js
 - [x] server/turkish-lessons.js
 - [x] server/turkish-streaks.js
-- [ ] server/sql/persistence.sql
-- [ ] server/stock-providers/stooq.js
-- [ ] server/stock-providers/yahoo-chart.js
-- [ ] server/__tests__/blackjack.test.js
-- [ ] server/__tests__/character-store.test.js
-- [ ] server/__tests__/crash.test.js
-- [ ] server/__tests__/currency.test.js
-- [ ] server/__tests__/daily-streak.test.js
-- [ ] server/__tests__/game-logic.test.js
-- [ ] server/__tests__/lobby-watchparty.test.js
-- [ ] server/__tests__/lol-betting.test.js
-- [ ] server/__tests__/lol-match-checker.test.js
-- [ ] server/__tests__/loop-machine.test.js
-- [ ] server/__tests__/pictochat-store.test.js
-- [ ] server/__tests__/plinko.test.js
-- [ ] server/__tests__/portfolio-history.test.js
-- [ ] server/__tests__/riot-api.test.js
-- [ ] server/__tests__/room-manager.test.js
-- [ ] server/__tests__/roulette.test.js
-- [ ] server/__tests__/socket-utils.test.js
-- [ ] server/__tests__/stock-game.test.js
-- [ ] server/__tests__/stocks-route.test.js
-- [ ] server/__tests__/strictly7s.test.js
-- [ ] server/__tests__/turkish-lessons.test.js
-- [ ] server/__tests__/watchparty.test.js
+- [x] server/sql/persistence.sql
+- [x] server/stock-providers/stooq.js
+- [x] server/stock-providers/yahoo-chart.js
+- [x] server/__tests__/blackjack.test.js
+- [x] server/__tests__/character-store.test.js
+- [x] server/__tests__/crash.test.js
+- [x] server/__tests__/currency.test.js
+- [x] server/__tests__/daily-streak.test.js
+- [x] server/__tests__/game-logic.test.js
+- [x] server/__tests__/lobby-watchparty.test.js
+- [x] server/__tests__/lol-betting.test.js
+- [x] server/__tests__/lol-match-checker.test.js
+- [x] server/__tests__/loop-machine.test.js
+- [x] server/__tests__/pictochat-store.test.js
+- [x] server/__tests__/plinko.test.js
+- [x] server/__tests__/portfolio-history.test.js
+- [x] server/__tests__/riot-api.test.js
+- [x] server/__tests__/room-manager.test.js
+- [x] server/__tests__/roulette.test.js
+- [x] server/__tests__/socket-utils.test.js
+- [x] server/__tests__/stock-game.test.js
+- [x] server/__tests__/stocks-route.test.js
+- [x] server/__tests__/strictly7s.test.js
+- [x] server/__tests__/turkish-lessons.test.js
+- [x] server/__tests__/watchparty.test.js
 
 ## 2. server/handlers/
 
@@ -159,51 +159,51 @@ Checkliste aller Repository-Dateien (aus `git ls-files`), gruppiert nach Modulen
 
 ## 6. public/
 
-- [ ] public/achievements.html
-- [ ] public/ambience.js
-- [ ] public/contacts.html
-- [ ] public/contacts.js
-- [ ] public/index.html
-- [ ] public/lobby-watchparty.js
-- [ ] public/lobby.css
-- [ ] public/lobby.js
-- [ ] public/login.html
-- [ ] public/nostalgiabait/gamecube/gamecube.css
-- [ ] public/nostalgiabait/gamecube/gamecube.html
-- [ ] public/nostalgiabait/gamecube/gamecube.js
-- [ ] public/nostalgiabait/gamecube/index.html
-- [ ] public/nostalgiabait/index.html
-- [ ] public/nostalgiabait/ps1/index.html
-- [ ] public/nostalgiabait/ps2/index.html
-- [ ] public/nostalgiabait/ps2/ps2.css
-- [ ] public/nostalgiabait/ps2/ps2.html
-- [ ] public/nostalgiabait/ps2/ps2.js
-- [ ] public/nostalgiabait/shared/player.css
-- [ ] public/nostalgiabait/shared/player.js
-- [ ] public/nostalgiabait/wiissbb/index.html
-- [ ] public/pictochat.js
-- [ ] public/shell.css
-- [ ] public/shell.js
-- [ ] public/shop.html
-- [ ] public/shop.js
-- [ ] public/soundboard.js
+- [x] public/achievements.html
+- [x] public/ambience.js
+- [x] public/contacts.html
+- [x] public/contacts.js
+- [x] public/index.html
+- [x] public/lobby-watchparty.js
+- [x] public/lobby.css
+- [x] public/lobby.js
+- [x] public/login.html
+- [x] public/nostalgiabait/gamecube/gamecube.css
+- [x] public/nostalgiabait/gamecube/gamecube.html
+- [x] public/nostalgiabait/gamecube/gamecube.js
+- [x] public/nostalgiabait/gamecube/index.html
+- [x] public/nostalgiabait/index.html
+- [x] public/nostalgiabait/ps1/index.html
+- [x] public/nostalgiabait/ps2/index.html
+- [x] public/nostalgiabait/ps2/ps2.css
+- [x] public/nostalgiabait/ps2/ps2.html
+- [x] public/nostalgiabait/ps2/ps2.js
+- [x] public/nostalgiabait/shared/player.css
+- [x] public/nostalgiabait/shared/player.js
+- [x] public/nostalgiabait/wiissbb/index.html
+- [x] public/pictochat.js
+- [x] public/shell.css
+- [x] public/shell.js
+- [x] public/shop.html
+- [x] public/shop.js
+- [x] public/soundboard.js
 
 ## 7. scripts/, Dockerfile, docker-compose.yml, Configs
 
-- [ ] Dockerfile
-- [ ] docker-compose.yml
-- [ ] .dockerignore
-- [ ] .env.example
-- [ ] .gitignore
-- [ ] package.json
-- [ ] scripts/import-tierlist-items.mjs
-- [ ] scripts/tierlist-titles.txt
-- [ ] .github/copilot-instructions.md
-- [ ] .github/workflows/keep-alive.yml
-- [ ] .vscode/settings.json
-- [ ] AGENTS.md
-- [ ] HANDOFF.md
-- [ ] LLM_AGENT_GUIDE.md
-- [ ] PLANS.md
-- [ ] README.md
-- [ ] docs/EVENTS.md
+- [x] Dockerfile
+- [x] docker-compose.yml
+- [x] .dockerignore
+- [x] .env.example
+- [x] .gitignore
+- [x] package.json
+- [x] scripts/import-tierlist-items.mjs
+- [x] scripts/tierlist-titles.txt
+- [x] .github/copilot-instructions.md
+- [x] .github/workflows/keep-alive.yml
+- [x] .vscode/settings.json
+- [x] AGENTS.md
+- [x] HANDOFF.md
+- [x] LLM_AGENT_GUIDE.md
+- [x] PLANS.md
+- [x] README.md
+- [x] docs/EVENTS.md
