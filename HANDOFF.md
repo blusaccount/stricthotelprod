@@ -4,16 +4,12 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
-# Handoff: Tierlist UX — unranked pool sorting, within-tier rearranging, drag edge auto-scroll (2026-07-20)
+# Handoff: Tierlist UX — within-tier rearranging, drag edge auto-scroll (2026-07-20)
 
 ## What Changed
-Client-only changes to Thing of the Week (`games/tierlist/`); no server or schema changes.
+Client-only changes to Thing of the Week (`games/tierlist/`); no server or schema changes. (An unranked-pool sort control was built first, then removed on user request — the ask was ordering inside tier rows.)
 
-### Unranked pool sorting (`index.html`, `js/game.js`)
-- New SORT control in the unranked-pool header: MIX (weekly shuffle, default) / CATEGORY / A-Z.
-- CATEGORY groups the pool by item category with small gold group labels; choice persists in `localStorage` (`tierlist-unranked-sort`).
-
-### Within-tier rearranging (`js/game.js`)
+### Within-tier rearranging (`index.html`, `js/game.js`)
 - Items can now be dropped at a specific position inside a tier row (and re-dragged to rearrange); a gold insert marker shows the drop position while dragging (desktop + touch).
 - Order is presentation-only: the server still stores just `itemIndex -> tier`, so per-tier order lives client-side in `localStorage` (`tierlist-order-<weekKey>`, pruned on week change) and is reconciled against server placements on every render (stale entries dropped, missing ones appended).
 - Same-tier drops are pure rearranges and do NOT emit `tierlist-place-item`.
@@ -24,8 +20,8 @@ Client-only changes to Thing of the Week (`games/tierlist/`); no server or schem
 
 ## How to Verify
 - `npm test` (all pass; no server changes).
-- Manual: open `/games/tierlist/`, use the SORT buttons on the pool (CATEGORY shows group labels; choice survives reload). Drag an item from the pool while holding the pointer near the top of the screen — page scrolls up. Drop items into a tier at a specific spot (gold marker), drag within the tier to rearrange, reload — order persists.
-- Verified headless via Playwright: sort modes + persistence, place → S tier, within-tier reorder via drop-at-left-edge, order persistence across reload, touch auto-scroll (scrollY decreased while finger held at top edge).
+- Manual: open `/games/tierlist/`. Drag an item from the pool while holding the pointer near the top of the screen — page scrolls up. Drop items into a tier at a specific spot (gold marker), drag within the tier to rearrange, reload — order persists.
+- Verified headless via Playwright: place → S tier, within-tier reorder via drop-at-left-edge, order persistence across reload, touch auto-scroll (scrollY decreased while finger held at top edge).
 
 ## Open Risks / Notes
 - Within-tier order is per-browser (localStorage), not synced across devices — placements themselves still sync via the server.

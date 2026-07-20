@@ -185,57 +185,11 @@
         }
 
         .unranked-label {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 6px;
             padding: 8px 12px;
             background: var(--ds-highlight);
             font-size: 10px;
             color: var(--ds-text-dim);
             border-bottom: 1px solid var(--ds-border);
-        }
-
-        .sort-controls {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .sort-controls .sort-title {
-            margin-right: 2px;
-        }
-
-        .sort-btn {
-            padding: 4px 8px;
-            border: 1px solid var(--ds-border);
-            background: var(--ds-surface);
-            color: var(--ds-text-dim);
-            font-family: inherit;
-            font-size: 9px;
-            cursor: pointer;
-            transition: all 0.15s;
-        }
-
-        .sort-btn:hover:not(.active) {
-            background: var(--ds-highlight);
-            color: var(--ds-text);
-        }
-
-        .sort-btn.active {
-            background: var(--ds-gold);
-            border-color: var(--ds-gold);
-            color: #000;
-        }
-
-        .pool-category-label {
-            width: 100%;
-            padding: 4px 2px 0;
-            font-size: 9px;
-            color: var(--ds-gold);
-            letter-spacing: 1px;
-            user-select: none;
         }
 
         .unranked-pool {
@@ -538,15 +492,7 @@
 
         <!-- UNRANKED POOL -->
         <div class="unranked-section">
-            <div class="unranked-label">
-                <span>UNRANKED — drag items to a tier</span>
-                <div class="sort-controls">
-                    <span class="sort-title">SORT:</span>
-                    <button class="sort-btn" data-sort="week" id="sort-week">MIX</button>
-                    <button class="sort-btn" data-sort="category" id="sort-category">CATEGORY</button>
-                    <button class="sort-btn" data-sort="name" id="sort-name">A-Z</button>
-                </div>
-            </div>
+            <div class="unranked-label">UNRANKED — drag items to a tier</div>
             <div class="unranked-pool" id="unranked-pool"></div>
         </div>
     </div>
