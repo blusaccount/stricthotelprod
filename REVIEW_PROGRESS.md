@@ -92,22 +92,22 @@ Checkliste aller Repository-Dateien (aus `git ls-files`), gruppiert nach Modulen
 
 ## 4. shared/
 
-- [ ] shared/css/arcade-override.css
-- [ ] shared/css/theme.css
-- [ ] shared/js/achievement-toast.js
-- [ ] shared/js/ambient.js
-- [ ] shared/js/avatars.js
-- [ ] shared/js/chat.js
-- [ ] shared/js/core.js
-- [ ] shared/js/creator.js
-- [ ] shared/js/emotes.js
-- [ ] shared/js/iframe-helper.js
-- [ ] shared/js/lobby.js
-- [ ] shared/js/reactions.js
-- [ ] shared/js/socket-init.js
-- [ ] shared/js/starfield-parallax.js
-- [ ] shared/js/stock-ticker.js
-- [ ] shared/js/tts.js
+- [x] shared/css/arcade-override.css
+- [x] shared/css/theme.css
+- [x] shared/js/achievement-toast.js
+- [x] shared/js/ambient.js
+- [x] shared/js/avatars.js
+- [x] shared/js/chat.js
+- [x] shared/js/core.js
+- [x] shared/js/creator.js
+- [x] shared/js/emotes.js
+- [x] shared/js/iframe-helper.js
+- [x] shared/js/lobby.js
+- [x] shared/js/reactions.js
+- [x] shared/js/socket-init.js
+- [x] shared/js/starfield-parallax.js
+- [x] shared/js/stock-ticker.js
+- [x] shared/js/tts.js
 
 ## 5. games/
 
