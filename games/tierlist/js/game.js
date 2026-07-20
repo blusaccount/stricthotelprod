@@ -15,6 +15,64 @@
     var communityData = {};  // itemIndex -> { S,A,B,C,D,F,total,avgTier,avgScore }
     var currentView = 'my';  // 'my' | 'community'
 
+    var SORT_MODES = ['week', 'category', 'name'];
+    var SORT_STORAGE_KEY = 'tierlist-unranked-sort';
+    var unrankedSort = 'week';
+    try {
+        var savedSort = localStorage.getItem(SORT_STORAGE_KEY);
+        if (SORT_MODES.indexOf(savedSort) !== -1) unrankedSort = savedSort;
+    } catch (e) { /* localStorage unavailable */ }
+
+    // ─── Within-Tier Ordering ───
+    // The server only stores itemIndex -> tier (order inside a tier is
+    // personal presentation, not part of the community aggregation), so the
+    // arrangement within each tier row lives client-side, per week.
+
+    var ORDER_STORAGE_PREFIX = 'tierlist-order-';
+    var tierOrder = {}; // tier -> [itemIndex, ...]
+
+    function loadTierOrder() {
+        tierOrder = {};
+        try {
+            var raw = localStorage.getItem(ORDER_STORAGE_PREFIX + weekKey);
+            if (raw) tierOrder = JSON.parse(raw) || {};
+        } catch (e) { tierOrder = {}; }
+        TIERS.forEach(function (tier) {
+            if (!Array.isArray(tierOrder[tier])) tierOrder[tier] = [];
+        });
+        // Drop order entries from previous weeks
+        try {
+            for (var i = localStorage.length - 1; i >= 0; i--) {
+                var key = localStorage.key(i);
+                if (key && key.indexOf(ORDER_STORAGE_PREFIX) === 0 && key !== ORDER_STORAGE_PREFIX + weekKey) {
+                    localStorage.removeItem(key);
+                }
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    function saveTierOrder() {
+        try {
+            localStorage.setItem(ORDER_STORAGE_PREFIX + weekKey, JSON.stringify(tierOrder));
+        } catch (e) { /* ignore */ }
+    }
+
+    function reconcileTierOrder() {
+        // Drop stale entries, then append any placed item missing from its
+        // tier's order list (e.g. placements synced from another device).
+        TIERS.forEach(function (tier) {
+            tierOrder[tier] = (tierOrder[tier] || []).filter(function (idx) {
+                return myPlacements[idx] === tier;
+            });
+        });
+        weeklyItems.forEach(function (item) {
+            var tier = myPlacements[item.index];
+            if (tier && TIERS.indexOf(tier) !== -1 && tierOrder[tier].indexOf(item.index) === -1) {
+                tierOrder[tier].push(item.index);
+            }
+        });
+    }
+
     // DOM refs
     var $unrankedPool = document.getElementById('unranked-pool');
     var $myView = document.getElementById('my-ranking-view');
@@ -96,7 +154,24 @@
 
     // ─── Render Functions ───
 
+    function sortUnrankedItems(items) {
+        if (unrankedSort === 'category') {
+            return items.slice().sort(function (a, b) {
+                if (a.category !== b.category) return a.category < b.category ? -1 : 1;
+                return a.name.localeCompare(b.name);
+            });
+        }
+        if (unrankedSort === 'name') {
+            return items.slice().sort(function (a, b) {
+                return a.name.localeCompare(b.name);
+            });
+        }
+        return items; // 'week' — keep the weekly shuffle order
+    }
+
     function renderMyView() {
+        reconcileTierOrder();
+
         // Clear all tier rows and unranked pool
         TIERS.forEach(function (tier) {
             var zone = document.querySelector('.tier-items[data-tier="' + tier + '"]');
@@ -104,16 +179,33 @@
         });
         $unrankedPool.innerHTML = '';
 
-        // Place items
-        weeklyItems.forEach(function (item) {
-            var card = createItemCard(item);
+        // Fill tier rows in the player's arranged order
+        TIERS.forEach(function (tier) {
+            var zone = document.querySelector('.tier-items[data-tier="' + tier + '"]');
+            if (!zone) return;
+            tierOrder[tier].forEach(function (idx) {
+                var item = weeklyItems[idx];
+                if (item) zone.appendChild(createItemCard(item));
+            });
+        });
+
+        // Everything unplaced goes to the pool
+        var unranked = weeklyItems.filter(function (item) {
             var tier = myPlacements[item.index];
-            if (tier && TIERS.indexOf(tier) !== -1) {
-                var zone = document.querySelector('.tier-items[data-tier="' + tier + '"]');
-                if (zone) zone.appendChild(card);
-            } else {
-                $unrankedPool.appendChild(card);
+            return !(tier && TIERS.indexOf(tier) !== -1);
+        });
+
+        // Fill the unranked pool in the chosen sort order
+        var lastCategory = null;
+        sortUnrankedItems(unranked).forEach(function (item) {
+            if (unrankedSort === 'category' && item.category !== lastCategory) {
+                lastCategory = item.category;
+                var label = document.createElement('div');
+                label.className = 'pool-category-label';
+                label.textContent = item.category.toUpperCase();
+                $unrankedPool.appendChild(label);
             }
+            $unrankedPool.appendChild(createItemCard(item));
         });
     }
 
@@ -203,6 +295,112 @@
         renderCommunityView();
     });
 
+    // ─── Unranked Sort Controls ───
+
+    var $sortBtns = document.querySelectorAll('.sort-btn');
+
+    function updateSortButtons() {
+        $sortBtns.forEach(function (btn) {
+            btn.classList.toggle('active', btn.dataset.sort === unrankedSort);
+        });
+    }
+
+    $sortBtns.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var mode = btn.dataset.sort;
+            if (SORT_MODES.indexOf(mode) === -1 || mode === unrankedSort) return;
+            unrankedSort = mode;
+            try { localStorage.setItem(SORT_STORAGE_KEY, mode); } catch (e) { /* ignore */ }
+            updateSortButtons();
+            renderMyView();
+        });
+    });
+
+    updateSortButtons();
+
+    // ─── Edge Auto-Scroll while dragging ───
+    // The browser's native drag auto-scroll zone is tiny (or absent for touch),
+    // which makes it hard to carry an item from the pool up to the tier rows.
+    // While a drag is active, holding the pointer near the top/bottom of the
+    // viewport scrolls the page, faster the closer it is to the edge.
+
+    var SCROLL_EDGE = 140;      // px from viewport edge where auto-scroll kicks in
+    var SCROLL_MAX_SPEED = 22;  // px per frame at the very edge
+
+    var autoScrollSpeed = 0;
+    var autoScrollRaf = null;
+
+    function updateAutoScroll(clientY) {
+        var vh = window.innerHeight;
+        var speed = 0;
+        if (clientY < SCROLL_EDGE) {
+            var topRatio = Math.min(1, Math.max(0, 1 - clientY / SCROLL_EDGE));
+            speed = -SCROLL_MAX_SPEED * topRatio;
+        } else if (clientY > vh - SCROLL_EDGE) {
+            var bottomRatio = Math.min(1, Math.max(0, 1 - (vh - clientY) / SCROLL_EDGE));
+            speed = SCROLL_MAX_SPEED * bottomRatio;
+        }
+        autoScrollSpeed = speed;
+        if (speed !== 0 && autoScrollRaf === null) {
+            autoScrollRaf = requestAnimationFrame(autoScrollStep);
+        }
+    }
+
+    function autoScrollStep() {
+        if (autoScrollSpeed === 0) {
+            autoScrollRaf = null;
+            return;
+        }
+        window.scrollBy(0, autoScrollSpeed);
+        // Keep the touch drop-zone highlight in sync with zones scrolling
+        // past a stationary finger
+        if (touchState && touchState.moved) {
+            highlightZoneAt(touchState.lastX, touchState.lastY);
+        }
+        autoScrollRaf = requestAnimationFrame(autoScrollStep);
+    }
+
+    function stopAutoScroll() {
+        autoScrollSpeed = 0;
+        if (autoScrollRaf !== null) {
+            cancelAnimationFrame(autoScrollRaf);
+            autoScrollRaf = null;
+        }
+    }
+
+    // ─── Insert Position & Marker ───
+    // Where in a (wrapping) tier row a dragged card would land, based on the
+    // pointer position: before the first card whose row contains the pointer
+    // and whose left half the pointer is in.
+
+    function getInsertPosition(zone, x, y) {
+        var cards = zone.querySelectorAll('.item-card:not(.dragging)');
+        for (var i = 0; i < cards.length; i++) {
+            var r = cards[i].getBoundingClientRect();
+            if (y < r.top) return i;
+            if (y <= r.bottom && x < r.left + r.width / 2) return i;
+        }
+        return cards.length;
+    }
+
+    var $insertMarker = document.createElement('div');
+    $insertMarker.className = 'insert-marker';
+
+    function showInsertMarker(zone, x, y) {
+        if (!zone.dataset.tier) { removeInsertMarker(); return; }
+        var cards = zone.querySelectorAll('.item-card:not(.dragging)');
+        var pos = getInsertPosition(zone, x, y);
+        if (pos < cards.length) {
+            zone.insertBefore($insertMarker, cards[pos]);
+        } else {
+            zone.appendChild($insertMarker);
+        }
+    }
+
+    function removeInsertMarker() {
+        if ($insertMarker.parentNode) $insertMarker.parentNode.removeChild($insertMarker);
+    }
+
     // ─── Desktop Drag & Drop ───
 
     var dragItemIndex = null;
@@ -217,13 +415,20 @@
     function onDragEnd() {
         this.classList.remove('dragging');
         clearDropHighlights();
+        stopAutoScroll();
         dragItemIndex = null;
     }
+
+    // Desktop: track pointer position during the whole drag for edge auto-scroll
+    document.addEventListener('dragover', function (e) {
+        if (dragItemIndex !== null) updateAutoScroll(e.clientY);
+    });
 
     function onDragOver(e) {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         this.classList.add('drag-over');
+        showInsertMarker(this, e.clientX, e.clientY);
     }
 
     function onDragLeave() {
@@ -233,12 +438,13 @@
     function onDrop(e) {
         e.preventDefault();
         this.classList.remove('drag-over');
+        removeInsertMarker();
         var idx = parseInt(e.dataTransfer.getData('text/plain'), 10);
         if (isNaN(idx)) return;
 
         var tier = this.dataset.tier;
         if (tier) {
-            placeItem(idx, tier);
+            placeItem(idx, tier, getInsertPosition(this, e.clientX, e.clientY));
         } else {
             removeItem(idx);
         }
@@ -248,6 +454,7 @@
         document.querySelectorAll('.drag-over').forEach(function (el) {
             el.classList.remove('drag-over');
         });
+        removeInsertMarker();
     }
 
     // Attach drop zones
@@ -285,6 +492,8 @@
             card: card,
             startX: touch.clientX,
             startY: touch.clientY,
+            lastX: touch.clientX,
+            lastY: touch.clientY,
             moved: false
         };
 
@@ -297,16 +506,25 @@
         e.preventDefault();
         var touch = e.touches[0];
         touchState.moved = true;
+        touchState.lastX = touch.clientX;
+        touchState.lastY = touch.clientY;
         positionGhost(touchState.ghost, touch.clientX, touch.clientY);
+        updateAutoScroll(touch.clientY);
+        highlightZoneAt(touch.clientX, touch.clientY);
+    }
 
-        // Highlight drop zone
+    function highlightZoneAt(x, y) {
+        if (!touchState) return;
         clearDropHighlights();
         touchState.ghost.style.display = 'none';
-        var elem = document.elementFromPoint(touch.clientX, touch.clientY);
+        var elem = document.elementFromPoint(x, y);
         touchState.ghost.style.display = '';
         if (elem) {
             var zone = elem.closest('.tier-items, .unranked-pool');
-            if (zone) zone.classList.add('drag-over');
+            if (zone) {
+                zone.classList.add('drag-over');
+                showInsertMarker(zone, x, y);
+            }
         }
     }
 
@@ -319,13 +537,14 @@
         touchState.ghost.remove();
 
         // Find drop target
+        removeInsertMarker();
         var elem = document.elementFromPoint(touch.clientX, touch.clientY);
         if (elem && touchState.moved) {
             var zone = elem.closest('.tier-items, .unranked-pool');
             if (zone) {
                 var tier = zone.dataset.tier;
                 if (tier) {
-                    placeItem(touchState.itemIndex, tier);
+                    placeItem(touchState.itemIndex, tier, getInsertPosition(zone, touch.clientX, touch.clientY));
                 } else {
                     removeItem(touchState.itemIndex);
                 }
@@ -334,6 +553,7 @@
 
         touchState.card.classList.remove('dragging');
         clearDropHighlights();
+        stopAutoScroll();
         touchState = null;
     }
 
@@ -349,27 +569,48 @@
             touchState.ghost.remove();
             touchState.card.classList.remove('dragging');
             clearDropHighlights();
+            stopAutoScroll();
             touchState = null;
         }
     });
 
     // ─── Place / Remove Logic ───
 
-    function placeItem(itemIndex, tier) {
+    function placeItem(itemIndex, tier, insertPos) {
         if (!TIERS.includes(tier)) return;
-        // Skip if already in that tier
-        if (myPlacements[itemIndex] === tier) return;
+        var prevTier = myPlacements[itemIndex];
+
+        // Update within-tier order: pull out of any list, insert at position
+        TIERS.forEach(function (t) {
+            var i = (tierOrder[t] || []).indexOf(itemIndex);
+            if (i !== -1) tierOrder[t].splice(i, 1);
+        });
+        if (!Array.isArray(tierOrder[tier])) tierOrder[tier] = [];
+        if (typeof insertPos !== 'number' || insertPos < 0 || insertPos > tierOrder[tier].length) {
+            insertPos = tierOrder[tier].length;
+        }
+        tierOrder[tier].splice(insertPos, 0, itemIndex);
+        saveTierOrder();
 
         // Optimistic update
         myPlacements[itemIndex] = tier;
         renderMyView();
 
-        // Emit to server
-        socket.emit('tierlist-place-item', { itemIndex: itemIndex, tier: tier });
+        // Same-tier drops are just a rearrange — the server only cares about
+        // which tier an item is in
+        if (prevTier !== tier) {
+            socket.emit('tierlist-place-item', { itemIndex: itemIndex, tier: tier });
+        }
     }
 
     function removeItem(itemIndex) {
         if (!myPlacements[itemIndex]) return;
+
+        TIERS.forEach(function (t) {
+            var i = (tierOrder[t] || []).indexOf(itemIndex);
+            if (i !== -1) tierOrder[t].splice(i, 1);
+        });
+        saveTierOrder();
 
         // Optimistic update
         delete myPlacements[itemIndex];
@@ -395,6 +636,9 @@
 
         // Compute weekly items from the week key
         weeklyItems = TI.getWeeklyItems(weekKey);
+
+        // Restore this week's within-tier arrangement
+        loadTierOrder();
 
         // Update header
         $weekLabel.textContent = formatMondayDate(weekKey);
