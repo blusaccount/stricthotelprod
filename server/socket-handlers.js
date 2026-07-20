@@ -74,11 +74,15 @@ export function checkStockTradeCooldown(playerName, minIntervalMs = 400) {
     return true;
 }
 
-function checkStrictly7sCooldown(socketId, minIntervalMs = 1200) {
+// Keyed by player identity (player.name) since the issue-#152 handler
+// hardening — a per-socket key let a player dodge the spin cooldown via a
+// second tab or reconnect. The strictly7s handler calls this inside its
+// per-player action lock, so a queued duplicate click is rejected here.
+function checkStrictly7sCooldown(playerName, minIntervalMs = 1200) {
     const now = Date.now();
-    const lastSpinAt = strictly7sSpinCooldown.get(socketId) || 0;
+    const lastSpinAt = strictly7sSpinCooldown.get(playerName) || 0;
     if (now - lastSpinAt < minIntervalMs) return false;
-    strictly7sSpinCooldown.set(socketId, now);
+    strictly7sSpinCooldown.set(playerName, now);
     return true;
 }
 

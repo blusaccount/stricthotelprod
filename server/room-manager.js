@@ -2,8 +2,19 @@ import { getAlivePlayers, nextAlivePlayerIndex } from './game-logic.js';
 import { addBalance } from './currency.js';
 import { pushActivity } from './activity-feed.js';
 import { emitToUser } from './socket-utils.js';
+import { actionKey, withActionLock } from './lib/action-guard.js';
 
 // ============== ROOM MANAGEMENT ==============
+
+// Serialize room-state mutations that straddle a wallet await (issue #152):
+// Mäxchen bet placement, game start, challenge/believe resolution and
+// player removal all share this per-room lock, so no two of them can
+// interleave around each other's awaits. Nothing running inside the lock
+// may take it again (removePlayerFromRoom and the maexchen handlers never
+// call each other), so there is no reentrant path.
+export function roomActionLock(room, fn) {
+    return withActionLock(actionKey('room', room.code), fn);
+}
 
 export const rooms = new Map();
 export const socketToRoom = new Map(); // socketId -> roomCode (O(1) lookup)
@@ -114,7 +125,17 @@ export function sendTurnStart(io, room) {
 // Shared logic to award pot to winner and emit game-over
 
 export async function awardPotAndEndGame(io, room, winnerName, alive) {
-    const pot = room.game.pot || 0;
+    // Exactly-once guard (issue #152): capture and clear room.game
+    // synchronously BEFORE the payout await — the brain-versus forfeit
+    // pattern. Three entry points funnel here (challenge, believe-maexchen,
+    // disconnect via removePlayerFromRoom); whichever runs first wins this
+    // check-and-clear atomically, every later caller sees null and bails
+    // instead of paying the pot again.
+    const game = room.game;
+    if (!game) return;
+    room.game = null;
+
+    const pot = game.pot || 0;
 
     if (pot > 0 && alive[0]) {
         const newBalance = await addBalance(alive[0].name, pot, 'maexchen_pot_win', { roomCode: room.code });
@@ -133,7 +154,7 @@ export async function awardPotAndEndGame(io, room, winnerName, alive) {
     // Achievement bumps for every player who participated.
     try {
         const { bump } = await import('./achievements.js');
-        for (const p of room.game.players) {
+        for (const p of game.players) {
             await bump(p.name, 'mae_rounds', 1).catch(() => {});
         }
         if (winnerName && winnerName !== 'Niemand') {
@@ -143,115 +164,120 @@ export async function awardPotAndEndGame(io, room, winnerName, alive) {
 
     io.to(room.code).emit('game-over', {
         winnerName,
-        players: room.game.players.map(p => ({ name: p.name, lives: p.lives })),
+        players: game.players.map(p => ({ name: p.name, lives: p.lives })),
         pot
     });
-    room.game = null;
 }
 
 // ============== REMOVE PLAYER FROM ROOM ==============
 // Shared logic for leave-room and disconnect handlers
 
 export async function removePlayerFromRoom(io, socketId, room) {
-    const playerIndex = room.players.findIndex(p => p.socketId === socketId);
-    if (playerIndex === -1) return;
+    // Serialized with the Mäxchen bet/start/resolve handlers via the same
+    // per-room lock (issue #152): a removal can no longer interleave with a
+    // bet adjustment's wallet await (which used to strand deducted coins in
+    // an orphaned room.bets entry) or race a game-ending pot payout.
+    return roomActionLock(room, async () => {
+        const playerIndex = room.players.findIndex(p => p.socketId === socketId);
+        if (playerIndex === -1) return;
 
-    const playerName = room.players[playerIndex].name;
-    const gameType = room.gameType;
+        const playerName = room.players[playerIndex].name;
+        const gameType = room.gameType;
 
-    // Handle active game state
-    if (room.game) {
-        if (room.gameType === 'watchparty') {
-            const gpIdx = room.game.players.findIndex(p => p.socketId === socketId);
-            if (gpIdx !== -1) {
-                room.game.players.splice(gpIdx, 1);
-            }
-            // Remove from room.players first so both lists are consistent before broadcast
-            room.players.splice(playerIndex, 1);
-            socketToRoom.delete(socketId);
-
-            io.to(room.code).emit('player-disconnected', {
-                playerName,
-                players: room.game.players.map(p => ({ name: p.name, lives: p.lives }))
-            });
-        } else {
-            const gamePlayer = room.game.players.find(p => p.socketId === socketId);
-            if (gamePlayer && gamePlayer.lives > 0) {
-                gamePlayer.lives = 0;
+        // Handle active game state
+        if (room.game) {
+            if (room.gameType === 'watchparty') {
+                const gpIdx = room.game.players.findIndex(p => p.socketId === socketId);
+                if (gpIdx !== -1) {
+                    room.game.players.splice(gpIdx, 1);
+                }
+                // Remove from room.players first so both lists are consistent before broadcast
+                room.players.splice(playerIndex, 1);
+                socketToRoom.delete(socketId);
 
                 io.to(room.code).emit('player-disconnected', {
                     playerName,
                     players: room.game.players.map(p => ({ name: p.name, lives: p.lives }))
                 });
+            } else {
+                const gamePlayer = room.game.players.find(p => p.socketId === socketId);
+                if (gamePlayer && gamePlayer.lives > 0) {
+                    gamePlayer.lives = 0;
 
-                if (room.game.players[room.game.currentIndex].socketId === socketId) {
-                    room.game.currentIndex = nextAlivePlayerIndex(room.game, room.game.currentIndex);
-                    room.game.previousAnnouncement = null;
-                    room.game.isFirstTurn = true;
-                }
+                    io.to(room.code).emit('player-disconnected', {
+                        playerName,
+                        players: room.game.players.map(p => ({ name: p.name, lives: p.lives }))
+                    });
 
-                const alive = getAlivePlayers(room.game);
-                if (alive.length <= 1) {
-                    const winnerName = alive[0]?.name || 'Niemand';
-                    await awardPotAndEndGame(io, room, winnerName, alive);
-                } else {
-                    sendTurnStart(io, room);
+                    if (room.game.players[room.game.currentIndex].socketId === socketId) {
+                        room.game.currentIndex = nextAlivePlayerIndex(room.game, room.game.currentIndex);
+                        room.game.previousAnnouncement = null;
+                        room.game.isFirstTurn = true;
+                    }
+
+                    const alive = getAlivePlayers(room.game);
+                    if (alive.length <= 1) {
+                        const winnerName = alive[0]?.name || 'Niemand';
+                        await awardPotAndEndGame(io, room, winnerName, alive);
+                    } else {
+                        sendTurnStart(io, room);
+                    }
                 }
             }
         }
-    }
 
-    // Remove from room players (skip if already removed in watchparty branch above)
-    const alreadyRemoved = room.game && room.gameType === 'watchparty';
-    if (!alreadyRemoved) {
-        room.players.splice(playerIndex, 1);
-        socketToRoom.delete(socketId);
-    }
+        // Remove from room players (skip if already removed in watchparty branch above)
+        const alreadyRemoved = room.game && room.gameType === 'watchparty';
+        if (!alreadyRemoved) {
+            room.players.splice(playerIndex, 1);
+            socketToRoom.delete(socketId);
+        }
 
-    // Clean up bet for leaving player and reset requiredBet if no bets remain
-    if (room.bets) {
-        const leavingBet = room.bets[socketId] || 0;
-        delete room.bets[socketId];
+        // Clean up bet for leaving player and reset requiredBet if no bets remain
+        if (room.bets) {
+            const leavingBet = room.bets[socketId] || 0;
+            delete room.bets[socketId];
 
-        // Refund pre-deducted bet if game hasn't started. Awaited so the
-        // subsequent broadcast reflects the final state — earlier this was
-        // fire-and-forget which could leave the wallet/broadcast inconsistent
-        // when the DB write failed.
-        if (leavingBet > 0 && !room.game) {
-            try {
-                await addBalance(playerName, leavingBet, 'maexchen_bet_refund', { roomCode: room.code });
-            } catch (err) {
-                console.error('bet refund error:', err.message);
+            // Refund pre-deducted bet if game hasn't started. Awaited so the
+            // subsequent broadcast reflects the final state — earlier this was
+            // fire-and-forget which could leave the wallet/broadcast inconsistent
+            // when the DB write failed.
+            if (leavingBet > 0 && !room.game) {
+                try {
+                    await addBalance(playerName, leavingBet, 'maexchen_bet_refund', { roomCode: room.code });
+                } catch (err) {
+                    console.error('bet refund error:', err.message);
+                }
+            }
+
+            const anyBets = room.players.some(p => (room.bets[p.socketId] || 0) > 0);
+            if (!anyBets) {
+                room.requiredBet = 0;
+            }
+            if (!room.game && room.players.length > 0) {
+                const betsInfo = room.players.map(p => ({
+                    name: p.name,
+                    bet: room.bets[p.socketId] || 0
+                }));
+                io.to(room.code).emit('bets-update', { bets: betsInfo, requiredBet: room.requiredBet || 0 });
             }
         }
 
-        const anyBets = room.players.some(p => (room.bets[p.socketId] || 0) > 0);
-        if (!anyBets) {
-            room.requiredBet = 0;
+        // Delete empty room or reassign host
+        if (room.players.length === 0) {
+            rooms.delete(room.code);
+            broadcastLobbies(io, gameType);
+            console.log(`Room ${room.code} deleted`);
+        } else {
+            if (room.hostId === socketId) {
+                room.hostId = room.players[0].socketId;
+            }
+            broadcastRoomState(io, room);
+            broadcastLobbies(io, gameType);
+            io.to(room.code).emit('player-left', { playerName });
         }
-        if (!room.game && room.players.length > 0) {
-            const betsInfo = room.players.map(p => ({
-                name: p.name,
-                bet: room.bets[p.socketId] || 0
-            }));
-            io.to(room.code).emit('bets-update', { bets: betsInfo, requiredBet: room.requiredBet || 0 });
-        }
-    }
 
-    // Delete empty room or reassign host
-    if (room.players.length === 0) {
-        rooms.delete(room.code);
-        broadcastLobbies(io, gameType);
-        console.log(`Room ${room.code} deleted`);
-    } else {
-        if (room.hostId === socketId) {
-            room.hostId = room.players[0].socketId;
-        }
-        broadcastRoomState(io, room);
-        broadcastLobbies(io, gameType);
-        io.to(room.code).emit('player-left', { playerName });
-    }
-
-    console.log(`${playerName} left ${room.code}`);
-    return playerName;
+        console.log(`${playerName} left ${room.code}`);
+        return playerName;
+    });
 }

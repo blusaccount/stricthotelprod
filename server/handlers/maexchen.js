@@ -3,7 +3,7 @@ import {
     rollRank, rollName, rollDice, isMaexchen,
     getAlivePlayers, nextAlivePlayerIndex
 } from '../game-logic.js';
-import { getRoom, sendTurnStart, awardPotAndEndGame } from '../room-manager.js';
+import { getRoom, sendTurnStart, awardPotAndEndGame, roomActionLock } from '../room-manager.js';
 import { getBalance, deductBalance, addBalance, withWallet } from '../currency.js';
 import { emitBalanceUpdate, emitToUser } from '../socket-utils.js';
 
@@ -15,81 +15,91 @@ export function registerMaexchenHandlers(socket, io, deps) {
         if (!data || typeof data !== 'object') return;
 
         const room = getRoom(socket.id);
-        if (!room || room.game) return; // Only in waiting room, before game starts
+        if (!room) return;
         if (room.gameType !== 'maexchen') return; // Only for Mäxchen
 
         const amount = Number(data.amount);
         if (!Number.isInteger(amount) || amount < 0 || amount > 1000) return;
 
-        const player = room.players.find(p => p.socketId === socket.id);
-        if (!player) return;
+        // Room lock (issue #152): the oldBet read, the room.game check and
+        // the room.bets write used to straddle the withWallet await, so a
+        // double-click double-deducted (both saw the same oldBet) and a
+        // concurrent start-game could turn a mid-flight bet into deducted
+        // coins that never reached the pot. Player removal takes the same
+        // lock, so membership can't change during the wallet await either.
+        await roomActionLock(room, async () => {
+            if (room.game) return; // Only in waiting room, before game starts
 
-        // Initialize bets map if needed
-        if (!room.bets) room.bets = {};
+            const player = room.players.find(p => p.socketId === socket.id);
+            if (!player) return;
 
-        const oldBet = room.bets[socket.id] || 0;
-        if (amount === oldBet) return; // No change
+            // Initialize bets map if needed
+            if (!room.bets) room.bets = {};
 
-        // Enforce uniform bet: first non-zero bet sets the required amount
-        if (amount > 0) {
-            if (room.requiredBet === undefined || room.requiredBet === 0) {
-                room.requiredBet = amount;
-            } else if (amount !== room.requiredBet) {
-                socket.emit('error', { message: `Alle müssen ${room.requiredBet} Coins setzen!` });
+            const oldBet = room.bets[socket.id] || 0;
+            if (amount === oldBet) return; // No change
+
+            // Enforce uniform bet: first non-zero bet sets the required amount
+            if (amount > 0) {
+                if (room.requiredBet === undefined || room.requiredBet === 0) {
+                    room.requiredBet = amount;
+                } else if (amount !== room.requiredBet) {
+                    socket.emit('error', { message: `Alle müssen ${room.requiredBet} Coins setzen!` });
+                    return;
+                }
+            }
+
+            // Refund old bet + deduct new bet must be atomic. Without the tx the
+            // previous code would refund, fail the second deduct, and try to
+            // re-deduct as a "compensation" — but if the player had spent the
+            // refunded coins in another tab in between, the re-deduct also
+            // fails and the pot is silently short. withWallet rolls everything
+            // back on failure.
+            const adjustResult = await withWallet(async (client) => {
+                if (oldBet > 0) {
+                    const refunded = await addBalance(
+                        player.name, oldBet, 'maexchen_bet_refund', { roomCode: room.code }, client
+                    );
+                    if (refunded === null) return { ok: false };
+                }
+                if (amount > 0) {
+                    const newBalance = await deductBalance(
+                        player.name, amount, 'maexchen_bet', { roomCode: room.code }, client
+                    );
+                    if (newBalance === null) return { ok: false, reason: 'insufficient' };
+                    return { ok: true, balance: newBalance };
+                }
+                // Pure removal (amount === 0, oldBet >= 0) — read final balance.
+                return { ok: true, balance: await getBalance(player.name, client) };
+            });
+
+            if (!adjustResult.ok) {
+                socket.emit('error', { message: 'Nicht genug Coins!' });
                 return;
             }
-        }
+            if (typeof adjustResult.balance === 'number') {
+                emitToUser(io, player.name, 'balance-update', { balance: adjustResult.balance });
+            }
 
-        // Refund old bet + deduct new bet must be atomic. Without the tx the
-        // previous code would refund, fail the second deduct, and try to
-        // re-deduct as a "compensation" — but if the player had spent the
-        // refunded coins in another tab in between, the re-deduct also
-        // fails and the pot is silently short. withWallet rolls everything
-        // back on failure.
-        const adjustResult = await withWallet(async (client) => {
-            if (oldBet > 0) {
-                const refunded = await addBalance(
-                    player.name, oldBet, 'maexchen_bet_refund', { roomCode: room.code }, client
-                );
-                if (refunded === null) return { ok: false };
+            room.bets[socket.id] = amount;
+
+            // If all non-zero bets are removed, reset requiredBet
+            if (amount === 0) {
+                const anyBets = room.players.some(p => (room.bets[p.socketId] || 0) > 0);
+                if (!anyBets) {
+                    room.requiredBet = 0;
+                }
             }
-            if (amount > 0) {
-                const newBalance = await deductBalance(
-                    player.name, amount, 'maexchen_bet', { roomCode: room.code }, client
-                );
-                if (newBalance === null) return { ok: false, reason: 'insufficient' };
-                return { ok: true, balance: newBalance };
-            }
-            // Pure removal (amount === 0, oldBet >= 0) — read final balance.
-            return { ok: true, balance: await getBalance(player.name, client) };
+
+            // Broadcast updated bets to room
+            const betsInfo = room.players.map(p => ({
+                name: p.name,
+                bet: room.bets[p.socketId] || 0
+            }));
+            io.to(room.code).emit('bets-update', { bets: betsInfo, requiredBet: room.requiredBet || 0 });
+
+            console.log(`${player.name} bet ${amount} coins in ${room.code}`);
         });
-
-        if (!adjustResult.ok) {
-            socket.emit('error', { message: 'Nicht genug Coins!' });
-            return;
-        }
-        if (typeof adjustResult.balance === 'number') {
-            emitToUser(io, player.name, 'balance-update', { balance: adjustResult.balance });
-        }
-
-        room.bets[socket.id] = amount;
-
-        // If all non-zero bets are removed, reset requiredBet
-        if (amount === 0) {
-            const anyBets = room.players.some(p => (room.bets[p.socketId] || 0) > 0);
-            if (!anyBets) {
-                room.requiredBet = 0;
-            }
-        }
-
-        // Broadcast updated bets to room
-        const betsInfo = room.players.map(p => ({
-            name: p.name,
-            bet: room.bets[p.socketId] || 0
-        }));
-        io.to(room.code).emit('bets-update', { bets: betsInfo, requiredBet: room.requiredBet || 0 });
-
-        console.log(`${player.name} bet ${amount} coins in ${room.code}`);
     } catch (err) { console.error('place-bet error:', err.message); } });
 
     // --- Start Game ---
@@ -98,50 +108,57 @@ export function registerMaexchenHandlers(socket, io, deps) {
         const room = getRoom(socket.id);
         if (!room) return;
 
-        if (room.hostId !== socket.id) {
-            socket.emit('error', { message: 'Nur der Host kann starten!' });
-            return;
-        }
-        if (room.gameType !== 'watchparty' && room.players.length < 2) {
-            socket.emit('error', { message: 'Mindestens 2 Spieler!' });
-            return;
-        }
+        // Same room lock as place-bet (issue #152): the pot is summed and
+        // room.game set only while no bet adjustment is mid-wallet-await,
+        // so a bet can no longer be deducted without landing in the pot.
+        await roomActionLock(room, async () => {
+            if (room.game) return; // already started (double start-game)
 
-        // Bets are already deducted at place-bet time — just sum the pot
-        let pot = 0;
-        if (room.gameType === 'maexchen' && room.bets) {
-            for (const p of room.players) {
-                pot += room.bets[p.socketId] || 0;
+            if (room.hostId !== socket.id) {
+                socket.emit('error', { message: 'Nur der Host kann starten!' });
+                return;
             }
-        }
+            if (room.gameType !== 'watchparty' && room.players.length < 2) {
+                socket.emit('error', { message: 'Mindestens 2 Spieler!' });
+                return;
+            }
 
-        room.game = {
-            players: room.players.map(p => ({
-                socketId: p.socketId,
-                name: p.name,
-                lives: STARTING_LIVES,
-                character: p.character
-            })),
-            currentIndex: 0,
-            previousAnnouncement: null,
-            isFirstTurn: true,
-            currentRoll: null,
-            hasRolled: false,
-            pot: pot || 0
-        };
+            // Bets are already deducted at place-bet time — just sum the pot
+            let pot = 0;
+            if (room.gameType === 'maexchen' && room.bets) {
+                for (const p of room.players) {
+                    pot += room.bets[p.socketId] || 0;
+                }
+            }
 
-        io.to(room.code).emit('game-started', {
-            players: room.game.players.map(p => ({
-                name: p.name, lives: p.lives, character: p.character,
-                isHost: p.socketId === room.hostId
-            })),
-            pot: room.game.pot,
-            hostId: room.hostId
+            room.game = {
+                players: room.players.map(p => ({
+                    socketId: p.socketId,
+                    name: p.name,
+                    lives: STARTING_LIVES,
+                    character: p.character
+                })),
+                currentIndex: 0,
+                previousAnnouncement: null,
+                isFirstTurn: true,
+                currentRoll: null,
+                hasRolled: false,
+                pot: pot || 0
+            };
+
+            io.to(room.code).emit('game-started', {
+                players: room.game.players.map(p => ({
+                    name: p.name, lives: p.lives, character: p.character,
+                    isHost: p.socketId === room.hostId
+                })),
+                pot: room.game.pot,
+                hostId: room.hostId
+            });
+
+            sendTurnStart(io, room);
+            broadcastLobbies(io, room.gameType);
+            console.log(`Game started in ${room.code} (pot: ${pot})`);
         });
-
-        sendTurnStart(io, room);
-        broadcastLobbies(io, room.gameType);
-        console.log(`Game started in ${room.code} (pot: ${pot})`);
     } catch (err) { console.error('start-game error:', err.message); } });
 
     // --- Roll Dice ---
@@ -230,36 +247,44 @@ export function registerMaexchenHandlers(socket, io, deps) {
     socket.on('challenge', async () => { try {
         if (!checkRateLimit(socket)) return;
         const room = getRoom(socket.id);
-        if (!room || !room.game) return;
-        const game = room.game;
+        if (!room) return;
 
-        const challenger = game.players[game.currentIndex];
-        if (challenger.socketId !== socket.id) return;
-        if (game.isFirstTurn || !game.previousAnnouncement) return;
+        // Room lock (issue #152): a doubled challenge (or challenge +
+        // believe) used to pass the room.game check together while the
+        // first one was awaiting the pot payout — double life loss and a
+        // double awardPotAndEndGame. The duplicate now runs after the
+        // original and fails the re-checked game/announcement state.
+        await roomActionLock(room, async () => {
+            if (!room.game) return;
+            const game = room.game;
 
-        const announcerIndex = game.previousAnnouncement.playerIndex;
-        const announcer = game.players[announcerIndex];
-        const announced = game.previousAnnouncement.value;
-        const actual = game.previousAnnouncement.actualRoll;
+            const challenger = game.players[game.currentIndex];
+            if (challenger.socketId !== socket.id) return;
+            if (game.isFirstTurn || !game.previousAnnouncement) return;
 
-        const wasLying = rollRank(actual.value) < rollRank(announced);
-        const livesLost = isMaexchen(announced) ? 2 : 1;
+            const announcerIndex = game.previousAnnouncement.playerIndex;
+            const announcer = game.players[announcerIndex];
+            const announced = game.previousAnnouncement.value;
+            const actual = game.previousAnnouncement.actualRoll;
 
-        const loserIndex = wasLying ? announcerIndex : game.currentIndex;
-        game.players[loserIndex].lives = Math.max(0, game.players[loserIndex].lives - livesLost);
+            const wasLying = rollRank(actual.value) < rollRank(announced);
+            const livesLost = isMaexchen(announced) ? 2 : 1;
 
-        io.to(room.code).emit('challenge-result', {
-            challengerName: challenger.name,
-            announcerName: announcer.name,
-            actualRoll: actual,
-            actualName: rollName(actual.value),
-            announced,
-            announcedName: rollName(announced),
-            wasLying,
-            loserName: game.players[loserIndex].name,
-            loserIndex,
-            livesLost,
-            players: game.players.map(p => ({ name: p.name, lives: p.lives }))
+            const loserIndex = wasLying ? announcerIndex : game.currentIndex;
+            game.players[loserIndex].lives = Math.max(0, game.players[loserIndex].lives - livesLost);
+
+            io.to(room.code).emit('challenge-result', {
+                challengerName: challenger.name,
+                announcerName: announcer.name,
+                actualRoll: actual,
+                actualName: rollName(actual.value),
+                announced,
+                announcedName: rollName(announced),
+                wasLying,
+                loserName: game.players[loserIndex].name,
+                loserIndex,
+                livesLost,
+                players: game.players.map(p => ({ name: p.name, lives: p.lives }))
         });
 
         const alive = getAlivePlayers(game);
@@ -276,30 +301,35 @@ export function registerMaexchenHandlers(socket, io, deps) {
         game.isFirstTurn = true;
 
         setTimeout(() => { try { if (room.game) sendTurnStart(io, room); } catch (e) { console.error('sendTurnStart error:', e.message); } }, 3000);
+        });
     } catch (err) { console.error('challenge error:', err.message); } });
 
     // --- Believe Mäxchen ---
     socket.on('believe-maexchen', async () => { try {
         if (!checkRateLimit(socket)) return;
         const room = getRoom(socket.id);
-        if (!room || !room.game) return;
-        const game = room.game;
+        if (!room) return;
 
-        const believer = game.players[game.currentIndex];
-        if (believer.socketId !== socket.id) return;
-        if (!game.previousAnnouncement || !isMaexchen(game.previousAnnouncement.value)) return;
+        // Same room lock + re-check as 'challenge' (issue #152).
+        await roomActionLock(room, async () => {
+            if (!room.game) return;
+            const game = room.game;
 
-        const actual = game.previousAnnouncement.actualRoll;
-        const wasRealMaexchen = isMaexchen(actual.value);
+            const believer = game.players[game.currentIndex];
+            if (believer.socketId !== socket.id) return;
+            if (!game.previousAnnouncement || !isMaexchen(game.previousAnnouncement.value)) return;
 
-        game.players[game.currentIndex].lives = Math.max(0, game.players[game.currentIndex].lives - 2);
+            const actual = game.previousAnnouncement.actualRoll;
+            const wasRealMaexchen = isMaexchen(actual.value);
 
-        io.to(room.code).emit('maexchen-believed', {
-            believerName: believer.name,
-            actualRoll: actual,
-            actualName: rollName(actual.value),
-            wasRealMaexchen,
-            players: game.players.map(p => ({ name: p.name, lives: p.lives }))
+            game.players[game.currentIndex].lives = Math.max(0, game.players[game.currentIndex].lives - 2);
+
+            io.to(room.code).emit('maexchen-believed', {
+                believerName: believer.name,
+                actualRoll: actual,
+                actualName: rollName(actual.value),
+                wasRealMaexchen,
+                players: game.players.map(p => ({ name: p.name, lives: p.lives }))
         });
 
         const alive = getAlivePlayers(game);
@@ -316,5 +346,6 @@ export function registerMaexchenHandlers(socket, io, deps) {
         game.isFirstTurn = true;
 
         setTimeout(() => { try { if (room.game) sendTurnStart(io, room); } catch (e) { console.error('sendTurnStart error:', e.message); } }, 3000);
+        });
     } catch (err) { console.error('believe-maexchen error:', err.message); } });
 }

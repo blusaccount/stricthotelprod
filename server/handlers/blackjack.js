@@ -4,6 +4,7 @@ import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
 import { STANDARD_CASINO_BETS, validateCasinoBet, emitToUser } from '../socket-utils.js';
 import { pushActivity } from '../activity-feed.js';
+import { actionKey, withActionLock } from '../lib/action-guard.js';
 
 // ============================================================================
 // Blackjack — single player vs. dealer, 6-deck shoe.
@@ -148,6 +149,15 @@ function publicState(g, includeHole = false) {
 export function registerBlackjackHandlers(socket, io, deps) {
     const { checkRateLimit, onlinePlayers } = deps;
 
+    // All hand-mutating events of one player share this lock (issue #152):
+    // the games.get/finished prechecks used to run before the balance
+    // await, so two fast bj-deal or bj-double events both passed them and
+    // double-deducted. Under the lock a duplicate runs only after the
+    // original committed and fails its re-checked precondition instead.
+    function withPlayerHandLock(playerName, fn) {
+        return withActionLock(actionKey('blackjack', playerName), fn);
+    }
+
     socket.on('bj-state', () => { try {
         if (!checkRateLimit(socket, 5)) return;
         const player = onlinePlayers.get(socket.id);
@@ -163,39 +173,41 @@ export function registerBlackjackHandlers(socket, io, deps) {
             socket.emit('bj-error', { message: 'Not logged in' });
             return;
         }
-        const existing = games.get(player.name);
-        if (existing && !existing.finished) {
-            socket.emit('bj-error', { message: 'Finish your current hand first' });
-            return;
-        }
         const bet = validateCasinoBet(data?.bet);
         if (bet === null) {
             socket.emit('bj-error', { message: 'Invalid bet amount' });
             return;
         }
-        const balance = await deductBalance(player.name, bet, 'blackjack_bet', { bet });
-        if (balance === null) {
-            socket.emit('bj-error', { message: 'Not enough coins' });
-            return;
-        }
+        await withPlayerHandLock(player.name, async () => {
+            const existing = games.get(player.name);
+            if (existing && !existing.finished) {
+                socket.emit('bj-error', { message: 'Finish your current hand first' });
+                return;
+            }
+            const balance = await deductBalance(player.name, bet, 'blackjack_bet', { bet });
+            if (balance === null) {
+                socket.emit('bj-error', { message: 'Not enough coins' });
+                return;
+            }
 
-        const g = {
-            playerHand: [deal(), deal()],
-            dealerHand: [deal(), deal()],
-            bet,
-            doubled: false,
-            finished: false,
-            lastActiveAt: Date.now()
-        };
-        games.set(player.name, g);
+            const g = {
+                playerHand: [deal(), deal()],
+                dealerHand: [deal(), deal()],
+                bet,
+                doubled: false,
+                finished: false,
+                lastActiveAt: Date.now()
+            };
+            games.set(player.name, g);
 
-        // Auto-settle on natural blackjack.
-        if (isBlackjack(g.playerHand) || isBlackjack(g.dealerHand)) {
-            await finishGame(player.name, socket, balance, io, onlinePlayers);
-            return;
-        }
-        emitToUser(io, player.name, 'balance-update', { balance });
-        socket.emit('bj-state-result', publicState(g, false));
+            // Auto-settle on natural blackjack.
+            if (isBlackjack(g.playerHand) || isBlackjack(g.dealerHand)) {
+                await finishGame(player.name, socket, balance, io, onlinePlayers);
+                return;
+            }
+            emitToUser(io, player.name, 'balance-update', { balance });
+            socket.emit('bj-state-result', publicState(g, false));
+        });
     } catch (err) {
         console.error('bj-deal error:', err.message);
         socket.emit('bj-error', { message: 'Deal failed.' });
@@ -205,18 +217,20 @@ export function registerBlackjackHandlers(socket, io, deps) {
         if (!checkRateLimit(socket, 10)) return;
         const player = onlinePlayers.get(socket.id);
         if (!player || !player.name) return;
-        const g = games.get(player.name);
-        if (!g || g.finished) {
-            socket.emit('bj-error', { message: 'No active hand' });
-            return;
-        }
-        g.playerHand.push(deal());
-        g.lastActiveAt = Date.now();
-        if (isBust(g.playerHand) || handTotal(g.playerHand).total === 21) {
-            await finishGame(player.name, socket, null, io, onlinePlayers);
-            return;
-        }
-        socket.emit('bj-state-result', publicState(g, false));
+        await withPlayerHandLock(player.name, async () => {
+            const g = games.get(player.name);
+            if (!g || g.finished) {
+                socket.emit('bj-error', { message: 'No active hand' });
+                return;
+            }
+            g.playerHand.push(deal());
+            g.lastActiveAt = Date.now();
+            if (isBust(g.playerHand) || handTotal(g.playerHand).total === 21) {
+                await finishGame(player.name, socket, null, io, onlinePlayers);
+                return;
+            }
+            socket.emit('bj-state-result', publicState(g, false));
+        });
     } catch (err) {
         console.error('bj-hit error:', err.message);
         socket.emit('bj-error', { message: 'Hit failed.' });
@@ -226,12 +240,14 @@ export function registerBlackjackHandlers(socket, io, deps) {
         if (!checkRateLimit(socket, 10)) return;
         const player = onlinePlayers.get(socket.id);
         if (!player || !player.name) return;
-        const g = games.get(player.name);
-        if (!g || g.finished) {
-            socket.emit('bj-error', { message: 'No active hand' });
-            return;
-        }
-        await finishGame(player.name, socket, null, io, onlinePlayers);
+        await withPlayerHandLock(player.name, async () => {
+            const g = games.get(player.name);
+            if (!g || g.finished) {
+                socket.emit('bj-error', { message: 'No active hand' });
+                return;
+            }
+            await finishGame(player.name, socket, null, io, onlinePlayers);
+        });
     } catch (err) {
         console.error('bj-stand error:', err.message);
         socket.emit('bj-error', { message: 'Stand failed.' });
@@ -241,47 +257,49 @@ export function registerBlackjackHandlers(socket, io, deps) {
         if (!checkRateLimit(socket, 5)) return;
         const player = onlinePlayers.get(socket.id);
         if (!player || !player.name) return;
-        const g = games.get(player.name);
-        if (!g || g.finished) {
-            socket.emit('bj-error', { message: 'No active hand' });
-            return;
-        }
-        if (g.playerHand.length !== 2) {
-            socket.emit('bj-error', { message: 'Can only double on first action' });
-            return;
-        }
-        const balanceAfterDouble = await deductBalance(player.name, g.bet, 'blackjack_double', { bet: g.bet });
-        if (balanceAfterDouble === null) {
-            socket.emit('bj-error', { message: 'Not enough coins to double' });
-            return;
-        }
-        const originalBet = g.bet;
-        g.doubled = true;
-        g.bet = g.bet * 2;
-        g.playerHand.push(deal());
-        g.lastActiveAt = Date.now();
-        emitToUser(io, player.name, 'balance-update', { balance: balanceAfterDouble });
-        try {
-            await finishGame(player.name, socket, null, io, onlinePlayers);
-        } catch (finishErr) {
-            // finishGame crashed (DB hiccup etc.) AFTER we already booked the
-            // double-down stake. Roll back the extra stake and leave the
-            // hand resolvable so the player isn't stuck mid-game.
-            console.error('bj-double finish error:', finishErr.message);
-            try {
-                const refunded = await addBalance(player.name, originalBet, 'blackjack_double_refund', { bet: originalBet });
-                if (refunded !== null) {
-                    emitToUser(io, player.name, 'balance-update', { balance: refunded });
-                }
-            } catch (refundErr) {
-                console.error('bj-double refund failed:', refundErr.message);
+        await withPlayerHandLock(player.name, async () => {
+            const g = games.get(player.name);
+            if (!g || g.finished) {
+                socket.emit('bj-error', { message: 'No active hand' });
+                return;
             }
-            g.doubled = false;
-            g.bet = originalBet;
-            // Pop the auto-drawn card so the player can hit/stand again.
-            g.playerHand.pop();
-            socket.emit('bj-error', { message: 'Double failed — stake refunded.' });
-        }
+            if (g.playerHand.length !== 2) {
+                socket.emit('bj-error', { message: 'Can only double on first action' });
+                return;
+            }
+            const balanceAfterDouble = await deductBalance(player.name, g.bet, 'blackjack_double', { bet: g.bet });
+            if (balanceAfterDouble === null) {
+                socket.emit('bj-error', { message: 'Not enough coins to double' });
+                return;
+            }
+            const originalBet = g.bet;
+            g.doubled = true;
+            g.bet = g.bet * 2;
+            g.playerHand.push(deal());
+            g.lastActiveAt = Date.now();
+            emitToUser(io, player.name, 'balance-update', { balance: balanceAfterDouble });
+            try {
+                await finishGame(player.name, socket, null, io, onlinePlayers);
+            } catch (finishErr) {
+                // finishGame crashed (DB hiccup etc.) AFTER we already booked the
+                // double-down stake. Roll back the extra stake and leave the
+                // hand resolvable so the player isn't stuck mid-game.
+                console.error('bj-double finish error:', finishErr.message);
+                try {
+                    const refunded = await addBalance(player.name, originalBet, 'blackjack_double_refund', { bet: originalBet });
+                    if (refunded !== null) {
+                        emitToUser(io, player.name, 'balance-update', { balance: refunded });
+                    }
+                } catch (refundErr) {
+                    console.error('bj-double refund failed:', refundErr.message);
+                }
+                g.doubled = false;
+                g.bet = originalBet;
+                // Pop the auto-drawn card so the player can hit/stand again.
+                g.playerHand.pop();
+                socket.emit('bj-error', { message: 'Double failed — stake refunded.' });
+            }
+        });
     } catch (err) {
         console.error('bj-double error:', err.message);
         socket.emit('bj-error', { message: 'Double failed.' });
@@ -357,3 +375,9 @@ export {
     cardValue,
     BLACKJACK_BETS
 };
+
+// Test-only: stack the shoe so handler-level tests get deterministic hands.
+// Must hold at least RESHUFFLE_AT cards or ensureShoe() replaces it.
+export function _setTestShoe(cards) {
+    shoe = cards;
+}

@@ -4,6 +4,7 @@ import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
 import { STANDARD_CASINO_BETS, validateCasinoBet, emitToUser } from '../socket-utils.js';
 import { pushActivity } from '../activity-feed.js';
+import { actionKey, withActionLock, claimOnce } from '../lib/action-guard.js';
 
 // ============================================================================
 // Crash — single global round, exponential multiplier curve, server-authoritative.
@@ -199,13 +200,24 @@ export function stopCrashLoop() {
 
 // ---------- per-socket handlers ---------- //
 
+// The ONLY code path that pays out a cash-out. Called from two entry
+// points that can fire in the same tick — the auto-cashout sweep in the
+// running loop and the manual crash-cashout handler. Exactly-once is
+// guaranteed by the synchronous claim on cashedAt below: it sits before
+// the first await, so on the single-threaded event loop whichever caller
+// runs first wins the claim atomically and the other sees it set. The
+// tick loop deliberately takes no lock (it must never wait on another
+// player's wallet op); this claim is its entire guarantee.
 async function resolveCashout(playerName, atMultiplier, isAuto = false) {
     const b = round.bets.get(playerName);
-    if (!b || b.cashedAt) return null;
+    if (!b) return null;
     const m = +atMultiplier.toFixed(4);
+    if (!claimOnce(b, 'cashedAt', m)) return null;
+    // Claim won — from here on this cash-out is ours alone. If addBalance
+    // below throws, the claim intentionally stays set: the booking may
+    // have landed server-side, and releasing would risk a double payout.
     // Floor (not round) so the house never gives away fractional SC.
     const payout = Math.floor(b.bet * m);
-    b.cashedAt = m;
     b.payout = payout;
     b.isAuto = isAuto;
     const updated = await addBalance(playerName, payout, 'crash_payout', {
@@ -281,14 +293,6 @@ export function registerCrashHandlers(socket, io, deps) {
             socket.emit('crash-error', { message: 'Not logged in' });
             return;
         }
-        if (round.state !== 'betting') {
-            socket.emit('crash-error', { message: 'Betting is closed for this round' });
-            return;
-        }
-        if (round.bets.has(player.name)) {
-            socket.emit('crash-error', { message: 'Bet already placed for this round' });
-            return;
-        }
         const bet = validateCasinoBet(data?.bet);
         if (bet === null) {
             socket.emit('crash-error', { message: 'Invalid bet amount' });
@@ -303,46 +307,60 @@ export function registerCrashHandlers(socket, io, deps) {
             }
             autoCashout = +a.toFixed(2);
         }
-        // Capture the round id so we can detect a state transition that
-        // happened during the deductBalance await (betting → running). Without
-        // this check the bet would land in an already-running round.
-        const placedInRoundId = round.id;
+        // Issue #152: the bets.has() check used to run before the deduct
+        // await and the bets.set() after it, so a double-click passed the
+        // check twice and one stake vanished. Under the per-player lock the
+        // duplicate re-checks only after the original committed.
+        await withActionLock(actionKey('crash', player.name), async () => {
+            if (round.state !== 'betting') {
+                socket.emit('crash-error', { message: 'Betting is closed for this round' });
+                return;
+            }
+            if (round.bets.has(player.name)) {
+                socket.emit('crash-error', { message: 'Bet already placed for this round' });
+                return;
+            }
+            // Capture the round id so we can detect a state transition that
+            // happened during the deductBalance await (betting → running). Without
+            // this check the bet would land in an already-running round.
+            const placedInRoundId = round.id;
 
-        const balanceAfterBet = await deductBalance(player.name, bet, 'crash_bet', { bet, autoCashout });
-        if (balanceAfterBet === null) {
-            socket.emit('crash-error', { message: 'Not enough coins' });
-            return;
-        }
-        // Refund + bail if the round flipped while we were deducting.
-        if (round.state !== 'betting' || round.id !== placedInRoundId) {
-            await addBalance(player.name, bet, 'crash_bet_refund_state_race', { bet, originalRound: placedInRoundId });
-            socket.emit('crash-error', { message: 'Betting closed before bet was confirmed' });
-            emitToUser(io, player.name, 'balance-update', { balance: balanceAfterBet + bet });
-            return;
-        }
-        round.bets.set(player.name, {
-            socketId: socket.id,
-            bet,
-            autoCashout,
-            cashedAt: null,
-            payout: 0
-        });
-        // Achievement: first bet
-        const unlocks = await bump(player.name, 'crash_bets', 1);
-        notifyUnlocks(io, onlinePlayers, player.name, unlocks);
+            const balanceAfterBet = await deductBalance(player.name, bet, 'crash_bet', { bet, autoCashout });
+            if (balanceAfterBet === null) {
+                socket.emit('crash-error', { message: 'Not enough coins' });
+                return;
+            }
+            // Refund + bail if the round flipped while we were deducting.
+            if (round.state !== 'betting' || round.id !== placedInRoundId) {
+                await addBalance(player.name, bet, 'crash_bet_refund_state_race', { bet, originalRound: placedInRoundId });
+                socket.emit('crash-error', { message: 'Betting closed before bet was confirmed' });
+                emitToUser(io, player.name, 'balance-update', { balance: balanceAfterBet + bet });
+                return;
+            }
+            round.bets.set(player.name, {
+                socketId: socket.id,
+                bet,
+                autoCashout,
+                cashedAt: null,
+                payout: 0
+            });
+            // Achievement: first bet
+            const unlocks = await bump(player.name, 'crash_bets', 1);
+            notifyUnlocks(io, onlinePlayers, player.name, unlocks);
 
-        emitToUser(io, player.name, 'balance-update', { balance: balanceAfterBet });
-        socket.emit('crash-bet-confirmed', {
-            roundId: round.id,
-            bet,
-            autoCashout,
-            balance: balanceAfterBet
-        });
-        if (mainLoopIo) mainLoopIo.emit('crash-bet-public', {
-            roundId: round.id,
-            name: player.name,
-            bet,
-            autoCashout
+            emitToUser(io, player.name, 'balance-update', { balance: balanceAfterBet });
+            socket.emit('crash-bet-confirmed', {
+                roundId: round.id,
+                bet,
+                autoCashout,
+                balance: balanceAfterBet
+            });
+            if (mainLoopIo) mainLoopIo.emit('crash-bet-public', {
+                roundId: round.id,
+                name: player.name,
+                bet,
+                autoCashout
+            });
         });
     } catch (err) {
         console.error('crash-bet error:', err.message);
@@ -356,27 +374,33 @@ export function registerCrashHandlers(socket, io, deps) {
             socket.emit('crash-error', { message: 'Not logged in' });
             return;
         }
-        if (round.state !== 'running') {
-            socket.emit('crash-error', { message: 'Round is not running' });
-            return;
-        }
-        const b = round.bets.get(player.name);
-        if (!b) {
-            socket.emit('crash-error', { message: 'No active bet' });
-            return;
-        }
-        if (b.cashedAt) {
-            socket.emit('crash-error', { message: 'Already cashed out' });
-            return;
-        }
-        const elapsed = Date.now() - round.runningStartedAt;
-        const m = multiplierAt(elapsed);
-        if (m > round.crashMultiplier) {
-            socket.emit('crash-error', { message: 'Too late — already crashed' });
-            return;
-        }
-        const result = await resolveCashout(player.name, m, false);
-        if (result) socket.emit('crash-cashout-confirmed', result);
+        // Serializes against a still-running crash-bet for the same player;
+        // exactly-once vs. the auto-cashout sweep is decided by the
+        // synchronous claim inside resolveCashout, not by this lock.
+        await withActionLock(actionKey('crash', player.name), async () => {
+            if (round.state !== 'running') {
+                socket.emit('crash-error', { message: 'Round is not running' });
+                return;
+            }
+            const b = round.bets.get(player.name);
+            if (!b) {
+                socket.emit('crash-error', { message: 'No active bet' });
+                return;
+            }
+            if (b.cashedAt) {
+                socket.emit('crash-error', { message: 'Already cashed out' });
+                return;
+            }
+            const elapsed = Date.now() - round.runningStartedAt;
+            const m = multiplierAt(elapsed);
+            if (m > round.crashMultiplier) {
+                socket.emit('crash-error', { message: 'Too late — already crashed' });
+                return;
+            }
+            const result = await resolveCashout(player.name, m, false);
+            if (result) socket.emit('crash-cashout-confirmed', result);
+            else socket.emit('crash-error', { message: 'Already cashed out' });
+        });
     } catch (err) {
         console.error('crash-cashout error:', err.message);
         socket.emit('crash-error', { message: 'Cash-out failed.' });
@@ -393,5 +417,10 @@ export {
     CRASH_BETS,
     sampleCrashMultiplier,
     multiplierAt,
-    timeForMultiplier
+    timeForMultiplier,
+    // round + resolveCashout are exported so the reentrancy tests can
+    // drive the auto-cashout entry point (normally only the tick loop
+    // calls it) against the manual crash-cashout handler.
+    round,
+    resolveCashout
 };

@@ -4,6 +4,7 @@ import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
 import { STANDARD_CASINO_BETS, validateCasinoBet, emitToUser } from '../socket-utils.js';
 import { pushActivity } from '../activity-feed.js';
+import { actionKey, withActionLock } from '../lib/action-guard.js';
 
 // ============================================================================
 // Strictly7s 2.0 — 5×3 grid, 10 paylines, win-both-ways, expanding wild,
@@ -271,10 +272,6 @@ export function registerStrictly7sHandlers(socket, io, deps) {
 
     socket.on('strictly7s-spin', async (data) => { try {
         if (!checkRateLimit(socket, 5)) return;
-        if (!checkStrictly7sCooldown(socket.id)) {
-            socket.emit('strictly7s-error', { message: 'Spin cooldown active. Try again.' });
-            return;
-        }
 
         const player = onlinePlayers.get(socket.id);
         if (!player || !player.name) {
@@ -282,157 +279,172 @@ export function registerStrictly7sHandlers(socket, io, deps) {
             return;
         }
 
-        const fs = getFreeSpinState(player.name);
-        const inFreeSpin = !!(fs && fs.remaining > 0);
-
-        let bet;
-        let multiplier;
-        if (inFreeSpin) {
-            bet = fs.bet;
-            multiplier = fs.multiplier;
-        } else {
-            bet = validateCasinoBet(data?.bet);
-            if (bet === null) {
-                socket.emit('strictly7s-error', { message: 'Invalid bet amount' });
+        // Per-player lock (issue #152): fs.remaining was read before the
+        // withWallet await and decremented after it, so two concurrent
+        // spins during free spins both counted as free (gratis spins), and
+        // two base spins triggering scatters overwrote each other's
+        // freeSpinState. The whole read-spin-update section now runs
+        // serialized; the cooldown sits inside the lock and is keyed by
+        // player name (not socket.id), so the queued duplicate of a
+        // double-click is rejected instead of spinning again.
+        await withActionLock(actionKey('strictly7s', player.name), async () => {
+            if (!checkStrictly7sCooldown(player.name)) {
+                socket.emit('strictly7s-error', { message: 'Spin cooldown active. Try again.' });
                 return;
             }
-            multiplier = 1;
-        }
 
-        // Deduct + spin + payout in one DB transaction so a crash between
-        // bet and payout doesn't leave the player short. The RNG happens
-        // inside the tx — that's fine, throwing rolls everything back.
-        const spinResult = await withWallet(async (client) => {
-            let balanceAfterBet = null;
+            const fs = getFreeSpinState(player.name);
+            const inFreeSpin = !!(fs && fs.remaining > 0);
+
+            let bet;
+            let multiplier;
+            if (inFreeSpin) {
+                bet = fs.bet;
+                multiplier = fs.multiplier;
+            } else {
+                bet = validateCasinoBet(data?.bet);
+                if (bet === null) {
+                    socket.emit('strictly7s-error', { message: 'Invalid bet amount' });
+                    return;
+                }
+                multiplier = 1;
+            }
+
+            // Deduct + spin + payout in one DB transaction so a crash between
+            // bet and payout doesn't leave the player short. The RNG happens
+            // inside the tx — that's fine, throwing rolls everything back.
+            const spinResult = await withWallet(async (client) => {
+                let balanceAfterBet = null;
+                if (!inFreeSpin) {
+                    balanceAfterBet = await deductBalance(player.name, bet, 'strictly7s_bet', { bet }, client);
+                    if (balanceAfterBet === null) {
+                        return { ok: false, reason: 'insufficient' };
+                    }
+                }
+
+                const grid = spinGrid();
+                const outcome = evaluateSpin(grid, bet);
+                const rawPayout = (outcome.lineWinTotal + outcome.scatterPay) * multiplier;
+                const payout = Math.floor(rawPayout);
+
+                let finalBalance = balanceAfterBet;
+                if (payout > 0) {
+                    const updated = await addBalance(player.name, payout, 'strictly7s_payout', {
+                        bet,
+                        payout,
+                        multiplier,
+                        wins: outcome.wins.length,
+                        scatters: outcome.scatterCount,
+                        inFreeSpin
+                    }, client);
+                    if (updated !== null) finalBalance = updated;
+                }
+                return { ok: true, balanceAfterBet, finalBalance, grid, outcome, payout };
+            });
+
+            if (!spinResult || !spinResult.ok) {
+                socket.emit('strictly7s-error', { message: 'Not enough coins' });
+                return;
+            }
+
+            const { balanceAfterBet, grid, outcome, payout } = spinResult;
+            let finalBalance = spinResult.finalBalance;
+
+            // Update free spin state AFTER the transaction commits, so we don't
+            // mutate session state for a spin that ultimately rolled back.
+            let freeSpinsRemainingAfter = 0;
+            let freeSpinsAddedThisSpin = 0;
+            if (inFreeSpin) {
+                fs.lastActiveAt = Date.now();
+                fs.remaining -= 1;
+                if (outcome.freeSpinsAwarded > 0) {
+                    fs.remaining += outcome.freeSpinsAwarded;
+                    freeSpinsAddedThisSpin = outcome.freeSpinsAwarded;
+                }
+                if (fs.remaining > 0) {
+                    freeSpinState.set(player.name, fs);
+                    freeSpinsRemainingAfter = fs.remaining;
+                } else {
+                    clearFreeSpinState(player.name);
+                    freeSpinsRemainingAfter = 0;
+                }
+            } else if (outcome.freeSpinsAwarded > 0) {
+                const newState = {
+                    remaining: outcome.freeSpinsAwarded,
+                    multiplier: FREE_SPIN_MULTIPLIER,
+                    bet,
+                    lastActiveAt: Date.now()
+                };
+                freeSpinState.set(player.name, newState);
+                freeSpinsRemainingAfter = newState.remaining;
+                freeSpinsAddedThisSpin = outcome.freeSpinsAwarded;
+            }
+
+            // Free spin with no payout: fetch current balance so the client always sees a value.
+            if (finalBalance === null) {
+                finalBalance = await getBalance(player.name);
+            }
+
+            emitToUser(io, player.name, 'balance-update', { balance: finalBalance });
+
+            // Achievement bumps. Skip on free spins so re-triggers don't double-count.
             if (!inFreeSpin) {
-                balanceAfterBet = await deductBalance(player.name, bet, 'strictly7s_bet', { bet }, client);
-                if (balanceAfterBet === null) {
-                    return { ok: false, reason: 'insufficient' };
+                const unlocks = [];
+                const u1 = await bump(player.name, 'slot_spins', 1);
+                unlocks.push(...u1);
+                if (outcome.freeSpinsAwarded > 0) {
+                    const u2 = await bump(player.name, 'slot_fs_triggers', 1);
+                    unlocks.push(...u2);
+                }
+                // 5-of-a-kind SEVEN check
+                const isJackpot = outcome.wins.some(w => w.leftSymbol === 'SEVEN' && w.leftCount === 5);
+                if (isJackpot) {
+                    const u3 = await bump(player.name, 'slot_jackpots', 1);
+                    unlocks.push(...u3);
+                }
+                if (typeof finalBalance === 'number') {
+                    const u4 = await bump(player.name, 'max_balance', Math.floor(finalBalance), 'max');
+                    unlocks.push(...u4);
+                }
+                notifyUnlocks(io, onlinePlayers, player.name, unlocks);
+
+                // Activity feed: jackpot or any win >= 10× bet.
+                const winMultiplier = payout / Math.max(1, bet);
+                if (isJackpot) {
+                    pushActivity({
+                        type: 'big_win', player: player.name,
+                        text: `JACKPOT! Strictly7s 5×7️⃣ for ${payout} SC`,
+                        icon: '7️⃣', color: 'magenta',
+                        meta: { game: 'strictly7s', amount: payout, multiplier: winMultiplier }
+                    });
+                } else if (winMultiplier >= 10) {
+                    pushActivity({
+                        type: 'big_win', player: player.name,
+                        text: `Hit a ${winMultiplier.toFixed(1)}× win on Strictly7s for ${payout} SC`,
+                        icon: '🎰', color: 'gold',
+                        meta: { game: 'strictly7s', amount: payout, multiplier: winMultiplier }
+                    });
                 }
             }
 
-            const grid = spinGrid();
-            const outcome = evaluateSpin(grid, bet);
-            const rawPayout = (outcome.lineWinTotal + outcome.scatterPay) * multiplier;
-            const payout = Math.floor(rawPayout);
-
-            let finalBalance = balanceAfterBet;
-            if (payout > 0) {
-                const updated = await addBalance(player.name, payout, 'strictly7s_payout', {
-                    bet,
-                    payout,
-                    multiplier,
-                    wins: outcome.wins.length,
-                    scatters: outcome.scatterCount,
-                    inFreeSpin
-                }, client);
-                if (updated !== null) finalBalance = updated;
-            }
-            return { ok: true, balanceAfterBet, finalBalance, grid, outcome, payout };
-        });
-
-        if (!spinResult || !spinResult.ok) {
-            socket.emit('strictly7s-error', { message: 'Not enough coins' });
-            return;
-        }
-
-        const { balanceAfterBet, grid, outcome, payout } = spinResult;
-        let finalBalance = spinResult.finalBalance;
-
-        // Update free spin state AFTER the transaction commits, so we don't
-        // mutate session state for a spin that ultimately rolled back.
-        let freeSpinsRemainingAfter = 0;
-        let freeSpinsAddedThisSpin = 0;
-        if (inFreeSpin) {
-            fs.lastActiveAt = Date.now();
-            fs.remaining -= 1;
-            if (outcome.freeSpinsAwarded > 0) {
-                fs.remaining += outcome.freeSpinsAwarded;
-                freeSpinsAddedThisSpin = outcome.freeSpinsAwarded;
-            }
-            if (fs.remaining > 0) {
-                freeSpinState.set(player.name, fs);
-                freeSpinsRemainingAfter = fs.remaining;
-            } else {
-                clearFreeSpinState(player.name);
-                freeSpinsRemainingAfter = 0;
-            }
-        } else if (outcome.freeSpinsAwarded > 0) {
-            const newState = {
-                remaining: outcome.freeSpinsAwarded,
-                multiplier: FREE_SPIN_MULTIPLIER,
+            const highestLineSingle = highestSingleLineMultiplier(outcome.wins);
+            socket.emit('strictly7s-spin-result', {
+                grid,                        // [reel][row] symbol IDs (pre-expansion)
+                expandedReels: outcome.expandedReelFlags,
+                wins: outcome.wins,
+                lineWinTotal: Math.floor(outcome.lineWinTotal * multiplier),
+                scatterCount: outcome.scatterCount,
+                scatterPositions: outcome.scatterPositions,
+                scatterPay: Math.floor(outcome.scatterPay * multiplier),
                 bet,
-                lastActiveAt: Date.now()
-            };
-            freeSpinState.set(player.name, newState);
-            freeSpinsRemainingAfter = newState.remaining;
-            freeSpinsAddedThisSpin = outcome.freeSpinsAwarded;
-        }
-
-        // Free spin with no payout: fetch current balance so the client always sees a value.
-        if (finalBalance === null) {
-            finalBalance = await getBalance(player.name);
-        }
-
-        emitToUser(io, player.name, 'balance-update', { balance: finalBalance });
-
-        // Achievement bumps. Skip on free spins so re-triggers don't double-count.
-        if (!inFreeSpin) {
-            const unlocks = [];
-            const u1 = await bump(player.name, 'slot_spins', 1);
-            unlocks.push(...u1);
-            if (outcome.freeSpinsAwarded > 0) {
-                const u2 = await bump(player.name, 'slot_fs_triggers', 1);
-                unlocks.push(...u2);
-            }
-            // 5-of-a-kind SEVEN check
-            const isJackpot = outcome.wins.some(w => w.leftSymbol === 'SEVEN' && w.leftCount === 5);
-            if (isJackpot) {
-                const u3 = await bump(player.name, 'slot_jackpots', 1);
-                unlocks.push(...u3);
-            }
-            if (typeof finalBalance === 'number') {
-                const u4 = await bump(player.name, 'max_balance', Math.floor(finalBalance), 'max');
-                unlocks.push(...u4);
-            }
-            notifyUnlocks(io, onlinePlayers, player.name, unlocks);
-
-            // Activity feed: jackpot or any win >= 10× bet.
-            const winMultiplier = payout / Math.max(1, bet);
-            if (isJackpot) {
-                pushActivity({
-                    type: 'big_win', player: player.name,
-                    text: `JACKPOT! Strictly7s 5×7️⃣ for ${payout} SC`,
-                    icon: '7️⃣', color: 'magenta',
-                    meta: { game: 'strictly7s', amount: payout, multiplier: winMultiplier }
-                });
-            } else if (winMultiplier >= 10) {
-                pushActivity({
-                    type: 'big_win', player: player.name,
-                    text: `Hit a ${winMultiplier.toFixed(1)}× win on Strictly7s for ${payout} SC`,
-                    icon: '🎰', color: 'gold',
-                    meta: { game: 'strictly7s', amount: payout, multiplier: winMultiplier }
-                });
-            }
-        }
-
-        const highestLineSingle = highestSingleLineMultiplier(outcome.wins);
-        socket.emit('strictly7s-spin-result', {
-            grid,                        // [reel][row] symbol IDs (pre-expansion)
-            expandedReels: outcome.expandedReelFlags,
-            wins: outcome.wins,
-            lineWinTotal: Math.floor(outcome.lineWinTotal * multiplier),
-            scatterCount: outcome.scatterCount,
-            scatterPositions: outcome.scatterPositions,
-            scatterPay: Math.floor(outcome.scatterPay * multiplier),
-            bet,
-            multiplier,
-            payout,
-            highestLineSingle: Math.floor(highestLineSingle * multiplier),
-            freeSpinsAwarded: freeSpinsAddedThisSpin,
-            freeSpinsRemaining: freeSpinsRemainingAfter,
-            wasFreeSpin: inFreeSpin,
-            balance: finalBalance
+                multiplier,
+                payout,
+                highestLineSingle: Math.floor(highestLineSingle * multiplier),
+                freeSpinsAwarded: freeSpinsAddedThisSpin,
+                freeSpinsRemaining: freeSpinsRemainingAfter,
+                wasFreeSpin: inFreeSpin,
+                balance: finalBalance
+            });
         });
     } catch (err) {
         console.error('strictly7s-spin error:', err.message);
@@ -455,5 +467,7 @@ export {
     FREE_SPIN_AWARD,
     FREE_SPIN_MULTIPLIER,
     FREE_SPIN_TRIGGER_COUNT,
-    STRICTLY7S_BETS
+    STRICTLY7S_BETS,
+    // Exposed so the reentrancy tests can seed a free-spin balance directly.
+    freeSpinState
 };
