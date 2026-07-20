@@ -169,3 +169,63 @@ describe('fetchTickerQuotes merge behavior', () => {
         expect(result[0].marketState).toBeNull();
     });
 });
+
+describe('stock route rate limiting', () => {
+    function makeReq(path, ip, query = {}) {
+        return { method: 'GET', url: path, originalUrl: path, ip, headers: {}, query };
+    }
+
+    function makeRes(onDone) {
+        const res = {
+            statusCode: 200,
+            headers: {},
+            body: undefined,
+            set(name, val) { this.headers[name] = val; return this; },
+            status(code) { this.statusCode = code; return this; },
+            json(payload) { this.body = payload; onDone(); return this; },
+        };
+        return res;
+    }
+
+    async function dispatch(router, path, ip, query) {
+        return new Promise((resolve) => {
+            const res = makeRes(() => resolve(res));
+            router(makeReq(path, ip, query), res, () => resolve(res));
+        });
+    }
+
+    function makeDiagRouter() {
+        return createStocksRouter({
+            getYahooFinance: async () => ({ quote: vi.fn().mockRejectedValue(new Error('down')) }),
+            isStockGameEnabled: true,
+        });
+    }
+
+    it('blocks a single IP with 429 after exceeding the per-route budget on /api/stock-search', async () => {
+        const router = makeDiagRouter();
+        let last;
+        for (let i = 0; i < 31; i++) {
+            last = await dispatch(router, '/api/stock-search', '1.2.3.4', { q: 'AAPL' });
+        }
+        expect(last.statusCode).toBe(429);
+        expect(last.headers['Retry-After']).toBeGreaterThan(0);
+    });
+
+    it('does not rate-limit a different IP once one IP is exhausted', async () => {
+        const router = makeDiagRouter();
+        for (let i = 0; i < 31; i++) {
+            await dispatch(router, '/api/stock-search', '1.2.3.4', { q: 'AAPL' });
+        }
+        const otherIp = await dispatch(router, '/api/stock-search', '9.9.9.9', { q: 'AAPL' });
+        expect(otherIp.statusCode).not.toBe(429);
+    });
+
+    it('applies a tighter budget to /api/_stock-diag than to search/quote', async () => {
+        const router = makeDiagRouter();
+        let last;
+        for (let i = 0; i < 6; i++) {
+            last = await dispatch(router, '/api/_stock-diag', '5.5.5.5');
+        }
+        expect(last.statusCode).toBe(429);
+    });
+});

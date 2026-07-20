@@ -88,6 +88,36 @@ const SEARCH_CACHE_MS = 10 * 60 * 1000; // 10 minutes
 const singleQuoteCache = new Map();
 const SINGLE_QUOTE_CACHE_MS = 2 * 60 * 1000; // 2 minutes
 
+// Per-IP sliding window rate limiter, mirroring the login limiter in
+// routes/auth.js. Protects the provider-backed routes from a single logged-in
+// user hammering Yahoo/Stooq from the server's IP (see issue #159).
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+
+function rateLimiter(maxPerWindow) {
+    const hits = new Map(); // ip -> { count, resetAt }
+    return (req, res, next) => {
+        const now = Date.now();
+        const ip = req.ip || 'unknown';
+        const entry = hits.get(ip);
+        if (entry && now < entry.resetAt) {
+            entry.count += 1;
+            if (entry.count > maxPerWindow) {
+                res.set('Retry-After', Math.ceil((entry.resetAt - now) / 1000));
+                return res.status(429).json({ error: 'Too many requests. Try again soon.' });
+            }
+        } else {
+            hits.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+        }
+        next();
+    };
+}
+
+const stockSearchRateLimiter = rateLimiter(30);
+const stockQuoteRateLimiter = rateLimiter(30);
+// _stock-diag?probe=1 fires up to 4 real provider requests per call, so it
+// gets a much tighter budget than plain search/quote lookups.
+const stockDiagRateLimiter = rateLimiter(5);
+
 export function createStocksRouter({ getYahooFinance, isStockGameEnabled, getExtraSymbols }) {
     const router = Router();
 
@@ -283,7 +313,7 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled, getExt
         }
     });
 
-    router.get('/api/stock-search', async (req, res) => {
+    router.get('/api/stock-search', stockSearchRateLimiter, async (req, res) => {
         if (!isStockGameEnabled) {
             return res.status(503).json({ code: 'GAME_DISABLED', error: 'Stock game is disabled by server config' });
         }
@@ -328,7 +358,7 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled, getExt
         }
     });
 
-    router.get('/api/stock-quote', async (req, res) => {
+    router.get('/api/stock-quote', stockQuoteRateLimiter, async (req, res) => {
         if (!isStockGameEnabled) {
             return res.status(503).json({ code: 'GAME_DISABLED', error: 'Stock game is disabled by server config' });
         }
@@ -408,7 +438,7 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled, getExt
     // Diagnostic endpoint — no auth (state is non-sensitive: counts, error
     // messages, cache size). Lets us see from the browser exactly why the
     // ticker is empty on production.
-    router.get('/api/_stock-diag', async (req, res) => {
+    router.get('/api/_stock-diag', stockDiagRateLimiter, async (req, res) => {
         const ageMs = (ts) => (ts ? Date.now() - ts : null);
         const out = {
             now: new Date().toISOString(),

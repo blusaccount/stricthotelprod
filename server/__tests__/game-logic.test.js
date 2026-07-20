@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { randomInt } from 'crypto';
 import {
     ROLL_ORDER,
     STARTING_LIVES,
@@ -9,6 +10,11 @@ import {
     getAlivePlayers,
     nextAlivePlayerIndex
 } from '../game-logic.js';
+
+vi.mock('crypto', async (importOriginal) => {
+    const actual = await importOriginal();
+    return { ...actual, randomInt: vi.fn(actual.randomInt) };
+});
 
 describe('ROLL_ORDER', () => {
     it('has 21 entries', () => {
@@ -96,6 +102,19 @@ describe('rollDice', () => {
             const roll = rollDice();
             expect(ROLL_ORDER).toContain(roll.value);
         }
+    });
+
+    it('uses crypto.randomInt instead of Math.random', () => {
+        randomInt.mockClear();
+        const mathRandomSpy = vi.spyOn(Math, 'random');
+
+        rollDice();
+
+        expect(randomInt).toHaveBeenCalledTimes(2);
+        expect(randomInt).toHaveBeenCalledWith(1, 7);
+        expect(mathRandomSpy).not.toHaveBeenCalled();
+
+        mathRandomSpy.mockRestore();
     });
 });
 
