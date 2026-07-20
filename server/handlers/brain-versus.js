@@ -56,6 +56,25 @@ function getUtcDayNumber(date = new Date()) {
     return Math.floor(date.getTime() / (1000 * 60 * 60 * 24));
 }
 
+// Forfeit payout: awards the opponent once. Both the explicit 'leave' path
+// and the disconnect path funnel through here; each performs the
+// room.game.status check-and-clear synchronously (no await in between)
+// before calling this, so a simultaneous leave+disconnect can only win the
+// status transition once — the loser of the race sees room.game === null.
+async function payoutBrainVersusForfeit(io, socket, game, room) {
+    const opponent = game.players.find(p => p.socketId !== socket.id);
+    if (!opponent) return;
+    const newBalance = await addBalance(opponent.name, 20, 'brain_versus_forfeit', { roomCode: room.code });
+    emitToUser(io, opponent.name, 'balance-update', { balance: newBalance });
+    io.to(opponent.socketId).emit('brain-versus-result', {
+        winner: opponent.name,
+        isDraw: false,
+        players: game.players.map(p => ({ name: p.name, score: p.finalScore || 0 })),
+        coins: 20,
+        forfeit: true
+    });
+}
+
 async function hasBrainDailyReward(name) {
     const day = getUtcDayNumber();
     if (!isDatabaseEnabled()) {
@@ -309,6 +328,7 @@ export function registerBrainVersusHandlers(socket, io, deps) {
 
         room.game = {
             gameId: gameId,
+            status: 'running',
             players: room.players.map(p => ({ socketId: p.socketId, name: p.name, score: 0, finished: false, finalScore: null })),
             startedAt: Date.now()
         };
@@ -406,21 +426,14 @@ export function registerBrainVersusHandlers(socket, io, deps) {
 
         socket.leave(room.code);
 
-        // If game was running, opponent wins by default
-        if (room.game) {
-            const opponent = room.game.players.find(p => p.socketId !== socket.id);
-            if (opponent) {
-                const newBalance = await addBalance(opponent.name, 20, 'brain_versus_forfeit', { roomCode: room.code });
-                emitToUser(io, opponent.name, 'balance-update', { balance: newBalance });
-                io.to(opponent.socketId).emit('brain-versus-result', {
-                    winner: opponent.name,
-                    isDraw: false,
-                    players: room.game.players.map(p => ({ name: p.name, score: p.finalScore || 0 })),
-                    coins: 20,
-                    forfeit: true
-                });
-            }
+        // If a game was running, it's forfeited and the opponent wins by
+        // default. The status check-and-clear happens synchronously (no
+        // await above it) so a concurrent disconnect can't also pay this out.
+        if (room.game && room.game.status === 'running') {
+            const game = room.game;
+            game.status = 'forfeited';
             room.game = null;
+            await payoutBrainVersusForfeit(io, socket, game, room);
         }
 
         // Remove player from room
@@ -443,20 +456,13 @@ export function registerBrainVersusHandlers(socket, io, deps) {
 }
 
 export async function cleanupBrainVersusOnDisconnect(socket, room, io) {
-    // Brain Versus: handle forfeit before generic cleanup
-    if (room.gameType === 'strictbrain' && room.game) {
-        const opponent = room.game.players.find(p => p.socketId !== socket.id);
-        if (opponent) {
-            const newBalance = await addBalance(opponent.name, 20, 'brain_versus_forfeit', { roomCode: room.code });
-            emitToUser(io, opponent.name, 'balance-update', { balance: newBalance });
-            io.to(opponent.socketId).emit('brain-versus-result', {
-                winner: opponent.name,
-                isDraw: false,
-                players: room.game.players.map(p => ({ name: p.name, score: p.finalScore || 0 })),
-                coins: 20,
-                forfeit: true
-            });
-        }
+    // Brain Versus: handle forfeit before generic cleanup. Same
+    // status-check-and-clear-before-await pattern as brain-versus-leave, so
+    // whichever of leave/disconnect runs first is the only one that pays out.
+    if (room.gameType === 'strictbrain' && room.game && room.game.status === 'running') {
+        const game = room.game;
+        game.status = 'forfeited';
         room.game = null;
+        await payoutBrainVersusForfeit(io, socket, game, room);
     }
 }
