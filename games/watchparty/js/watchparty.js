@@ -3,7 +3,7 @@
 // ============================
 
 (function () {
-    const { socket, $, showScreen, state } = window.MaexchenApp;
+    const { socket, $, showScreen, state, escapeAttr } = window.MaexchenApp;
 
     let ytPlayer = null;
     let isHost = false;
@@ -307,7 +307,7 @@
 
         bar.innerHTML = players.map(function (p) {
             var avatarHtml = p.character && p.character.dataURL
-                ? '<img src="' + p.character.dataURL + '" alt="" style="width:24px;height:24px;image-rendering:pixelated;">'
+                ? '<img src="' + escapeAttr(p.character.dataURL) + '" alt="" style="width:24px;height:24px;image-rendering:pixelated;">'
                 : '👽';
             var hostBadge = p.isHost ? '<span class="host-badge">HOST</span>' : '';
             return '<div class="online-player" style="margin:4px;">' +

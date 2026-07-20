@@ -3,7 +3,7 @@
 // ============================
 
 (function() {
-    const { socket, $, state } = window.MaexchenApp;
+    const { socket, $, state, escapeAttr } = window.MaexchenApp;
 
     let chatVisible = false;
 
@@ -356,7 +356,7 @@
 
         msgEl.innerHTML = `
             <div class="sender">${escapeHtml(sender)} ${targetText}</div>
-            <img src="${dataURL}" class="chat-drawing" alt="Zeichnung">
+            <img src="${escapeAttr(dataURL)}" class="chat-drawing" alt="Zeichnung">
         `;
 
         messagesContainer.appendChild(msgEl);

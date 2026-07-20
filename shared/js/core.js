@@ -8,6 +8,16 @@ const socket = io();
 // DOM helper
 const $ = id => document.getElementById(id);
 
+// HTML-attribute-safe escaping (also covers `"` and `'`, unlike the
+// textContent/innerHTML trick used elsewhere for text-node content, which
+// does not escape quotes and is therefore unsafe when the escaped value is
+// placed inside an HTML attribute such as `src="..."`).
+function escapeAttr(str) {
+    return String(str == null ? '' : str).replace(/[&"'<>]/g, c => ({
+        '&': '&amp;', '"': '&quot;', "'": '&#39;', '<': '&lt;', '>': '&gt;'
+    }[c]));
+}
+
 // Screens
 const screens = {
     start: $('screen-start'),
@@ -80,4 +90,4 @@ document.querySelectorAll('.title-maexchen').forEach(el => {
 });
 
 // Export for global access
-window.MaexchenApp = { socket, $, showScreen, state };
+window.MaexchenApp = { socket, $, showScreen, state, escapeAttr };

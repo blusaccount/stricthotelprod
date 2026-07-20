@@ -3,7 +3,7 @@
 // ============================
 
 (function() {
-    const { socket, $, showScreen, state } = window.MaexchenApp;
+    const { socket, $, showScreen, state, escapeAttr } = window.MaexchenApp;
 
     // Track registered socket listeners for cleanup
     const socketListeners = [];
@@ -300,7 +300,7 @@
 
         list.innerHTML = players.map(p => {
             const avatarHtml = p.character?.dataURL
-                ? `<img src="${escapeHtml(p.character.dataURL)}" alt="">`
+                ? `<img src="${escapeAttr(p.character.dataURL)}" alt="">`
                 : '👽';
             return `
                 <div class="online-player">
@@ -324,7 +324,7 @@
         list.innerHTML = lobbies.map(lobby => {
             const avatars = lobby.players.slice(0, 4).map(p => {
                 if (p.character?.dataURL) {
-                    return `<div class="lobby-avatar"><img src="${escapeHtml(p.character.dataURL)}" alt=""></div>`;
+                    return `<div class="lobby-avatar"><img src="${escapeAttr(p.character.dataURL)}" alt=""></div>`;
                 }
                 return `<div class="lobby-avatar">👽</div>`;
             }).join('');
@@ -361,7 +361,7 @@
             // Get character display (pixel art dataURL)
             let avatarHtml = '<span class="player-avatar-placeholder">?</span>';
             if (p.character && p.character.dataURL) {
-                avatarHtml = `<img class="player-avatar-img" src="${escapeHtml(p.character.dataURL)}" alt="${escapeHtml(p.name)}">`;
+                avatarHtml = `<img class="player-avatar-img" src="${escapeAttr(p.character.dataURL)}" alt="${escapeAttr(p.name)}">`;
             }
 
             let badges = '';

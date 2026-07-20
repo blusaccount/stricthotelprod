@@ -5,6 +5,17 @@ export function sanitizeName(name) {
     return clean;
 }
 
+// Strict image data-URL check: only the base64 payload of a whitelisted
+// image mime type is allowed. Rejects anything containing `"`, `<`, or other
+// characters that could break out of an HTML attribute (e.g.
+// `data:image/png" onerror=...`), which is how this used to be exploitable
+// when only the `data:image/` prefix was checked.
+const DATA_URL_RE = /^data:image\/(png|jpe?g|gif|webp);base64,[A-Za-z0-9+/=]+$/;
+
+export function isValidDataUrl(value) {
+    return typeof value === 'string' && DATA_URL_RE.test(value);
+}
+
 export function validateCharacter(character) {
     if (!character || typeof character !== 'object') return null;
     // Limit character data size (~10KB JSON max, supports full 16x16 pixel grid + 64px dataURL)
@@ -17,7 +28,7 @@ export function validateCharacter(character) {
         if (allowed[key]) clean[key] = character[key];
     }
     // Validate dataURL if present
-    if (clean.dataURL && (typeof clean.dataURL !== 'string' || !clean.dataURL.startsWith('data:image/'))) {
+    if (clean.dataURL && !isValidDataUrl(clean.dataURL)) {
         delete clean.dataURL;
     }
     // Reject empty character objects (no pixels or dataURL)
