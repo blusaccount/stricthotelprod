@@ -72,16 +72,16 @@ Checkliste aller Repository-Dateien (aus `git ls-files`), gruppiert nach Modulen
 - [x] server/handlers/lobby-watchparty.js
 - [x] server/handlers/lobby.js
 - [x] server/handlers/lol-betting.js
-- [ ] server/handlers/loop-machine.js
-- [ ] server/handlers/maexchen.js
-- [ ] server/handlers/pictochat.js
-- [ ] server/handlers/plinko.js
-- [ ] server/handlers/roulette.js
-- [ ] server/handlers/soundboard.js
-- [ ] server/handlers/stocks.js
-- [ ] server/handlers/strictly7s.js
-- [ ] server/handlers/tierlist.js
-- [ ] server/handlers/watchparty.js
+- [x] server/handlers/loop-machine.js
+- [x] server/handlers/maexchen.js
+- [x] server/handlers/pictochat.js
+- [x] server/handlers/plinko.js
+- [x] server/handlers/roulette.js
+- [x] server/handlers/soundboard.js
+- [x] server/handlers/stocks.js
+- [x] server/handlers/strictly7s.js
+- [x] server/handlers/tierlist.js
+- [x] server/handlers/watchparty.js
 
 ## 3. server/routes/
 
