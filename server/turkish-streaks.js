@@ -3,6 +3,24 @@ import { addBalance } from './currency.js';
 
 const streaksMemory = new Map(); // name -> { currentStreak, maxStreak, lastDay }
 
+// In-memory per-player lock preventing multi-tab / rapid double-completions
+// when the DB is disabled. Mirrors `withClaimLock` in daily-streak.js and
+// `withStockTradeLock` in stock-game.js: the whole read-decide-write-payout
+// runs serialized per player, so two concurrent completions can't both pass
+// the "already completed today?" check and pay the reward twice. The DB path
+// gets the same guarantee from a conditional UPDATE (see below).
+const completionLocks = new Map(); // playerName -> Promise
+async function withCompletionLock(playerName, fn) {
+    while (completionLocks.has(playerName)) {
+        await completionLocks.get(playerName);
+    }
+    let resolve;
+    const p = new Promise(r => { resolve = r; });
+    completionLocks.set(playerName, p);
+    try { return await fn(); }
+    finally { completionLocks.delete(playerName); resolve(); }
+}
+
 const REWARD_PER_DAY = 5;
 const REWARD_MAX = 50;
 
@@ -50,28 +68,34 @@ export async function recordDailyCompletion(playerName, date = new Date()) {
     const todayDate = dayNumberToDateString(todayDay);
 
     if (!isDatabaseEnabled()) {
-        const entry = streaksMemory.get(playerName) || { currentStreak: 0, maxStreak: 0, lastDay: null };
-        const { currentStreak, alreadyCompleted } = computeNextStreak(entry, todayDay);
-        const maxStreak = Math.max(entry.maxStreak || 0, currentStreak);
+        // Serialize the whole read-decide-write-payout per player so two
+        // concurrent completions can't both see "not completed today" and
+        // pay the reward twice.
+        return withCompletionLock(playerName, async () => {
+            const entry = await readStreakEntry(playerName);
+            const { currentStreak, alreadyCompleted } = computeNextStreak(entry, todayDay);
+            const maxStreak = Math.max(entry.maxStreak || 0, currentStreak);
 
-        entry.currentStreak = currentStreak;
-        entry.maxStreak = maxStreak;
-        entry.lastDay = todayDay;
-        streaksMemory.set(playerName, entry);
+            streaksMemory.set(playerName, {
+                currentStreak,
+                maxStreak,
+                lastDay: todayDay
+            });
 
-        const rewardCoins = alreadyCompleted ? 0 : computeReward(currentStreak);
-        if (rewardCoins > 0) {
-            await addBalance(playerName, rewardCoins, 'turkish_daily', { day: todayDate, streak: currentStreak });
-        }
+            const rewardCoins = alreadyCompleted ? 0 : computeReward(currentStreak);
+            if (rewardCoins > 0) {
+                await addBalance(playerName, rewardCoins, 'turkish_daily', { day: todayDate, streak: currentStreak });
+            }
 
-        return {
-            ok: true,
-            alreadyCompleted,
-            rewardCoins,
-            currentStreak,
-            maxStreak,
-            day: todayDate
-        };
+            return {
+                ok: true,
+                alreadyCompleted,
+                rewardCoins,
+                currentStreak,
+                maxStreak,
+                day: todayDate
+            };
+        });
     }
 
     return withTransaction(async (client) => {
@@ -80,53 +104,74 @@ export async function recordDailyCompletion(playerName, date = new Date()) {
             return { ok: false, error: 'Player not found' };
         }
 
-        const current = await client.query(
-            `select current_streak, max_streak, last_completed_day
-             from turkish_streaks
-             where player_id = $1`,
+        // Ensure the streak row exists so the conditional UPDATE below has a
+        // row to act on (fresh rows start with last_completed_day = null).
+        await client.query(
+            `insert into turkish_streaks (player_id, current_streak, max_streak, last_completed_day)
+             values ($1, 0, 0, null)
+             on conflict (player_id) do nothing`,
             [playerId]
         );
 
-        const row = current.rows[0];
-        const lastDay = row ? Number(row.last_completed_day) : null;
-        const existingCurrent = row ? Number(row.current_streak) : 0;
-        const existingMax = row ? Number(row.max_streak) : 0;
-
-        const { currentStreak, alreadyCompleted } = computeNextStreak(
-            { lastDay, currentStreak: existingCurrent },
-            todayDay
+        // Atomic claim: this single UPDATE both decides the new streak and
+        // guards against a double payout. The WHERE only matches when today
+        // has NOT already been recorded, so of two concurrent transactions
+        // the second blocks on the row lock, then re-evaluates against the
+        // committed row (last_completed_day = todayDay) and affects 0 rows.
+        // 1:1 the daily-streak.js conditional-UPDATE + `returning` pattern.
+        const upd = await client.query(
+            `update turkish_streaks
+                set current_streak = case when last_completed_day = $2 - 1 then current_streak + 1 else 1 end,
+                    max_streak     = greatest(max_streak,
+                                              case when last_completed_day = $2 - 1 then current_streak + 1 else 1 end),
+                    last_completed_day = $2
+              where player_id = $1
+                and (last_completed_day is null or last_completed_day < $2)
+              returning current_streak, max_streak`,
+            [playerId, todayDay]
         );
-        const maxStreak = Math.max(existingMax, currentStreak);
 
-        if (row) {
-            await client.query(
-                `update turkish_streaks
-                 set current_streak = $1, max_streak = $2, last_completed_day = $3
-                 where player_id = $4`,
-                [currentStreak, maxStreak, todayDay, playerId]
+        if (!upd.rows.length) {
+            // Already completed today — no state change, no reward.
+            const existing = await client.query(
+                `select current_streak, max_streak from turkish_streaks where player_id = $1`,
+                [playerId]
             );
-        } else {
-            await client.query(
-                `insert into turkish_streaks (player_id, current_streak, max_streak, last_completed_day)
-                 values ($1, $2, $3, $4)`,
-                [playerId, currentStreak, maxStreak, todayDay]
-            );
+            const row = existing.rows[0];
+            return {
+                ok: true,
+                alreadyCompleted: true,
+                rewardCoins: 0,
+                currentStreak: row ? Number(row.current_streak) : 0,
+                maxStreak: row ? Number(row.max_streak) : 0,
+                day: todayDate
+            };
         }
 
-        const rewardCoins = alreadyCompleted ? 0 : computeReward(currentStreak);
+        const currentStreak = Number(upd.rows[0].current_streak);
+        const maxStreak = Number(upd.rows[0].max_streak);
+        const rewardCoins = computeReward(currentStreak);
         if (rewardCoins > 0) {
             await addBalance(playerName, rewardCoins, 'turkish_daily', { day: todayDate, streak: currentStreak }, client);
         }
 
         return {
             ok: true,
-            alreadyCompleted,
+            alreadyCompleted: false,
             rewardCoins,
             currentStreak,
             maxStreak,
             day: todayDate
         };
     });
+}
+
+// Reads the current in-memory streak entry for a player. Async so the memory
+// completion path has an explicit yield point between read and write, exactly
+// like the DB read it stands in for — which is why `withCompletionLock` above
+// is load-bearing rather than cosmetic.
+async function readStreakEntry(playerName) {
+    return streaksMemory.get(playerName) || { currentStreak: 0, maxStreak: 0, lastDay: null };
 }
 
 export async function getTurkishLeaderboard(limit = 10) {
