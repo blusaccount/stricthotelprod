@@ -111,51 +111,51 @@ Checkliste aller Repository-Dateien (aus `git ls-files`), gruppiert nach Modulen
 
 ## 5. games/
 
-- [ ] games/blackjack/blackjack.css
-- [ ] games/blackjack/index.html
-- [ ] games/blackjack/js/game.js
-- [ ] games/casino/casino.css
-- [ ] games/casino/index.html
-- [ ] games/casino/js/casino.js
-- [ ] games/crash/crash.css
-- [ ] games/crash/index.html
-- [ ] games/crash/js/game.js
-- [ ] games/food-guessr/index.html
-- [ ] games/food-guessr/js/countries.js
-- [ ] games/food-guessr/js/dishes.js
-- [ ] games/food-guessr/js/game.js
-- [ ] games/lol-betting/index.html
-- [ ] games/lol-betting/js/game.js
-- [ ] games/lol-betting/lol-betting.css
-- [ ] games/loop-machine/index.html
-- [ ] games/loop-machine/js/game.js
-- [ ] games/maexchen/index.html
-- [ ] games/maexchen/js/dice.js
-- [ ] games/maexchen/js/game.js
-- [ ] games/plinko/index.html
-- [ ] games/plinko/js/game.js
-- [ ] games/plinko/plinko.css
-- [ ] games/roulette/index.html
-- [ ] games/roulette/js/game.js
-- [ ] games/roulette/roulette.css
-- [ ] games/shopping/index.html
-- [ ] games/shopping/shopping.css
-- [ ] games/stocks/index.html
-- [ ] games/stocks/js/game.js
-- [ ] games/stocks/stocks.css
-- [ ] games/strictbrain/brain.css
-- [ ] games/strictbrain/index.html
-- [ ] games/strictbrain/js/game.js
-- [ ] games/strictly7s/index.html
-- [ ] games/strictly7s/js/game.js
-- [ ] games/strictly7s/strictly7s.css
-- [ ] games/tierlist/index.html
-- [ ] games/tierlist/js/game.js
-- [ ] games/tierlist/js/items.js
-- [ ] games/turkish/index.html
-- [ ] games/turkish/js/game.js
-- [ ] games/watchparty/index.html
-- [ ] games/watchparty/js/watchparty.js
+- [x] games/blackjack/blackjack.css
+- [x] games/blackjack/index.html
+- [x] games/blackjack/js/game.js
+- [x] games/casino/casino.css
+- [x] games/casino/index.html
+- [x] games/casino/js/casino.js
+- [x] games/crash/crash.css
+- [x] games/crash/index.html
+- [x] games/crash/js/game.js
+- [x] games/food-guessr/index.html
+- [x] games/food-guessr/js/countries.js
+- [x] games/food-guessr/js/dishes.js
+- [x] games/food-guessr/js/game.js
+- [x] games/lol-betting/index.html
+- [x] games/lol-betting/js/game.js
+- [x] games/lol-betting/lol-betting.css
+- [x] games/loop-machine/index.html
+- [x] games/loop-machine/js/game.js
+- [x] games/maexchen/index.html
+- [x] games/maexchen/js/dice.js
+- [x] games/maexchen/js/game.js
+- [x] games/plinko/index.html
+- [x] games/plinko/js/game.js
+- [x] games/plinko/plinko.css
+- [x] games/roulette/index.html
+- [x] games/roulette/js/game.js
+- [x] games/roulette/roulette.css
+- [x] games/shopping/index.html
+- [x] games/shopping/shopping.css
+- [x] games/stocks/index.html
+- [x] games/stocks/js/game.js
+- [x] games/stocks/stocks.css
+- [x] games/strictbrain/brain.css
+- [x] games/strictbrain/index.html
+- [x] games/strictbrain/js/game.js
+- [x] games/strictly7s/index.html
+- [x] games/strictly7s/js/game.js
+- [x] games/strictly7s/strictly7s.css
+- [x] games/tierlist/index.html
+- [x] games/tierlist/js/game.js
+- [x] games/tierlist/js/items.js
+- [x] games/turkish/index.html
+- [x] games/turkish/js/game.js
+- [x] games/watchparty/index.html
+- [x] games/watchparty/js/watchparty.js
 
 ## 6. public/
 
