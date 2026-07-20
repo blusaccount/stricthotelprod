@@ -32,7 +32,7 @@ import { registerFoodGuessrHandlers } from './handlers/food-guessr.js';
 
 const rateLimiters = new Map(); // socketId -> { count, resetTime }
 const rateLimitersIp = new Map(); // ip -> { count, resetTime }
-const stockTradeCooldown = new Map(); // socketId -> timestamp
+const stockTradeCooldown = new Map(); // playerName -> timestamp
 const strictly7sSpinCooldown = new Map(); // socketId -> timestamp
 const plinkoDropCooldown = new Map(); // socketId -> timestamp
 
@@ -63,11 +63,14 @@ function checkRateLimit(socketOrId, maxPerSecond = 10) {
     return true;
 }
 
-function checkStockTradeCooldown(socketId, minIntervalMs = 400) {
+// Keyed by player identity (player.name), not socket.id — a per-socket key
+// lets a player dodge the cooldown by opening a second tab or reconnecting,
+// since each new socket gets its own untouched cooldown entry.
+export function checkStockTradeCooldown(playerName, minIntervalMs = 400) {
     const now = Date.now();
-    const lastTradeAt = stockTradeCooldown.get(socketId) || 0;
+    const lastTradeAt = stockTradeCooldown.get(playerName) || 0;
     if (now - lastTradeAt < minIntervalMs) return false;
-    stockTradeCooldown.set(socketId, now);
+    stockTradeCooldown.set(playerName, now);
     return true;
 }
 
