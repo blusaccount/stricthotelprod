@@ -90,6 +90,11 @@ When a task is large, risky, or spans multiple files, create an ExecPlan using [
 - Avoid adding adjacent features without confirmation.
 - Prefer existing patterns and helpers.
 
+## No guessing — verify against the code
+- The maintainer explicitly dislikes answers based on assumptions. Never claim a feature exists, is missing, or works a certain way without having read the relevant code first.
+- Before proposing a new feature or stating "X fehlt", check the existing modules (especially `public/`, `shared/js/`, `server/handlers/`) — much more exists than the README summary suggests.
+- When unsure, say "not verified yet" and go read the code instead of extrapolating.
+
 ## Handoff
 Record changes and verification notes in [HANDOFF.md](HANDOFF.md).
 
