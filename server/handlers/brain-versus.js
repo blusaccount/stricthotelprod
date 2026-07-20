@@ -56,6 +56,59 @@ function getUtcDayNumber(date = new Date()) {
     return Math.floor(date.getTime() / (1000 * 60 * 60 * 24));
 }
 
+// Forfeit payout: awards the opponent once. Both the explicit 'leave' path
+// and the disconnect path funnel through here; each performs the
+// room.game.status check-and-clear synchronously (no await in between)
+// before calling this, so a simultaneous leave+disconnect can only win the
+// status transition once — the loser of the race sees room.game === null.
+async function payoutBrainVersusForfeit(io, socket, game, room) {
+    const opponent = game.players.find(p => p.socketId !== socket.id);
+    if (!opponent) return;
+    const newBalance = await addBalance(opponent.name, 20, 'brain_versus_forfeit', { roomCode: room.code });
+    emitToUser(io, opponent.name, 'balance-update', { balance: newBalance });
+    io.to(opponent.socketId).emit('brain-versus-result', {
+        winner: opponent.name,
+        isDraw: false,
+        players: game.players.map(p => ({ name: p.name, score: p.finalScore ?? p.score })),
+        coins: 20,
+        forfeit: true
+    });
+}
+
+// ============== STRICT BRAIN VERSUS: SERVER-AUTHORITATIVE SCORING ==============
+// The client never gets to declare a result. While a round is running it
+// reports raw progress (one correct answer, one completed level, one
+// reaction round) via brain-versus-score-update; the server only accepts
+// plausible, rate-limited, monotonically increasing deltas per player and
+// gameId. brain-versus-finished is purely a "my round is over" signal — the
+// winner and payout are always derived from the score the server itself
+// accumulated, never from that event's payload.
+const VERSUS_MAX_SCORE_BY_GAME = { math: 80, stroop: 150, chimp: 9, reaction: 10000, scramble: 40 };
+const VERSUS_SCORE_UPDATE_MIN_INTERVAL_MS = 150;
+// Reaction reports the running sum of *valid* click times only; a player who
+// never lands a valid click (all timeouts) never sends an update. The
+// client's own scoring treats that as the worst possible outcome
+// (maxRounds × 2000ms), so the server mirrors that fallback.
+const VERSUS_REACTION_NO_CLICK_SCORE = 10000;
+
+function isPlausibleVersusScoreUpdate(gameId, prevScore, newScore) {
+    if (!Number.isFinite(newScore) || newScore < prevScore) return false;
+    const max = VERSUS_MAX_SCORE_BY_GAME[gameId];
+    if (max !== undefined && newScore > max) return false;
+    if (gameId === 'chimp') {
+        // First report is the starting level (3); afterwards one completed level at a time.
+        if (prevScore === 0) return newScore <= 3;
+        return newScore - prevScore <= 1;
+    }
+    if (gameId === 'reaction') return newScore - prevScore <= 2000; // one round's worth
+    return newScore - prevScore <= 1; // math / stroop / scramble: one correct answer per report
+}
+
+function computeVersusFinalScore(gameId, player) {
+    if (gameId === 'reaction' && !player.scoreReported) return VERSUS_REACTION_NO_CLICK_SCORE;
+    return player.score;
+}
+
 async function hasBrainDailyReward(name) {
     const day = getUtcDayNumber();
     if (!isDatabaseEnabled()) {
@@ -309,7 +362,11 @@ export function registerBrainVersusHandlers(socket, io, deps) {
 
         room.game = {
             gameId: gameId,
-            players: room.players.map(p => ({ socketId: p.socketId, name: p.name, score: 0, finished: false, finalScore: null })),
+            status: 'running',
+            players: room.players.map(p => ({
+                socketId: p.socketId, name: p.name, score: 0, finished: false, finalScore: null,
+                scoreReported: false, lastScoreUpdateAt: 0
+            })),
             startedAt: Date.now()
         };
 
@@ -319,84 +376,97 @@ export function registerBrainVersusHandlers(socket, io, deps) {
     } catch (err) { console.error('brain-versus-start error:', err.message); } });
 
     socket.on('brain-versus-score-update', (data) => { try {
+        if (!checkRateLimit(socket)) return;
         const room = getRoom(socket.id);
-        if (!room || !room.game || room.gameType !== 'strictbrain') return;
+        if (!room || !room.game || room.game.status !== 'running' || room.gameType !== 'strictbrain') return;
         const player = room.game.players.find(p => p.socketId === socket.id);
         if (!player || player.finished) return;
 
-        const score = Number(data && data.score);
-        if (!Number.isFinite(score) || score < 0) return;
-        player.score = Math.min(9999, Math.round(score));
+        const now = Date.now();
+        if (now - player.lastScoreUpdateAt < VERSUS_SCORE_UPDATE_MIN_INTERVAL_MS) return;
+
+        const reported = Number(data && data.score);
+        if (!Number.isFinite(reported) || reported < 0) return;
+        const rounded = Math.round(reported);
+        if (!isPlausibleVersusScoreUpdate(room.game.gameId, player.score, rounded)) return;
+
+        player.lastScoreUpdateAt = now;
+        player.score = rounded;
+        player.scoreReported = true;
 
         io.to(room.code).emit('brain-versus-scores', {
             players: room.game.players.map(p => ({ name: p.name, score: p.score, finished: p.finished }))
         });
     } catch (err) { console.error('brain-versus-score-update error:', err.message); } });
 
-    socket.on('brain-versus-finished', async (data) => { try {
+    // The client sends no payload here — it only signals "my round is over".
+    // The result is computed entirely from server-tracked, validated scores.
+    socket.on('brain-versus-finished', async () => { try {
         if (!checkRateLimit(socket)) return;
         const room = getRoom(socket.id);
-        if (!room || !room.game || room.gameType !== 'strictbrain') return;
+        if (!room || !room.game || room.game.status !== 'running' || room.gameType !== 'strictbrain') return;
         const player = room.game.players.find(p => p.socketId === socket.id);
         if (!player || player.finished) return;
 
-        const finalScore = Number(data && data.score);
-        const isReaction = room.game.gameId === 'reaction';
-        const maxAllowed = isReaction ? 10000 : 100;
-        if (!Number.isFinite(finalScore) || finalScore < 0 || finalScore > maxAllowed) return;
         player.finished = true;
-        player.finalScore = finalScore;
-        player.score = finalScore;
+        player.finalScore = computeVersusFinalScore(room.game.gameId, player);
+        player.score = player.finalScore;
 
-        // Check if both finished
         const allFinished = room.game.players.every(p => p.finished);
-        if (allFinished) {
-            // Reaction: lower ms = better; others: higher = better
-            let sorted, winner, isDraw;
-            if (isReaction) {
-                sorted = [...room.game.players].sort((a, b) => a.finalScore - b.finalScore);
-                winner = sorted[0].finalScore < sorted[1].finalScore ? sorted[0].name : null;
-                isDraw = sorted[0].finalScore === sorted[1].finalScore;
-            } else {
-                sorted = [...room.game.players].sort((a, b) => b.finalScore - a.finalScore);
-                winner = sorted[0].finalScore > sorted[1].finalScore ? sorted[0].name : null;
-                isDraw = sorted[0].finalScore === sorted[1].finalScore;
-            }
-
-            // Award coins
-            const winnerCoins = 20;
-            const loserCoins = 5;
-            const drawCoins = 10;
-
-            for (const p of room.game.players) {
-                let coins;
-                if (isDraw) { coins = drawCoins; }
-                else if (p.name === winner) { coins = winnerCoins; }
-                else { coins = loserCoins; }
-
-                const newBalance = await addBalance(p.name, coins, 'brain_versus_reward', { roomCode: room.code });
-                emitToUser(io, p.name, 'balance-update', { balance: newBalance });
-            }
-
-            // Achievement: brain_versus_wins for the winner.
-            if (!isDraw && winner) {
-                bump(winner, 'brain_versus_wins', 1).catch(() => {});
-            }
-
-            io.to(room.code).emit('brain-versus-result', {
-                winner: winner,
-                isDraw: isDraw,
-                players: room.game.players.map(p => ({ name: p.name, score: p.finalScore })),
-                coins: isDraw ? drawCoins : winnerCoins
-            });
-
-            room.game = null;
-            console.log(`Brain versus ended in ${room.code}: ${isDraw ? 'draw' : winner + ' wins'}`);
-        } else {
+        if (!allFinished) {
             io.to(room.code).emit('brain-versus-scores', {
                 players: room.game.players.map(p => ({ name: p.name, score: p.score, finished: p.finished }))
             });
+            return;
         }
+
+        // Both players are done. Transition out of 'running' synchronously
+        // (nothing above this line awaits) so this payout can only ever run once.
+        room.game.status = 'finished';
+        const game = room.game;
+        room.game = null;
+
+        // Reaction: lower ms = better; others: higher = better
+        const isReaction = game.gameId === 'reaction';
+        let sorted, winner, isDraw;
+        if (isReaction) {
+            sorted = [...game.players].sort((a, b) => a.finalScore - b.finalScore);
+            winner = sorted[0].finalScore < sorted[1].finalScore ? sorted[0].name : null;
+            isDraw = sorted[0].finalScore === sorted[1].finalScore;
+        } else {
+            sorted = [...game.players].sort((a, b) => b.finalScore - a.finalScore);
+            winner = sorted[0].finalScore > sorted[1].finalScore ? sorted[0].name : null;
+            isDraw = sorted[0].finalScore === sorted[1].finalScore;
+        }
+
+        // Award coins
+        const winnerCoins = 20;
+        const loserCoins = 5;
+        const drawCoins = 10;
+
+        for (const p of game.players) {
+            let coins;
+            if (isDraw) { coins = drawCoins; }
+            else if (p.name === winner) { coins = winnerCoins; }
+            else { coins = loserCoins; }
+
+            const newBalance = await addBalance(p.name, coins, 'brain_versus_reward', { roomCode: room.code });
+            emitToUser(io, p.name, 'balance-update', { balance: newBalance });
+        }
+
+        // Achievement: brain_versus_wins for the winner.
+        if (!isDraw && winner) {
+            bump(winner, 'brain_versus_wins', 1).catch(() => {});
+        }
+
+        io.to(room.code).emit('brain-versus-result', {
+            winner: winner,
+            isDraw: isDraw,
+            players: game.players.map(p => ({ name: p.name, score: p.finalScore })),
+            coins: isDraw ? drawCoins : winnerCoins
+        });
+
+        console.log(`Brain versus ended in ${room.code}: ${isDraw ? 'draw' : winner + ' wins'}`);
     } catch (err) { console.error('brain-versus-finished error:', err.message); } });
 
     socket.on('brain-versus-leave', async () => { try {
@@ -406,21 +476,14 @@ export function registerBrainVersusHandlers(socket, io, deps) {
 
         socket.leave(room.code);
 
-        // If game was running, opponent wins by default
-        if (room.game) {
-            const opponent = room.game.players.find(p => p.socketId !== socket.id);
-            if (opponent) {
-                const newBalance = await addBalance(opponent.name, 20, 'brain_versus_forfeit', { roomCode: room.code });
-                emitToUser(io, opponent.name, 'balance-update', { balance: newBalance });
-                io.to(opponent.socketId).emit('brain-versus-result', {
-                    winner: opponent.name,
-                    isDraw: false,
-                    players: room.game.players.map(p => ({ name: p.name, score: p.finalScore || 0 })),
-                    coins: 20,
-                    forfeit: true
-                });
-            }
+        // If a game was running, it's forfeited and the opponent wins by
+        // default. The status check-and-clear happens synchronously (no
+        // await above it) so a concurrent disconnect can't also pay this out.
+        if (room.game && room.game.status === 'running') {
+            const game = room.game;
+            game.status = 'forfeited';
             room.game = null;
+            await payoutBrainVersusForfeit(io, socket, game, room);
         }
 
         // Remove player from room
@@ -443,20 +506,13 @@ export function registerBrainVersusHandlers(socket, io, deps) {
 }
 
 export async function cleanupBrainVersusOnDisconnect(socket, room, io) {
-    // Brain Versus: handle forfeit before generic cleanup
-    if (room.gameType === 'strictbrain' && room.game) {
-        const opponent = room.game.players.find(p => p.socketId !== socket.id);
-        if (opponent) {
-            const newBalance = await addBalance(opponent.name, 20, 'brain_versus_forfeit', { roomCode: room.code });
-            emitToUser(io, opponent.name, 'balance-update', { balance: newBalance });
-            io.to(opponent.socketId).emit('brain-versus-result', {
-                winner: opponent.name,
-                isDraw: false,
-                players: room.game.players.map(p => ({ name: p.name, score: p.finalScore || 0 })),
-                coins: 20,
-                forfeit: true
-            });
-        }
+    // Brain Versus: handle forfeit before generic cleanup. Same
+    // status-check-and-clear-before-await pattern as brain-versus-leave, so
+    // whichever of leave/disconnect runs first is the only one that pays out.
+    if (room.gameType === 'strictbrain' && room.game && room.game.status === 'running') {
+        const game = room.game;
+        game.status = 'forfeited';
         room.game = null;
+        await payoutBrainVersusForfeit(io, socket, game, room);
     }
 }

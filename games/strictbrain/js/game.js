@@ -222,6 +222,14 @@
         return score + '/100';
     }
 
+    // Versus results show the server's raw tracked score (correct answers /
+    // level reached), not the 0-100 normalized scale used by single-player.
+    function formatVersusScore(gameId, score) {
+        if (gameId === 'reaction') return score + 'ms';
+        if (gameId === 'chimp') return 'Level ' + score;
+        return score + ' Punkte';
+    }
+
     function getBrainAgeScore(r) {
         // Reaction game stores sum of ms as score; use normalized for brain age
         if (r.gameId === 'reaction' && r.rawData && typeof r.rawData.normalized === 'number') {
@@ -507,7 +515,6 @@
         setLives('♥'.repeat(lives));
 
         function renderLevel() {
-            onScore(scorePrefix ? scorePrefix + level : level);
             area.innerHTML =
                 '<div class="chimp-info" id="' + infoId + '">Merke dir die Reihenfolge der Zahlen!</div>' +
                 '<div class="chimp-grid" id="' + gridId + '"></div>';
@@ -561,6 +568,7 @@
                         nextExpected++;
                         if (nextExpected > level) {
                             maxLevel = Math.max(maxLevel, level);
+                            onScore(scorePrefix ? scorePrefix + maxLevel : maxLevel);
                             level++;
                             if (level > 9) {
                                 finishChimp();
@@ -645,7 +653,10 @@
                     zone.className = 'reaction-area result';
                     zone.innerHTML = Math.round(rt) + ' ms';
                     if (onScore) {
-                        const sumMs = Math.round(reactionTimes.reduce((a, b) => a + b, 0));
+                        // Sum only genuine clicks — matches finishReaction's
+                        // validTimes filter so the live score-update stream
+                        // the server tracks never includes timeout penalties.
+                        const sumMs = Math.round(reactionTimes.filter(t => t < 2000).reduce((a, b) => a + b, 0));
                         onScore(sumMs);
                     }
                     setTimeout(nextRound, 800);
@@ -798,7 +809,7 @@
         const timerFn = isSingle ? startTimer : startVersusTimer;
         const onFinish = isSingle
             ? (score, raw) => onGameFinished(gameId, score, raw)
-            : (score) => versusFinish(score);
+            : () => versusFinish();
         const defaultOnScore = isSingle
             ? (val) => { $(scoreElId).textContent = val; }
             : (val) => { versusScoreUpdate(val); };
@@ -821,6 +832,9 @@
                 });
                 break;
             case 'chimp':
+                // Show the starting level immediately; onScore itself now only
+                // fires once a level is actually completed (see runChimpGame).
+                $(scoreElId).textContent = isSingle ? 'Level 3' : '0';
                 runChimpGame({
                     ...cfg,
                     onScore: isSingle
@@ -1089,9 +1103,9 @@
         const op = data.players.find(p => p.name !== playerName);
 
         $('versus-res-name1').textContent = me ? me.name : playerName;
-        $('versus-res-score1').textContent = formatGameScore(versusGameId, me ? me.score : 0);
+        $('versus-res-score1').textContent = formatVersusScore(versusGameId, me ? me.score : 0);
         $('versus-res-name2').textContent = op ? op.name : '???';
-        $('versus-res-score2').textContent = formatGameScore(versusGameId, op ? op.score : 0);
+        $('versus-res-score2').textContent = formatVersusScore(versusGameId, op ? op.score : 0);
 
         // Highlight winner
         $('versus-res-p1').classList.toggle('winner', data.winner === playerName);
@@ -1152,9 +1166,11 @@
         socket.emit('brain-versus-score-update', { score: rawScore });
     }
 
-    function versusFinish(normalizedScore) {
+    function versusFinish() {
         clearInterval(versusTimer);
-        socket.emit('brain-versus-finished', { score: normalizedScore });
+        // No score in the payload — the server determines the result from
+        // the progress it already tracked via brain-versus-score-update.
+        socket.emit('brain-versus-finished');
     }
 
 
