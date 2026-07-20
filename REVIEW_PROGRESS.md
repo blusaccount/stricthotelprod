@@ -5,34 +5,34 @@ Checkliste aller Repository-Dateien (aus `git ls-files`), gruppiert nach Modulen
 ## 1. server/ Kernmodule
 
 - [ ] server.js
-- [ ] server/achievements.js
-- [ ] server/activity-feed.js
-- [ ] server/brain-leaderboards.js
-- [ ] server/character-store.js
-- [ ] server/cleanup.js
-- [ ] server/currency.js
-- [ ] server/daily-streak.js
-- [ ] server/db.js
-- [ ] server/food-leaderboards-store.js
-- [ ] server/food-ratings-store.js
-- [ ] server/game-logic.js
-- [ ] server/identity.js
-- [ ] server/index.js
-- [ ] server/keep-alive.js
-- [ ] server/log-buffer.js
-- [ ] server/lol-betting.js
-- [ ] server/lol-match-checker.js
-- [ ] server/pictochat-store.js
-- [ ] server/portfolio-history.js
-- [ ] server/riot-api.js
-- [ ] server/room-manager.js
-- [ ] server/socket-handlers.js
-- [ ] server/socket-utils.js
-- [ ] server/stock-game.js
-- [ ] server/stock-price-cache.js
-- [ ] server/tierlist-store.js
-- [ ] server/turkish-lessons.js
-- [ ] server/turkish-streaks.js
+- [x] server/achievements.js
+- [x] server/activity-feed.js
+- [x] server/brain-leaderboards.js
+- [x] server/character-store.js
+- [x] server/cleanup.js
+- [x] server/currency.js
+- [x] server/daily-streak.js
+- [x] server/db.js
+- [x] server/food-leaderboards-store.js
+- [x] server/food-ratings-store.js
+- [x] server/game-logic.js
+- [x] server/identity.js
+- [x] server/index.js
+- [x] server/keep-alive.js
+- [x] server/log-buffer.js
+- [x] server/lol-betting.js
+- [x] server/lol-match-checker.js
+- [x] server/pictochat-store.js
+- [x] server/portfolio-history.js
+- [x] server/riot-api.js
+- [x] server/room-manager.js
+- [x] server/socket-handlers.js
+- [x] server/socket-utils.js
+- [x] server/stock-game.js
+- [x] server/stock-price-cache.js
+- [x] server/tierlist-store.js
+- [x] server/turkish-lessons.js
+- [x] server/turkish-streaks.js
 - [ ] server/sql/persistence.sql
 - [ ] server/stock-providers/stooq.js
 - [ ] server/stock-providers/yahoo-chart.js
