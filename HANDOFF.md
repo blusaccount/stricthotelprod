@@ -4,6 +4,35 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Tierlist UX — unranked pool sorting, within-tier rearranging, drag edge auto-scroll (2026-07-20)
+
+## What Changed
+Client-only changes to Thing of the Week (`games/tierlist/`); no server or schema changes.
+
+### Unranked pool sorting (`index.html`, `js/game.js`)
+- New SORT control in the unranked-pool header: MIX (weekly shuffle, default) / CATEGORY / A-Z.
+- CATEGORY groups the pool by item category with small gold group labels; choice persists in `localStorage` (`tierlist-unranked-sort`).
+
+### Within-tier rearranging (`js/game.js`)
+- Items can now be dropped at a specific position inside a tier row (and re-dragged to rearrange); a gold insert marker shows the drop position while dragging (desktop + touch).
+- Order is presentation-only: the server still stores just `itemIndex -> tier`, so per-tier order lives client-side in `localStorage` (`tierlist-order-<weekKey>`, pruned on week change) and is reconciled against server placements on every render (stale entries dropped, missing ones appended).
+- Same-tier drops are pure rearranges and do NOT emit `tierlist-place-item`.
+
+### Drag edge auto-scroll (`js/game.js`)
+- While dragging (HTML5 drag or touch), holding the pointer within 140px of the viewport top/bottom scrolls the page (speed scales toward the edge). Fixes "can't scroll up while carrying an item to the tier rows" — the native browser zone was tiny/absent for touch.
+- During touch auto-scroll the drop-zone highlight re-resolves each frame so it tracks zones scrolling past a stationary finger.
+
+## How to Verify
+- `npm test` (all pass; no server changes).
+- Manual: open `/games/tierlist/`, use the SORT buttons on the pool (CATEGORY shows group labels; choice survives reload). Drag an item from the pool while holding the pointer near the top of the screen — page scrolls up. Drop items into a tier at a specific spot (gold marker), drag within the tier to rearrange, reload — order persists.
+- Verified headless via Playwright: sort modes + persistence, place → S tier, within-tier reorder via drop-at-left-edge, order persistence across reload, touch auto-scroll (scrollY decreased while finger held at top edge).
+
+## Open Risks / Notes
+- Within-tier order is per-browser (localStorage), not synced across devices — placements themselves still sync via the server.
+- Pre-existing (not introduced here): on a cold server, `tierlist-join` can race `register-player` and get silently dropped (empty player name) until the next reload/reconnect.
+
+---
+
 # Handoff: Full repo review completed — file-for-file pass, tool sweep, spot-check verification (2026-07-20)
 
 ## What Changed
