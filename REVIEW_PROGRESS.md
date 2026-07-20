@@ -85,10 +85,10 @@ Checkliste aller Repository-Dateien (aus `git ls-files`), gruppiert nach Modulen
 
 ## 3. server/routes/
 
-- [ ] server/routes/auth.js
-- [ ] server/routes/nostalgiabait.js
-- [ ] server/routes/stocks.js
-- [ ] server/routes/turkish.js
+- [x] server/routes/auth.js
+- [x] server/routes/nostalgiabait.js
+- [x] server/routes/stocks.js
+- [x] server/routes/turkish.js
 
 ## 4. shared/
 
