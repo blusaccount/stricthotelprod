@@ -61,17 +61,17 @@ Checkliste aller Repository-Dateien (aus `git ls-files`), gruppiert nach Modulen
 
 ## 2. server/handlers/
 
-- [ ] server/handlers/achievements.js
-- [ ] server/handlers/activity-feed.js
-- [ ] server/handlers/blackjack.js
-- [ ] server/handlers/brain-versus.js
-- [ ] server/handlers/crash.js
-- [ ] server/handlers/currency.js
-- [ ] server/handlers/daily-streak.js
-- [ ] server/handlers/food-guessr.js
-- [ ] server/handlers/lobby-watchparty.js
-- [ ] server/handlers/lobby.js
-- [ ] server/handlers/lol-betting.js
+- [x] server/handlers/achievements.js
+- [x] server/handlers/activity-feed.js
+- [x] server/handlers/blackjack.js
+- [x] server/handlers/brain-versus.js
+- [x] server/handlers/crash.js
+- [x] server/handlers/currency.js
+- [x] server/handlers/daily-streak.js
+- [x] server/handlers/food-guessr.js
+- [x] server/handlers/lobby-watchparty.js
+- [x] server/handlers/lobby.js
+- [x] server/handlers/lol-betting.js
 - [ ] server/handlers/loop-machine.js
 - [ ] server/handlers/maexchen.js
 - [ ] server/handlers/pictochat.js
