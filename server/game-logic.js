@@ -1,3 +1,5 @@
+import { randomInt } from 'crypto';
+
 // ============== GAME CONSTANTS ==============
 
 // Dice value encoding: higher die as tens digit (e.g., roll 3+1 = 31)
@@ -25,8 +27,8 @@ export function rollName(val) {
 }
 
 export function rollDice() {
-    const a = Math.floor(Math.random() * 6) + 1;
-    const b = Math.floor(Math.random() * 6) + 1;
+    const a = randomInt(1, 7);
+    const b = randomInt(1, 7);
     const high = Math.max(a, b);
     const low = Math.min(a, b);
     return { d1: high, d2: low, value: high * 10 + low };
