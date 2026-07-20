@@ -130,7 +130,7 @@ export function registerStocksHandlers(socket, io, deps) {
             emitStockError(socket, 'INVALID_AMOUNT', 'Amount must be a positive integer');
             return;
         }
-        if (!checkStockTradeCooldown(socket.id)) {
+        if (!checkStockTradeCooldown(player.name)) {
             emitStockError(socket, 'TRADE_COOLDOWN', 'Trade requests are too fast');
             return;
         }
@@ -197,7 +197,7 @@ export function registerStocksHandlers(socket, io, deps) {
             emitStockError(socket, 'INVALID_AMOUNT', 'Amount must be a positive integer');
             return;
         }
-        if (!checkStockTradeCooldown(socket.id)) {
+        if (!checkStockTradeCooldown(player.name)) {
             emitStockError(socket, 'TRADE_COOLDOWN', 'Trade requests are too fast');
             return;
         }

@@ -11,6 +11,31 @@ const FP_TOLERANCE = 1.0001;
 // Fallback in-memory storage for local development without DATABASE_URL
 const portfolios = new Map(); // playerName -> Map<symbol, { shares: number, avgCost: number }>
 
+// Per-player mutex serializing buyStock/sellStock in memory mode. Mirrors
+// the atomicity the DB path gets from `withTransaction` + `for update`:
+// without this, two concurrent trades for the same player (e.g. two tabs)
+// can both read the same stale shares/avgCost and the second write clobbers
+// the first (lost update), even though the balance itself is protected by
+// currency.js's own lock.
+const stockTradeLocks = new Map(); // playerName -> Promise
+
+async function withStockTradeLock(playerName, fn) {
+    while (stockTradeLocks.has(playerName)) {
+        await stockTradeLocks.get(playerName);
+    }
+
+    let resolve;
+    const lockPromise = new Promise(r => { resolve = r; });
+    stockTradeLocks.set(playerName, lockPromise);
+
+    try {
+        return await fn();
+    } finally {
+        stockTradeLocks.delete(playerName);
+        resolve();
+    }
+}
+
 function round2(n) {
     return Math.round(n * 100) / 100;
 }
@@ -53,11 +78,18 @@ function getPortfolioMemory(playerName) {
     return portfolios.get(playerName);
 }
 
-async function getOrCreatePlayerId(playerName, client = null) {
+// `lock: true` acquires a row lock on the player's row (SELECT ... FOR
+// UPDATE) that is held for the rest of the caller's transaction. Only
+// meaningful when `client` is a transaction client — used to serialize a
+// player's trades against each other so the stock_positions read-modify-
+// write below can't lose an update to a concurrent trade (two tabs, fast
+// reconnect, etc). Callers outside a transaction (e.g. read-only snapshot
+// lookups) must leave this false.
+async function getOrCreatePlayerId(playerName, client = null, { lock = false } = {}) {
     const runner = client || { query };
     const currentBalance = await getBalance(playerName, runner);
 
-    const result = await runner.query(
+    await runner.query(
         `insert into players (name, balance)
          values ($1, $2)
          on conflict (name) do nothing`,
@@ -66,7 +98,7 @@ async function getOrCreatePlayerId(playerName, client = null) {
 
     // Fetch the id (needed whether inserted or already existed)
     const idResult = await runner.query(
-        'select id from players where name = $1',
+        `select id from players where name = $1${lock ? ' for update' : ''}`,
         [playerName]
     );
 
@@ -88,38 +120,45 @@ export async function buyStock(playerName, symbol, price, amount) {
     amount = round2(amount);
 
     if (!isDatabaseEnabled()) {
-        const newBalance = await deductBalance(playerName, amount, 'stock_buy', { symbol, price, amount });
-        if (newBalance === null) {
-            return { ok: false, code: 'INSUFFICIENT_FUNDS', error: 'Insufficient funds' };
-        }
+        return withStockTradeLock(playerName, async () => {
+            const newBalance = await deductBalance(playerName, amount, 'stock_buy', { symbol, price, amount });
+            if (newBalance === null) {
+                return { ok: false, code: 'INSUFFICIENT_FUNDS', error: 'Insufficient funds' };
+            }
 
-        const shares = amount / price;
-        const portfolio = getPortfolioMemory(playerName);
-        const existing = portfolio.get(symbol);
+            const shares = amount / price;
+            const portfolio = getPortfolioMemory(playerName);
+            const existing = portfolio.get(symbol);
 
-        if (existing) {
-            const totalCost = existing.avgCost * existing.shares + amount;
-            existing.shares += shares;
-            existing.avgCost = totalCost / existing.shares;
-        } else {
-            portfolio.set(symbol, { shares, avgCost: price });
-        }
+            if (existing) {
+                const totalCost = existing.avgCost * existing.shares + amount;
+                existing.shares += shares;
+                existing.avgCost = totalCost / existing.shares;
+            } else {
+                portfolio.set(symbol, { shares, avgCost: price });
+            }
 
-        return { ok: true, shares, newBalance };
+            return { ok: true, shares, newBalance };
+        });
     }
 
     try {
         const txResult = await withTransaction(async (client) => {
+            // Lock the player's row first so a concurrent buy/sell for the
+            // same player (any symbol) blocks here until this transaction
+            // commits — makes the whole read-modify-write below atomic
+            // instead of relying on statement-ordering luck.
+            const playerId = await getOrCreatePlayerId(playerName, client, { lock: true });
+
             const newBalance = await deductBalance(playerName, amount, 'stock_buy', { symbol, price, amount }, client);
             if (newBalance === null) {
                 return { ok: false, code: 'INSUFFICIENT_FUNDS', error: 'Insufficient funds' };
             }
 
-            const playerId = await getOrCreatePlayerId(playerName, client);
             const shares = amount / price;
 
             const current = await client.query(
-                'select shares, avg_cost from stock_positions where player_id = $1 and symbol = $2',
+                'select shares, avg_cost from stock_positions where player_id = $1 and symbol = $2 for update',
                 [playerId, symbol]
             );
 
@@ -169,33 +208,37 @@ export async function sellStock(playerName, symbol, price, amount) {
     amount = round2(amount);
 
     if (!isDatabaseEnabled()) {
-        const portfolio = getPortfolioMemory(playerName);
-        const holding = portfolio.get(symbol);
+        return withStockTradeLock(playerName, async () => {
+            const portfolio = getPortfolioMemory(playerName);
+            const holding = portfolio.get(symbol);
 
-        if (!holding || holding.shares <= 0) {
-            return { ok: false, code: 'NO_SHARES', error: 'No shares to sell' };
-        }
+            if (!holding || holding.shares <= 0) {
+                return { ok: false, code: 'NO_SHARES', error: 'No shares to sell' };
+            }
 
-        const sharesToSell = amount / price;
-        if (sharesToSell > holding.shares * FP_TOLERANCE) {
-            return { ok: false, code: 'NOT_ENOUGH_SHARES', error: 'Not enough shares' };
-        }
+            const sharesToSell = amount / price;
+            if (sharesToSell > holding.shares * FP_TOLERANCE) {
+                return { ok: false, code: 'NOT_ENOUGH_SHARES', error: 'Not enough shares' };
+            }
 
-        const actualShares = Math.min(sharesToSell, holding.shares);
-        const proceeds = actualShares * price;
+            const actualShares = Math.min(sharesToSell, holding.shares);
+            const proceeds = actualShares * price;
 
-        holding.shares -= actualShares;
-        if (holding.shares < 1e-10) portfolio.delete(symbol);
+            holding.shares -= actualShares;
+            if (holding.shares < 1e-10) portfolio.delete(symbol);
 
-        const newBalance = await addBalance(playerName, round2(proceeds), 'stock_sell', { symbol, price, amount: round2(proceeds) });
-        return { ok: true, shares: actualShares, newBalance };
+            const newBalance = await addBalance(playerName, round2(proceeds), 'stock_sell', { symbol, price, amount: round2(proceeds) });
+            return { ok: true, shares: actualShares, newBalance };
+        });
     }
 
     try {
         const txResult = await withTransaction(async (client) => {
-            const playerId = await getOrCreatePlayerId(playerName, client);
+            // Same player-row lock as buyStock — serializes concurrent
+            // trades for this player before we touch stock_positions.
+            const playerId = await getOrCreatePlayerId(playerName, client, { lock: true });
             const current = await client.query(
-                'select shares from stock_positions where player_id = $1 and symbol = $2',
+                'select shares from stock_positions where player_id = $1 and symbol = $2 for update',
                 [playerId, symbol]
             );
             const holding = current.rows[0];
