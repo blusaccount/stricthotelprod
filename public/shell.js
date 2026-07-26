@@ -145,7 +145,7 @@
         try {
             if (!switchSound) {
                 switchSound = new Audio('/userinput/switch.mp3');
-                switchSound.volume = 0.25;
+                switchSound.volume = 0.12;
                 switchSound.preload = 'auto';
             }
             switchSound.currentTime = 0;
