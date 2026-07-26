@@ -52,7 +52,6 @@
     const miniBox = $('lobby-wp-mini');
     const miniSlot = $('lobby-wp-mini-slot');
     const miniBackBtn = $('lobby-wp-mini-back');
-    let inMiniMode = false;
     let activeSlot = homeSlot;
     let portalRafId = null;
 
@@ -87,7 +86,6 @@
         if (!currentVideoId) return;
         miniBox.hidden = false;
         activeSlot = miniSlot;
-        inMiniMode = true;
         repositionPortal();
     }
 
@@ -95,7 +93,6 @@
         if (!playerWrap || !miniBox) return;
         miniBox.hidden = true;
         activeSlot = homeSlot;
-        inMiniMode = false;
         repositionPortal();
     }
 
@@ -114,6 +111,29 @@
         const ro = new ResizeObserver(schedulePortalReposition);
         if (homeSlot) ro.observe(homeSlot);
         if (miniSlot) ro.observe(miniSlot);
+    }
+    // The mobile rail slides in/out via `transform: translateX(...)`. Transform
+    // changes don't fire ResizeObserver, so we follow the slide ourselves: on
+    // transitionstart, rAF-loop reposition until transitionend.
+    const shellRail = document.getElementById('shell-rail');
+    if (shellRail) {
+        let railAnimating = false;
+        const trackRail = () => {
+            if (!railAnimating) return;
+            repositionPortal();
+            requestAnimationFrame(trackRail);
+        };
+        shellRail.addEventListener('transitionstart', (e) => {
+            if (e.propertyName !== 'transform') return;
+            if (railAnimating) return;
+            railAnimating = true;
+            requestAnimationFrame(trackRail);
+        });
+        shellRail.addEventListener('transitionend', (e) => {
+            if (e.propertyName !== 'transform') return;
+            railAnimating = false;
+            schedulePortalReposition();
+        });
     }
 
     function escapeHtml(str) {
@@ -187,6 +207,7 @@
         // the rebuilt player would emit getCurrentTime() of the new video.
         cancelPendingState();
         suppressUntil = 0;
+        if (player) { try { player.destroy(); } catch (_) {} }
         player = null;
         ytReady = false;
         // Always tear down and rebuild on video change.
@@ -336,6 +357,7 @@
         // No video → tear down.
         if (!s || !s.videoId) {
             if (placeholder) placeholder.style.display = '';
+            if (player) { try { player.destroy(); } catch (_) {} }
             if (playerWrap) playerWrap.innerHTML = '';
             player = null;
             currentVideoId = null;

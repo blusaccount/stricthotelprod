@@ -511,6 +511,12 @@ body.shell-body > .shell-root { width: 100%; }
     .shell-menu-toggle { display: inline-flex; align-items: center; justify-content: center; }
     .shell-rail-toggle { display: inline-flex; align-items: center; justify-content: center; }
     .shell-name-input { width: 90px; }
+    .shell-topbar .shell-edit-char,
+    .shell-topbar button.shell-edit-char {
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
+    }
 }
 @media (max-width: 600px) {
     .shell-pill .streak-divider { display: none; }
