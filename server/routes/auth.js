@@ -67,6 +67,7 @@ export function authMiddleware(req, res, next) {
     if (req.path === '/login.html' ||
         req.path === '/health' ||
         req.path === '/admin/logs' ||
+        req.path === '/admin/release-name' ||
         req.path.startsWith('/shared/css/') ||
         req.path.startsWith('/shared/fonts/')) {
         return next();

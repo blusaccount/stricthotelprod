@@ -92,6 +92,39 @@ export async function claimName(playerName, ownerToken) {
 }
 
 /**
+ * Release the owner token bound to a name so the next register-player can
+ * claim it fresh. Operator-only escape hatch for lost tokens: the token
+ * lives in localStorage, so clearing site data (or renaming from a second
+ * device) can strand a name under a token nobody holds anymore — the owner
+ * then sees NAME_TAKEN on their own name forever. Player data (balance,
+ * achievements, character) is untouched; only the ownership binding resets.
+ *
+ * Returns one of:
+ *   { ok: true }                       — name is now unowned
+ *   { ok: false, reason: 'not_found' } — no such player / no binding
+ *   { ok: false, reason: 'db_error' }  — query failed
+ */
+export async function releaseName(playerName) {
+    if (!playerName) return { ok: false, reason: 'not_found' };
+    if (!isDatabaseEnabled()) {
+        return memoryOwners.delete(playerName)
+            ? { ok: true }
+            : { ok: false, reason: 'not_found' };
+    }
+    try {
+        const r = await query(
+            'update players set owner_token = null where name = $1',
+            [playerName]
+        );
+        if (r.rowCount === 0) return { ok: false, reason: 'not_found' };
+        return { ok: true };
+    } catch (err) {
+        console.error('releaseName error:', err.message);
+        return { ok: false, reason: 'db_error' };
+    }
+}
+
+/**
  * Verify that the supplied token owns the given name. Used by HTTP routes
  * that take a player name from the request body (e.g. /api/turkish/complete).
  *

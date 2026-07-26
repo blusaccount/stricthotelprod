@@ -32,6 +32,8 @@ import { getAllHeldSymbols } from './stock-game.js';
 import { startPeriodicCleanup } from './cleanup.js';
 import { startKeepAlive, stopKeepAlive } from './keep-alive.js';
 import { getLogs, getStats } from './log-buffer.js';
+import { releaseName } from './identity.js';
+import { sanitizeName } from './socket-utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -146,6 +148,29 @@ app.get('/admin/logs', (req, res) => {
         stats: getStats(),
         logs: getLogs({ since, level, grep, limit })
     });
+});
+
+// Release the TOFU owner binding on a player name. Escape hatch for the
+// "my own name says taken" case: the owner token lives in localStorage, so
+// clearing site data or switching devices strands the name under a token
+// nobody holds. Clearing the binding lets the next register-player claim it.
+// Guarded by the same operator token as /admin/logs.
+app.post('/admin/release-name', async (req, res) => {
+    const expected = process.env.LOGS_TOKEN;
+    if (!expected) return res.status(503).json({ error: 'LOGS_TOKEN not configured' });
+    const provided = req.query.token || req.headers['x-logs-token'] || '';
+    if (!tokensEqual(String(provided), expected)) {
+        return res.status(401).json({ error: 'unauthorized' });
+    }
+    const name = sanitizeName(req.body?.name);
+    if (!name) return res.status(400).json({ error: 'invalid name' });
+    const result = await releaseName(name);
+    if (!result.ok) {
+        const status = result.reason === 'not_found' ? 404 : 500;
+        return res.status(status).json({ error: result.reason });
+    }
+    console.log(`Admin released owner token for name: ${name}`);
+    res.json({ ok: true, name });
 });
 
 // ============== ROUTE MODULES ==============
