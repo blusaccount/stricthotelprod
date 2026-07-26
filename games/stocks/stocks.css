@@ -176,6 +176,7 @@ body {
 }
 
 .holdings-table .symbol { font-weight: 700; }
+.holdings-table .holding-icon { font-size: 12px; margin-right: 5px; vertical-align: -2px; }
 .holdings-table .positive { font-weight: 700; }
 .holdings-table .positive::before { content: '+'; }
 .holdings-table .negative { color: var(--ds-text-dim); }

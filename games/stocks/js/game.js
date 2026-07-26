@@ -231,6 +231,25 @@
         return 'STOCK';
     };
 
+    // --- Asset icons ---
+    // No flag emojis: Windows renders them as plain letters.
+    const STOCK_ICONS = {
+        AAPL: '🍎', MSFT: '🪟', NVDA: '🎮', TSLA: '🚗', AMZN: '📦', META: '👥',
+        GOOGL: '🔍', NFLX: '🎬', AMD: '🖥️', CRM: '☁️', AVGO: '📡', ORCL: '🗄️',
+        ADBE: '🎨', DIS: '🏰', PYPL: '💸', INTC: '💻', BA: '✈️', V: '💳',
+        JPM: '🏦', WMT: '🛒', KO: '🥤', PEP: '🍿', JNJ: '💊', PG: '🧼',
+        'BRK-B': '🎩', XOM: '⛽', UNH: '🏥',
+        URTH: '🌍', QQQ: '🤖', GDAXI: '🥨', DIA: '🏭', SPY: '🦅', VGK: '🥐',
+        EEM: '🌏', IWM: '🐭', VTI: '🗽', ARKK: '🚀', XLF: '💰', XLE: '⚡',
+        GLD: '🥇', TLT: '🏛️',
+        'GC=F': '🥇', 'SI=F': '🥈', 'PL=F': '💍', 'HG=F': '🥉',
+        'CL=F': '🛢️', 'BZ=F': '🛢️', 'NG=F': '🔥',
+        'BTC-USD': '🟠', 'ETH-USD': '🔷', 'SOL-USD': '🟣', 'BNB-USD': '🟡',
+        'XRP-USD': '💧', 'ADA-USD': '🔵', 'DOGE-USD': '🐕',
+    };
+    const TYPE_ICONS = { STOCK: '🏢', ETF: '🧺', COMMODITY: '⛏️', CRYPTO: '🪙' };
+    const getStockIcon = (symbol) => STOCK_ICONS[symbol] || TYPE_ICONS[getStockType(symbol)] || '🏢';
+
     // --- Render Market Grid ---
     const renderMarket = () => {
         let filtered = marketData;
@@ -389,7 +408,7 @@
                 : `${p.gainLoss >= 0 ? '+' : ''}${formatNumber(p.gainLoss)} (${p.gainLossPct >= 0 ? '+' : ''}${formatNumber(p.gainLossPct)}%)`;
             const glCls = stale ? '' : cls;
             html += `<tr>`
-                + `<td class="symbol">${escapeHtml(p.symbol)}<br><span style="color:var(--ds-text-dim);font-size:6px">${escapeHtml(p.name)}</span></td>`
+                + `<td class="symbol"><span class="holding-icon">${getStockIcon(p.symbol)}</span>${escapeHtml(p.symbol)}<br><span style="color:var(--ds-text-dim);font-size:6px">${escapeHtml(p.name)}</span></td>`
                 + `<td>${formatNumber(p.shares, 4)}</td>`
                 + `<td>$${formatNumber(p.avgCost)}</td>`
                 + `<td>${priceCell}</td>`
