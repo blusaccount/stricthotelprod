@@ -104,7 +104,6 @@ See `.env.example` for all available options. Key variables:
 - 💎 **Shop** - Spend StrictCoins on diamonds and premium items
 - 🏅 **Achievements** - 59 achievements with progress tracking and unlock toasts
 - 📼 **Nostalgiabait** - Retro console boot experiences
-- 🏨 **The Hotel** - External game link
 
 **Lobby Features:**
 - Character creator with pixel art editor
