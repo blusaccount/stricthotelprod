@@ -4,6 +4,69 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Crash — curve rendered as a vertical line after ~6.4s (2026-07-27)
+
+## Why
+Reported by the maintainer: the Crash graph "starts going vertical". Client-only
+rendering defect in `games/crash/js/game.js`; no server, math, or RTP change.
+
+## Root Cause
+`timeToX(elapsedMs)` derived its own view window from **the point's own timestamp**:
+
+    const totalShown = Math.max(8000, elapsedMs * 1.25);
+    return 30 + (elapsedMs / totalShown) * (W - 60);
+
+For any `t >= 6400ms` that ratio is `t / (1.25 * t)` = exactly `0.8`, so every
+sample past 6.4s mapped to the identical x pixel. The curve bent upward from 6.4s
+and was fully vertical by ~20s, once the 800-point ring buffer had dropped every
+sample older than 6.4s. The comment above it already described the correct intent
+("pin current time to 80% of width") — only the implementation was self-referential.
+
+## What Changed (`games/crash/js/game.js`, client only)
+- Split into `timeSpanForView(tipMs)` + `timeToX(elapsedMs, totalShown)`. `drawCurve()`
+  computes `totalShown` **once per frame from the tip** and passes it to all 7 call sites.
+- **Second defect, found while verifying the first and previously masked by it**: the
+  800-point buffer `shift()`ed off the head, so past ~13.3s the curve no longer reached
+  back to `t = 0` while the fill path still started at the origin — drawing a false chord
+  from bottom-left across the plot (measured: 523px of missing head at 60s). Hit any round
+  past m≈2.2, i.e. ~44% of rounds (`P(crash > 2.2x) = 0.96/2.2`).
+  Replaced `shift()` with `resampleCurve()`: on overflow (`MAX_CURVE_POINTS = 800`) the
+  buffer is resampled to `CURVE_POINTS_TARGET = 400` points uniform in time over `[0, tip]`.
+  Uniform matters — simple halving degrades the *oldest* samples geometrically (gaps of
+  4267ms at t=0) and chords the whole 0->1.00x launch ramp into one straight line.
+
+## How to Verify
+- `npx vitest run` — 459 passed / 33 files. (No test covers this file; it is client canvas
+  code. The `stocks-route.test.js` express failures noted in the previous entry are gone.)
+- Geometry simulated numerically against the real functions over a 90s round, 900x420 canvas:
+
+  | | before | after |
+  |---|---|---|
+  | curve x-span @20s | **0 px** (vertical) | 672 px |
+  | curve x-span @60s | 0 px | 672 px |
+  | missing head @60s | 523 px | 0 px |
+  | worst segment | 274 px | 13.9 px |
+  | oldest retained `t` | 6667ms+ | 0 |
+
+- Both curve branches are linear in screen space under this Y mapping (launch: `y` linear
+  in `m` linear in `t`; flight: `y ∝ log(m)` and `log(m)` linear in `t`), so chords *within*
+  a branch are exact. Only the 1.00x knee can be chorded — straddle is 0ms up to 60s and
+  ≤400ms (~3px) on 75s+ rounds (m>300, ~0.3% of rounds).
+
+## Open Risks / Notes
+- **Still not verified in a browser** — same reason as the previous entry (SITE_PASSWORD
+  gate). The math and pixel geometry are covered above, but the actual canvas render of the
+  launch band, break-even line and rescue button remains visually unchecked. Carried forward.
+- `resampleCurve()` picks nearest-earlier existing samples rather than interpolating. With
+  400 points over a piecewise-linear curve this is visually exact; if the curve ever gains
+  real curvature in screen space, switch to interpolation.
+- The tip is always the true live sample (appended every frame, and `resampleCurve()`
+  explicitly preserves it), so the rocket marker never lags.
+- Untouched: `LAUNCH_MS` / `GROWTH_RATE` client-server duplication, and the deliberate
+  below-break-even rescue trap. Do not restyle the rescue path green.
+
+---
+
 # Handoff: Crash — 0.00x launch phase with a below-break-even rescue window (2026-07-27)
 
 ## Why

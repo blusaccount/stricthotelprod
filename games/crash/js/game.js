@@ -56,8 +56,32 @@
     let players = [];               // public bet list mirrored from server
     let myBet = null;               // { bet, autoCashout, cashedAt, payout, lost }
 
-    // Curve drawing buffer.
+    // Curve drawing buffer. On overflow it is resampled down to a uniform
+    // spacing over the whole round rather than truncated, so it always still
+    // reaches back to t = 0 — a plain shift() drops the head and the filled
+    // area then draws a false chord up from the origin.
+    const MAX_CURVE_POINTS = 800;
+    const CURVE_POINTS_TARGET = 400;
     const curvePoints = [];
+
+    // Uniform in time, so the 1.00x knee between the launch ramp and the flight
+    // curve is never chorded across. (Halving the buffer instead degrades the
+    // oldest samples geometrically and flattens the whole ramp into one line.)
+    function resampleCurve() {
+        const tip = curvePoints[curvePoints.length - 1];
+        if (!tip || tip.t <= 0) return;
+        const step = tip.t / (CURVE_POINTS_TARGET - 1);
+        const out = [];
+        let r = 0;
+        for (let i = 0; i < CURVE_POINTS_TARGET - 1; i++) {
+            const want = i * step;
+            while (r + 1 < curvePoints.length && curvePoints[r + 1].t <= want) r++;
+            out.push(curvePoints[r]);
+        }
+        out.push(tip);
+        curvePoints.length = 0;
+        for (const p of out) curvePoints.push(p);
+    }
 
     // ---------- Canvas ---------- //
     const W = canvas.width;
@@ -87,9 +111,14 @@
         const ratio = Math.log(m) / Math.log(Math.max(1.01, viewMax));
         return breakEvenY() - Math.min(1, ratio) * (bottom - plotTop() - bandH);
     }
-    function timeToX(elapsedMs) {
-        // Auto-scale x-axis: pin current time to 80% of width, anchor 0 at 5%.
-        const totalShown = Math.max(8000, elapsedMs * 1.25);
+    // Auto-scale x-axis: pin the newest sample to 80% of width, never zoom in
+    // past an 8s window. Derived from the tip once per frame — deriving it from
+    // each point's own timestamp collapses every sample past 6.4s onto the same
+    // x (t / 1.25t is constant), which drew the curve as a vertical line.
+    function timeSpanForView(tipMs) {
+        return Math.max(8000, tipMs * 1.25);
+    }
+    function timeToX(elapsedMs, totalShown) {
         return 30 + (elapsedMs / totalShown) * (W - 60);
     }
 
@@ -140,16 +169,17 @@
         if (curvePoints.length < 2) return;
 
         const viewMax = maxMultiplierForView();
+        const last = curvePoints[curvePoints.length - 1];
+        const totalShown = timeSpanForView(last.t);
 
         // Filled area under curve
         ctx.beginPath();
-        const last = curvePoints[curvePoints.length - 1];
-        ctx.moveTo(timeToX(0), multToY(0, viewMax));
+        ctx.moveTo(timeToX(0, totalShown), multToY(0, viewMax));
         for (const p of curvePoints) {
-            ctx.lineTo(timeToX(p.t), multToY(p.m, viewMax));
+            ctx.lineTo(timeToX(p.t, totalShown), multToY(p.m, viewMax));
         }
-        ctx.lineTo(timeToX(last.t), H);
-        ctx.lineTo(timeToX(0), H);
+        ctx.lineTo(timeToX(last.t, totalShown), H);
+        ctx.lineTo(timeToX(0, totalShown), H);
         ctx.closePath();
         const inProfit = displayMultiplier >= 1;
         const grad = ctx.createLinearGradient(0, 0, 0, H);
@@ -169,9 +199,9 @@
 
         // Curve stroke
         ctx.beginPath();
-        ctx.moveTo(timeToX(curvePoints[0].t), multToY(curvePoints[0].m, viewMax));
+        ctx.moveTo(timeToX(curvePoints[0].t, totalShown), multToY(curvePoints[0].m, viewMax));
         for (const p of curvePoints) {
-            ctx.lineTo(timeToX(p.t), multToY(p.m, viewMax));
+            ctx.lineTo(timeToX(p.t, totalShown), multToY(p.m, viewMax));
         }
         ctx.lineWidth = 4;
         ctx.lineCap = 'round';
@@ -191,7 +221,7 @@
         ctx.shadowBlur = 0;
 
         // Rocket / X marker at the end of the curve
-        const tipX = timeToX(last.t);
+        const tipX = timeToX(last.t, totalShown);
         const tipY = multToY(last.m, viewMax);
         ctx.font = '32px "Press Start 2P", monospace';
         ctx.textAlign = 'center';
@@ -208,7 +238,7 @@
             const m = multiplierAt(projected);
             displayMultiplier = m;
             curvePoints.push({ t: projected, m });
-            if (curvePoints.length > 800) curvePoints.shift();
+            if (curvePoints.length > MAX_CURVE_POINTS) resampleCurve();
             updateMultiplierDisplay(m, false);
         } else if (roundState === 'reveal' || roundState === 'crashed') {
             // Hold multiplier at crashed value.
