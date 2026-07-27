@@ -136,7 +136,12 @@
             <span class="detail-change" id="detail-change"></span>
         </div>
 
-        <div class="detail-desc" id="detail-desc"></div>
+        <!-- Description keeps a readable line length; the key stats fill the
+             space beside it instead of leaving the row half empty. -->
+        <div class="detail-top">
+            <div class="detail-desc" id="detail-desc"></div>
+            <div class="portfolio-summary detail-info" id="detail-info"></div>
+        </div>
 
         <div class="category-tabs" id="range-tabs">
             <button class="category-tab" data-range="1d">1D</button>
@@ -151,9 +156,6 @@
             <div class="chart-empty" id="detail-chart-empty" style="display:none;">No chart data available.</div>
             <canvas id="detail-chart"></canvas>
         </div>
-
-        <div class="section-title">INFO</div>
-        <div class="portfolio-summary" id="detail-info"></div>
 
         <div class="section-title">YOUR POSITION</div>
         <div id="detail-position"><div class="no-holdings">You don't own this yet.</div></div>

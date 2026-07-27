@@ -458,15 +458,34 @@ body {
 }
 .detail-actions .btn-trade { flex: 1; }
 
+/* Text column capped for readable line length, stats column takes the
+   rest — otherwise the row sits half empty next to short descriptions. */
+.detail-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 340px);
+    gap: 16px;
+    align-items: start;
+    margin-bottom: 12px;
+}
+
 .detail-desc {
     font-family: var(--ds-font-body);
     font-size: 16px;
     color: var(--ds-text);
     line-height: 1.45;
-    margin-bottom: 12px;
-    max-width: 560px;
 }
 .detail-desc:empty { display: none; }
+
+.detail-top .detail-info {
+    grid-template-columns: 1fr 1fr;
+    margin-bottom: 0;
+}
+.detail-top .detail-info:empty { display: none; }
+
+/* Below this the text column would be squeezed to a few words per line. */
+@media (max-width: 700px) {
+    .detail-top { grid-template-columns: 1fr; }
+}
 
 .detail-desc-source {
     font-size: 12px;
