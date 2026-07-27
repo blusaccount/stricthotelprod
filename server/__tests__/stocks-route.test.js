@@ -168,6 +168,30 @@ describe('fetchTickerQuotes merge behavior', () => {
         const result = await router.fetchTickerQuotes();
         expect(result[0].marketState).toBeNull();
     });
+
+    it('stamps fresh quotes with asOf = fetch time', async () => {
+        const mockQuote = vi.fn().mockResolvedValueOnce([makeQuote('AAPL', 150)]);
+        const router = makeRouter(mockQuote);
+
+        const before = Date.now();
+        const result = await router.fetchTickerQuotes();
+        expect(result[0].asOf).toBe(before); // fake timers: no time passes
+    });
+
+    it('keeps the old asOf on carried-over quotes so staleness stays visible', async () => {
+        const mockQuote = vi.fn()
+            .mockResolvedValueOnce([makeQuote('AAPL', 150), makeQuote('MSFT', 400)])
+            .mockResolvedValueOnce([makeQuote('AAPL', 155)]); // MSFT missing
+        const router = makeRouter(mockQuote);
+
+        const t0 = Date.now();
+        await router.fetchTickerQuotes();
+        vi.advanceTimersByTime(6 * 60 * 1000);
+
+        const second = await router.fetchTickerQuotes();
+        expect(second.find(r => r.symbol === 'AAPL').asOf).toBe(t0 + 6 * 60 * 1000);
+        expect(second.find(r => r.symbol === 'MSFT').asOf).toBe(t0);
+    });
 });
 
 describe('stock route rate limiting', () => {

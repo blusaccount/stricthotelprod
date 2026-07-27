@@ -12,6 +12,12 @@ import { fetchSingleQuoteViaStooq } from '../stock-providers/stooq.js';
 
 const STOCK_TRADE_FEED_THRESHOLD = 1000; // SC traded
 
+// Trades must execute at a real, current market price. A quote older than
+// this is rejected (PRICE_STALE) instead of silently filling at yesterday's
+// price — otherwise a player could trade against a market move the cached
+// price hasn't caught up with.
+const MAX_TRADE_PRICE_AGE_MS = 10 * 60 * 1000;
+
 const stockQuoteCache = new Map(); // symbol -> { quote, ts }
 // 5 min: long enough that we don't hammer Yahoo on every snapshot, short
 // enough that prices stay reasonably fresh while the market is open.
@@ -29,12 +35,20 @@ function parseTradeAmount(rawAmount) {
     return amount;
 }
 
-async function getQuoteForSymbol(symbol, quotes, _getYahooFinance) {
+// asOf == null means the quote predates freshness stamping (or came from a
+// legacy cache row) — treat as stale whenever an age bound is requested.
+function isQuoteFreshEnough(quote, maxAgeMs, now = Date.now()) {
+    if (!maxAgeMs) return true;
+    return quote != null && typeof quote.asOf === 'number' && now - quote.asOf <= maxAgeMs;
+}
+
+async function getQuoteForSymbol(symbol, quotes, _getYahooFinance, { maxAgeMs = 0 } = {}) {
     let quote = quotes.find(q => q.symbol === symbol);
-    if (quote) return quote;
+    if (quote && isQuoteFreshEnough(quote, maxAgeMs)) return quote;
 
     const cached = stockQuoteCache.get(symbol);
-    if (cached && Date.now() - cached.ts < STOCK_QUOTE_CACHE_MS) {
+    if (cached && Date.now() - cached.ts < STOCK_QUOTE_CACHE_MS
+        && isQuoteFreshEnough(cached.quote, maxAgeMs)) {
         return cached.quote;
     }
 
@@ -79,6 +93,7 @@ async function getQuoteForSymbol(symbol, quotes, _getYahooFinance) {
     for (const fn of providers) {
         try {
             quote = await fn();
+            quote.asOf = Date.now();
             stockQuoteCache.set(symbol, { quote, ts: Date.now() });
             upsertQuotes([quote]).catch(() => {});
             return quote;
@@ -90,10 +105,13 @@ async function getQuoteForSymbol(symbol, quotes, _getYahooFinance) {
         console.error(`[getQuoteForSymbol] all providers failed for ${symbol}: ${providerErrors.join(' | ')}`);
     }
 
-    // Both live sources failed — fall back to persisted cache.
+    // Every live source failed — fall back to the persisted cache, but only
+    // within the caller's freshness budget. Valuation callers (no maxAgeMs)
+    // still get the stale price; trade callers get null instead.
     const persisted = getCachedQuote(symbol);
     if (persisted) {
-        const fallback = { symbol: persisted.symbol, name: persisted.name, price: persisted.price };
+        const fallback = { symbol: persisted.symbol, name: persisted.name, price: persisted.price, asOf: persisted.updatedAt ?? 0 };
+        if (!isQuoteFreshEnough(fallback, maxAgeMs)) return null;
         stockQuoteCache.set(symbol, { quote: fallback, ts: Date.now() });
         return fallback;
     }
@@ -135,11 +153,13 @@ export function registerStocksHandlers(socket, io, deps) {
             return;
         }
 
-        // Get current price from ticker cache or live lookup
+        // Get current price from ticker cache or live lookup. Trades demand
+        // a quote no older than MAX_TRADE_PRICE_AGE_MS — no fill at a price
+        // the real market has long left behind.
         const quotes = _fetchTickerQuotes ? await _fetchTickerQuotes() : [];
-        const quote = await getQuoteForSymbol(symbol, quotes, _getYahooFinance);
+        const quote = await getQuoteForSymbol(symbol, quotes, _getYahooFinance, { maxAgeMs: MAX_TRADE_PRICE_AGE_MS });
         if (!quote) {
-            emitStockError(socket, 'PRICE_UNAVAILABLE', 'Price unavailable');
+            emitStockError(socket, 'PRICE_UNAVAILABLE', 'No live price available right now. Try again in a moment.');
             return;
         }
 
@@ -203,9 +223,9 @@ export function registerStocksHandlers(socket, io, deps) {
         }
 
         const quotes = _fetchTickerQuotes ? await _fetchTickerQuotes() : [];
-        const quote = await getQuoteForSymbol(symbol, quotes, _getYahooFinance);
+        const quote = await getQuoteForSymbol(symbol, quotes, _getYahooFinance, { maxAgeMs: MAX_TRADE_PRICE_AGE_MS });
         if (!quote) {
-            emitStockError(socket, 'PRICE_UNAVAILABLE', 'Price unavailable');
+            emitStockError(socket, 'PRICE_UNAVAILABLE', 'No live price available right now. Try again in a moment.');
             return;
         }
 
@@ -317,3 +337,11 @@ export function cleanupStockQuoteCache() {
         if (now - entry.ts > STOCK_QUOTE_CACHE_MS) stockQuoteCache.delete(symbol);
     }
 }
+
+// Test-only exports — freshness gating is unit-tested directly because the
+// full socket round-trip needs live providers.
+export {
+    MAX_TRADE_PRICE_AGE_MS,
+    isQuoteFreshEnough,
+    getQuoteForSymbol,
+};

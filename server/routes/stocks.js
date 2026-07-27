@@ -145,6 +145,7 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled, getExt
                 pct: 0,
                 currency: p.currency || 'USD',
                 marketState: null,
+                asOf: p.updatedAt || 0,
             });
         }
         if (seeded.length === 0) return;
@@ -193,6 +194,12 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled, getExt
                 const symbols = tickerSyms.concat(extras);
 
                 const commit = (results) => {
+                    // Per-quote freshness stamp: fresh rows get "now", rows
+                    // carried over from the previous cache keep their old
+                    // asOf so the trade path can tell real live prices from
+                    // symbols that keep failing to refresh.
+                    const now = Date.now();
+                    for (const r of results) r.asOf = now;
                     if (tickerCache.data) {
                         const freshSymbols = new Set(results.map(r => r.symbol));
                         for (const prev of tickerCache.data) {
@@ -201,8 +208,8 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled, getExt
                             }
                         }
                     }
-                    tickerCache = { data: results, ts: Date.now() };
-                    diag.lastSuccessAt = Date.now();
+                    tickerCache = { data: results, ts: now };
+                    diag.lastSuccessAt = now;
                     diag.successCount++;
                     upsertQuotes(results).catch(() => {});
                     return results;

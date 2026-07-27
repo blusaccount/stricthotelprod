@@ -56,68 +56,11 @@
         'BTC-USD', 'ETH-USD', 'SOL-USD', 'BNB-USD', 'XRP-USD', 'ADA-USD', 'DOGE-USD'
     ];
 
-    const FALLBACK_QUOTES = [
-        { symbol: 'AAPL', name: 'Apple', price: 237.50, change: 1.25, pct: 0.53, currency: 'USD' },
-        { symbol: 'MSFT', name: 'Microsoft', price: 432.80, change: -0.90, pct: -0.21, currency: 'USD' },
-        { symbol: 'NVDA', name: 'NVIDIA', price: 140.20, change: 3.40, pct: 2.48, currency: 'USD' },
-        { symbol: 'TSLA', name: 'Tesla', price: 394.50, change: -5.30, pct: -1.33, currency: 'USD' },
-        { symbol: 'AMZN', name: 'Amazon', price: 225.30, change: 0.80, pct: 0.36, currency: 'USD' },
-        { symbol: 'META', name: 'Meta', price: 638.40, change: 2.60, pct: 0.41, currency: 'USD' },
-        { symbol: 'GOOGL', name: 'Alphabet', price: 196.70, change: -0.45, pct: -0.23, currency: 'USD' },
-        { symbol: 'NFLX', name: 'Netflix', price: 982.10, change: 4.20, pct: 0.43, currency: 'USD' },
-        { symbol: 'AMD', name: 'AMD', price: 120.50, change: 1.10, pct: 0.92, currency: 'USD' },
-        { symbol: 'CRM', name: 'Salesforce', price: 328.40, change: -2.15, pct: -0.65, currency: 'USD' },
-        { symbol: 'AVGO', name: 'Broadcom', price: 185.30, change: 3.60, pct: 1.98, currency: 'USD' },
-        { symbol: 'ORCL', name: 'Oracle', price: 178.20, change: 0.95, pct: 0.54, currency: 'USD' },
-        { symbol: 'ADBE', name: 'Adobe', price: 485.60, change: -1.80, pct: -0.37, currency: 'USD' },
-        { symbol: 'DIS', name: 'Disney', price: 112.40, change: 0.60, pct: 0.54, currency: 'USD' },
-        { symbol: 'PYPL', name: 'PayPal', price: 85.30, change: -0.40, pct: -0.47, currency: 'USD' },
-        { symbol: 'INTC', name: 'Intel', price: 22.80, change: 0.15, pct: 0.66, currency: 'USD' },
-        { symbol: 'BA', name: 'Boeing', price: 178.90, change: -1.20, pct: -0.67, currency: 'USD' },
-        { symbol: 'V', name: 'Visa', price: 298.50, change: 1.40, pct: 0.47, currency: 'USD' },
-        { symbol: 'JPM', name: 'JPMorgan Chase', price: 242.30, change: 2.10, pct: 0.87, currency: 'USD' },
-        { symbol: 'WMT', name: 'Walmart', price: 92.40, change: 0.35, pct: 0.38, currency: 'USD' },
-        { symbol: 'KO', name: 'Coca-Cola', price: 62.10, change: 0.20, pct: 0.32, currency: 'USD' },
-        { symbol: 'PEP', name: 'PepsiCo', price: 158.70, change: -0.55, pct: -0.35, currency: 'USD' },
-        { symbol: 'JNJ', name: 'Johnson & Johnson', price: 155.20, change: 0.45, pct: 0.29, currency: 'USD' },
-        { symbol: 'PG', name: 'Procter & Gamble', price: 170.80, change: 0.70, pct: 0.41, currency: 'USD' },
-        { symbol: 'BRK-B', name: 'Berkshire Hathaway', price: 458.90, change: 3.20, pct: 0.70, currency: 'USD' },
-        { symbol: 'XOM', name: 'ExxonMobil', price: 108.50, change: -0.80, pct: -0.73, currency: 'USD' },
-        { symbol: 'UNH', name: 'UnitedHealth', price: 532.10, change: 2.80, pct: 0.53, currency: 'USD' },
-        { symbol: 'URTH', name: 'MSCI World', price: 135.20, change: 0.85, pct: 0.63, currency: 'USD' },
-        { symbol: 'QQQ', name: 'Nasdaq 100', price: 525.40, change: -1.20, pct: -0.23, currency: 'USD' },
-        { symbol: 'SPY', name: 'S&P 500', price: 602.30, change: 2.10, pct: 0.35, currency: 'USD' },
-        { symbol: 'DIA', name: 'DOW Jones', price: 432.10, change: 1.45, pct: 0.34, currency: 'USD' },
-        { symbol: 'VGK', name: 'FTSE Europe', price: 68.90, change: 0.30, pct: 0.44, currency: 'USD' },
-        { symbol: 'EEM', name: 'Emerging Mkts', price: 43.50, change: -0.15, pct: -0.34, currency: 'USD' },
-        { symbol: 'GDAXI', name: 'DAX', price: 20145.00, change: 78.50, pct: 0.39, currency: 'EUR' },
-        { symbol: 'IWM', name: 'Russell 2000', price: 225.60, change: 1.30, pct: 0.58, currency: 'USD' },
-        { symbol: 'VTI', name: 'Total US Market', price: 285.40, change: 0.90, pct: 0.32, currency: 'USD' },
-        { symbol: 'ARKK', name: 'ARK Innovation', price: 55.80, change: -0.65, pct: -1.15, currency: 'USD' },
-        { symbol: 'XLF', name: 'Financials ETF', price: 46.20, change: 0.25, pct: 0.54, currency: 'USD' },
-        { symbol: 'XLE', name: 'Energy ETF', price: 88.90, change: -0.40, pct: -0.45, currency: 'USD' },
-        { symbol: 'GLD', name: 'Gold ETF', price: 242.10, change: 1.80, pct: 0.75, currency: 'USD' },
-        { symbol: 'TLT', name: 'US Treasury 20+', price: 92.30, change: 0.15, pct: 0.16, currency: 'USD' },
-        // Metals & Resources
-        { symbol: 'GC=F', name: 'Gold', price: 2650.40, change: 12.30, pct: 0.47, currency: 'USD' },
-        { symbol: 'SI=F', name: 'Silver', price: 31.20, change: 0.45, pct: 1.46, currency: 'USD' },
-        { symbol: 'PL=F', name: 'Platinum', price: 985.60, change: -3.20, pct: -0.32, currency: 'USD' },
-        { symbol: 'HG=F', name: 'Copper', price: 4.18, change: 0.03, pct: 0.72, currency: 'USD' },
-        { symbol: 'CL=F', name: 'Crude Oil WTI', price: 72.80, change: -0.65, pct: -0.88, currency: 'USD' },
-        { symbol: 'BZ=F', name: 'Brent Crude Oil', price: 76.40, change: -0.50, pct: -0.65, currency: 'USD' },
-        { symbol: 'NG=F', name: 'Natural Gas', price: 3.25, change: 0.08, pct: 2.52, currency: 'USD' },
-        // Crypto
-        { symbol: 'BTC-USD', name: 'Bitcoin', price: 97500.00, change: 1250.00, pct: 1.30, currency: 'USD' },
-        { symbol: 'ETH-USD', name: 'Ethereum', price: 3420.50, change: -45.20, pct: -1.30, currency: 'USD' },
-        { symbol: 'SOL-USD', name: 'Solana', price: 198.30, change: 8.40, pct: 4.42, currency: 'USD' },
-        { symbol: 'BNB-USD', name: 'BNB', price: 685.20, change: 12.80, pct: 1.90, currency: 'USD' },
-        { symbol: 'XRP-USD', name: 'XRP', price: 2.45, change: 0.12, pct: 5.15, currency: 'USD' },
-        { symbol: 'ADA-USD', name: 'Cardano', price: 0.98, change: -0.03, pct: -2.97, currency: 'USD' },
-        { symbol: 'DOGE-USD', name: 'Dogecoin', price: 0.38, change: 0.02, pct: 5.56, currency: 'USD' },
-    ];
-
     let currentBalance = 0;
-    let marketData = FALLBACK_QUOTES.slice();
+    // Live board quotes from /api/ticker. Starts empty on purpose: no
+    // hardcoded fantasy prices — the server serves real (DB-cached) quotes
+    // even on cold starts, and the UI shows a loading state until then.
+    let marketData = [];
     let portfolioData = { holdings: [], totalValue: 0 };
     let tradeSide = 'buy';
     let tradeSymbol = '';
@@ -264,6 +207,10 @@
     // --- Top Movers (replaces the full market grid; search finds the rest) ---
     const MOVERS_COUNT = 8;
     const renderMovers = () => {
+        if (marketData.length === 0) {
+            moversGrid.innerHTML = '<div class="no-holdings">Loading market data...</div>';
+            return;
+        }
         const movers = marketData
             .filter((q) => typeof q.pct === 'number' && !customQuotes.has(q.symbol))
             .slice()
