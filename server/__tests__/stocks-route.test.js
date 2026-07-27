@@ -228,4 +228,94 @@ describe('stock route rate limiting', () => {
         }
         expect(last.statusCode).toBe(429);
     });
+
+    it('rate-limits /api/stock-history after exceeding the per-route budget', async () => {
+        const router = makeDiagRouter();
+        let last;
+        for (let i = 0; i < 31; i++) {
+            last = await dispatch(router, '/api/stock-history', '2.2.2.2', { symbol: 'AAPL' });
+        }
+        expect(last.statusCode).toBe(429);
+    });
+});
+
+describe('/api/stock-history validation', () => {
+    function makeReq(path, ip, query = {}) {
+        return { method: 'GET', url: path, originalUrl: path, ip, headers: {}, query };
+    }
+
+    function makeRes(onDone) {
+        const res = {
+            statusCode: 200,
+            headers: {},
+            body: undefined,
+            set(name, val) { this.headers[name] = val; return this; },
+            status(code) { this.statusCode = code; return this; },
+            json(payload) { this.body = payload; onDone(); return this; },
+        };
+        return res;
+    }
+
+    async function dispatch(router, path, ip, query) {
+        return new Promise((resolve) => {
+            const res = makeRes(() => resolve(res));
+            router(makeReq(path, ip, query), res, () => resolve(res));
+        });
+    }
+
+    function makeHistoryRouter({ enabled = true } = {}) {
+        return createStocksRouter({
+            getYahooFinance: async () => ({ quote: vi.fn().mockRejectedValue(new Error('down')) }),
+            isStockGameEnabled: enabled,
+        });
+    }
+
+    it('rejects an empty or invalid symbol with 400', async () => {
+        const router = makeHistoryRouter();
+        const res = await dispatch(router, '/api/stock-history', '3.3.3.3', { symbol: '!!!' });
+        expect(res.statusCode).toBe(400);
+    });
+
+    it('rejects overlong symbols with 400', async () => {
+        const router = makeHistoryRouter();
+        const res = await dispatch(router, '/api/stock-history', '3.3.3.4', { symbol: 'A'.repeat(13) });
+        expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 502 when the provider is unreachable', async () => {
+        const router = makeHistoryRouter();
+        const res = await dispatch(router, '/api/stock-history', '3.3.3.5', { symbol: 'AAPL', range: '1mo' });
+        expect(res.statusCode).toBe(502);
+    });
+
+    it('returns 503 when the stock game is disabled', async () => {
+        const router = makeHistoryRouter({ enabled: false });
+        const res = await dispatch(router, '/api/stock-history', '3.3.3.6', { symbol: 'AAPL' });
+        expect(res.statusCode).toBe(503);
+        expect(res.body.code).toBe('GAME_DISABLED');
+    });
+
+    it('serves cached history without a provider call', async () => {
+        const router = makeHistoryRouter();
+        const payload = {
+            chart: {
+                result: [{
+                    meta: { symbol: 'AAPL', currency: 'USD', regularMarketPrice: 150, chartPreviousClose: 148 },
+                    timestamp: [1700000000, 1700086400],
+                    indicators: { quote: [{ close: [149.5, 150.25] }] },
+                }],
+            },
+        };
+        global.fetch.mockResolvedValue({ ok: true, json: async () => payload });
+
+        const first = await dispatch(router, '/api/stock-history', '3.3.3.7', { symbol: 'AAPL', range: '1mo' });
+        expect(first.statusCode).toBe(200);
+        expect(first.body.points).toHaveLength(2);
+        expect(first.body.points[1].c).toBe(150.25);
+
+        const callsAfterFirst = global.fetch.mock.calls.length;
+        const second = await dispatch(router, '/api/stock-history', '3.3.3.8', { symbol: 'AAPL', range: '1mo' });
+        expect(second.statusCode).toBe(200);
+        expect(global.fetch.mock.calls.length).toBe(callsAfterFirst);
+    });
 });

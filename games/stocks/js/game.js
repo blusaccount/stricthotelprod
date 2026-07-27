@@ -29,8 +29,10 @@
     const portfolioCashEl = $('portfolio-cash');
     const portfolioNetEl = $('portfolio-net');
     const holdingsContainer = $('holdings-container');
-    const marketGrid = $('market-grid');
+    const moversGrid = $('movers-grid');
     const marketStatusEl = $('market-status');
+    const mainView = $('main-view');
+    const detailView = $('detail-view');
     const tradeOverlay = $('trade-overlay');
     const tradeTitleEl = $('trade-title');
     const tradePriceEl = $('trade-price');
@@ -120,8 +122,11 @@
     let tradeSide = 'buy';
     let tradeSymbol = '';
     let tradeStock = null;
-    let activeCategory = 'all';
     let searchDebounce = null;
+    // Quotes for searched symbols that aren't on the ticker board. Kept
+    // separately so the 60s /api/ticker refresh doesn't wipe them out of
+    // marketData (the trade modal and detail view look prices up there).
+    const customQuotes = new Map(); // symbol -> quote
 
     // --- Register with server ---
     const register = () => {
@@ -164,6 +169,7 @@
         portfolioData = data;
         renderPortfolio();
         updateNetWorth();
+        if (detailSymbol) renderDetailPosition();
     });
 
     // --- Errors ---
@@ -184,9 +190,14 @@
             .then((data) => {
                 if (Array.isArray(data) && data.length > 0) {
                     dlog(`fetchMarket: got ${data.length} quotes; e.g.`, data[0]);
+                    const boardSymbols = new Set(data.map((q) => q.symbol));
                     marketData = data;
-                    renderMarket();
+                    for (const [sym, q] of customQuotes) {
+                        if (!boardSymbols.has(sym)) marketData.push(q);
+                    }
+                    renderMovers();
                     updateMarketStatus(data);
+                    if (detailSymbol) refreshDetailQuote();
                 } else {
                     dwarn('fetchMarket: empty/invalid response, keeping fallback data', data);
                 }
@@ -250,21 +261,22 @@
     const TYPE_ICONS = { STOCK: '🏢', ETF: '🧺', COMMODITY: '⛏️', CRYPTO: '🪙' };
     const getStockIcon = (symbol) => STOCK_ICONS[symbol] || TYPE_ICONS[getStockType(symbol)] || '🏢';
 
-    // --- Render Market Grid ---
-    const renderMarket = () => {
-        let filtered = marketData;
-        if (activeCategory !== 'all') {
-            const cat = activeCategory.toUpperCase();
-            filtered = marketData.filter((q) => getStockType(q.symbol) === cat);
-        }
+    // --- Top Movers (replaces the full market grid; search finds the rest) ---
+    const MOVERS_COUNT = 8;
+    const renderMovers = () => {
+        const movers = marketData
+            .filter((q) => typeof q.pct === 'number' && !customQuotes.has(q.symbol))
+            .slice()
+            .sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct))
+            .slice(0, MOVERS_COUNT);
 
-        marketGrid.innerHTML = filtered.map((q) => {
+        moversGrid.innerHTML = movers.map((q) => {
             const up = q.change >= 0;
             const type = getStockType(q.symbol);
             return `<div class="stock-card" data-symbol="${escapeAttr(q.symbol)}">`
                 + `<span class="type-badge">${type}</span>`
                 + `<div class="stock-card-header">`
-                + `<div><div class="symbol">${escapeHtml(q.symbol)}</div>`
+                + `<div><div class="symbol">${getStockIcon(q.symbol)} ${escapeHtml(q.symbol)}</div>`
                 + `<div class="name">${escapeHtml(q.name)}</div></div>`
                 + `<div style="text-align:right"><div class="price">$${formatNumber(q.price)}</div>`
                 + `<div class="change ${up ? 'up' : 'down'}">`
@@ -273,28 +285,65 @@
                 + `</div></div>`;
         }).join('');
 
-        // Attach click
-        const cards = marketGrid.querySelectorAll('.stock-card');
+        const cards = moversGrid.querySelectorAll('.stock-card');
         for (let i = 0; i < cards.length; i++) {
             cards[i].addEventListener('click', function () {
-                openTrade(this.getAttribute('data-symbol'));
+                openDetail(this.getAttribute('data-symbol'));
             });
         }
     };
 
-    // --- Category Tabs ---
-    const catTabs = document.querySelectorAll('.category-tab');
-    for (let ci = 0; ci < catTabs.length; ci++) {
-        catTabs[ci].addEventListener('click', function () {
-            activeCategory = this.getAttribute('data-cat');
-            for (let cj = 0; cj < catTabs.length; cj++) {
-                catTabs[cj].classList.toggle('active', catTabs[cj] === this);
-            }
-            renderMarket();
-        });
-    }
-
     // --- Search ---
+    // German search terms players actually type, mapped onto the English
+    // ticker-board names ("Öl" finds Crude Oil, "Silber" finds Silver).
+    const SEARCH_ALIASES = {
+        'öl': 'oil', 'oel': 'oil', 'rohöl': 'crude', 'erdöl': 'crude',
+        'silber': 'silver', 'kupfer': 'copper', 'platin': 'platinum',
+        'erdgas': 'natural gas', 'weizen': 'wheat', 'welt': 'world',
+        'anleihen': 'treasury', 'staatsanleihen': 'treasury',
+    };
+
+    const localSearch = (query) => {
+        const q = query.toLowerCase();
+        const terms = [q];
+        if (SEARCH_ALIASES[q]) terms.push(SEARCH_ALIASES[q]);
+        const matches = [];
+        for (const quote of marketData) {
+            if (customQuotes.has(quote.symbol)) continue;
+            const symbol = quote.symbol.toLowerCase();
+            const name = (quote.name || '').toLowerCase();
+            const type = getStockType(quote.symbol).toLowerCase();
+            if (terms.some((t) => symbol.indexOf(t) >= 0 || name.indexOf(t) >= 0 || type === t)) {
+                matches.push(quote);
+            }
+        }
+        return matches.slice(0, 8);
+    };
+
+    const searchResultRow = (r) => {
+        return `<div class="search-result-item" data-symbol="${escapeAttr(r.symbol)}" data-name="${escapeAttr(r.name)}">`
+            + `<div><span class="search-result-icon">${getStockIcon(r.symbol)}</span>`
+            + `<span class="search-result-symbol">${escapeHtml(r.symbol)}</span> `
+            + `<span class="search-result-name">${escapeHtml(r.name)}</span></div>`
+            + (typeof r.price === 'number'
+                ? `<span class="search-result-price">$${formatNumber(r.price)}</span>`
+                : `<span class="search-result-type">${escapeHtml(r.type || '')}</span>`)
+            + `</div>`;
+    };
+
+    const attachSearchResultClicks = () => {
+        const items = searchResults.querySelectorAll('.search-result-item[data-symbol]');
+        for (let si = 0; si < items.length; si++) {
+            items[si].addEventListener('click', function () {
+                const sym = this.getAttribute('data-symbol');
+                const name = this.getAttribute('data-name');
+                searchInput.value = '';
+                searchResults.classList.remove('active');
+                openDetail(sym, { name });
+            });
+        }
+    };
+
     searchInput.addEventListener('input', () => {
         const query = searchInput.value.trim();
         clearTimeout(searchDebounce);
@@ -303,39 +352,38 @@
             searchResults.innerHTML = '';
             return;
         }
+
+        // Local board matches render instantly; remote results append.
+        const local = localSearch(query);
+        if (local.length > 0) {
+            searchResults.innerHTML = local.map(searchResultRow).join('');
+            searchResults.classList.add('active');
+            attachSearchResultClicks();
+        }
+
         searchDebounce = setTimeout(() => {
             fetch(`/api/stock-search?q=${encodeURIComponent(query)}`)
                 .then((r) => r.json())
                 .then((results) => {
-                    if (!Array.isArray(results) || results.length === 0) {
+                    const localNow = localSearch(query);
+                    const seen = new Set(localNow.map((l) => l.symbol));
+                    const remote = (Array.isArray(results) ? results : [])
+                        .filter((r) => !seen.has(r.symbol));
+                    const merged = localNow.concat(remote);
+                    if (merged.length === 0) {
                         searchResults.innerHTML = '<div class="search-result-item" style="color:var(--ds-text-dim);cursor:default;">No results</div>';
                         searchResults.classList.add('active');
                         return;
                     }
-                    searchResults.innerHTML = results.map((r) => {
-                        return `<div class="search-result-item" data-symbol="${escapeAttr(r.symbol)}" data-name="${escapeAttr(r.name)}">`
-                            + `<div><span class="search-result-symbol">${escapeHtml(r.symbol)}</span> `
-                            + `<span class="search-result-name">${escapeHtml(r.name)}</span></div>`
-                            + `<span class="search-result-type">${escapeHtml(r.type || '')}</span>`
-                            + `</div>`;
-                    }).join('');
+                    searchResults.innerHTML = merged.map(searchResultRow).join('');
                     searchResults.classList.add('active');
-
-                    // Attach click handlers
-                    const items = searchResults.querySelectorAll('.search-result-item[data-symbol]');
-                    for (let si = 0; si < items.length; si++) {
-                        items[si].addEventListener('click', function () {
-                            const sym = this.getAttribute('data-symbol');
-                            const name = this.getAttribute('data-name');
-                            searchInput.value = '';
-                            searchResults.classList.remove('active');
-                            openSearchedTrade(sym, name);
-                        });
-                    }
+                    attachSearchResultClicks();
                 })
                 .catch(() => {
-                    searchResults.innerHTML = '<div class="search-result-item" style="color:var(--ds-text-dim);cursor:default;">Search failed</div>';
-                    searchResults.classList.add('active');
+                    if (localSearch(query).length === 0) {
+                        searchResults.innerHTML = '<div class="search-result-item" style="color:var(--ds-text-dim);cursor:default;">Search failed</div>';
+                        searchResults.classList.add('active');
+                    }
                 });
         }, 300);
     });
@@ -347,24 +395,263 @@
         }
     });
 
-    // Open trade for a searched stock (fetch live quote first)
-    const openSearchedTrade = (symbol, name) => {
-        fetch(`/api/stock-quote?symbol=${encodeURIComponent(symbol)}`)
+    // --- Detail Subpage ---
+    const detailIconEl = $('detail-icon');
+    const detailSymbolEl = $('detail-symbol');
+    const detailNameEl = $('detail-name');
+    const detailTypeEl = $('detail-type');
+    const detailPriceEl = $('detail-price');
+    const detailChangeEl = $('detail-change');
+    const detailInfoEl = $('detail-info');
+    const detailPositionEl = $('detail-position');
+    const detailChartCanvas = $('detail-chart');
+    const detailChartEmpty = $('detail-chart-empty');
+    const rangeTabsEl = $('range-tabs');
+
+    let detailSymbol = null;
+    let detailRange = '1mo';
+    let detailChart = null;
+    let detailHistorySeq = 0; // guards against out-of-order range responses
+
+    const findQuote = (symbol) => marketData.find((q) => q.symbol === symbol);
+
+    const openDetail = (symbol, hint) => {
+        detailSymbol = symbol;
+        dlog('openDetail', symbol);
+
+        const quote = findQuote(symbol);
+        detailIconEl.textContent = getStockIcon(symbol);
+        detailSymbolEl.textContent = symbol;
+        detailNameEl.textContent = (quote && quote.name) || (hint && hint.name) || symbol;
+        detailTypeEl.textContent = getStockType(symbol);
+        renderDetailQuote(quote);
+        renderDetailPosition();
+
+        mainView.hidden = true;
+        detailView.hidden = false;
+        window.scrollTo(0, 0);
+
+        if (!quote) {
+            // Searched symbol that isn't on the board — fetch a live quote so
+            // price display and the trade modal work.
+            fetch(`/api/stock-quote?symbol=${encodeURIComponent(symbol)}`)
+                .then((r) => r.json())
+                .then((data) => {
+                    if (data.error || detailSymbol !== symbol) return;
+                    customQuotes.set(data.symbol, data);
+                    if (!findQuote(data.symbol)) marketData.push(data);
+                    detailNameEl.textContent = data.name || symbol;
+                    renderDetailQuote(data);
+                })
+                .catch(() => { dwarn('detail quote fetch failed for', symbol); });
+        }
+
+        loadDetailHistory();
+    };
+
+    const closeDetail = () => {
+        detailSymbol = null;
+        detailView.hidden = true;
+        mainView.hidden = false;
+    };
+
+    const renderDetailQuote = (quote) => {
+        if (!quote) {
+            detailPriceEl.textContent = '$---';
+            detailChangeEl.textContent = '';
+            detailChangeEl.className = 'detail-change';
+            return;
+        }
+        detailPriceEl.textContent = `$${formatNumber(quote.price)}`;
+        if (typeof quote.change === 'number' && typeof quote.pct === 'number') {
+            const up = quote.change >= 0;
+            detailChangeEl.textContent = `${up ? '+' : '-'}${formatNumber(Math.abs(quote.change))} (${up ? '+' : ''}${formatNumber(quote.pct)}%)`;
+            detailChangeEl.className = `detail-change ${up ? 'up' : 'down'}`;
+        } else {
+            detailChangeEl.textContent = '';
+            detailChangeEl.className = 'detail-change';
+        }
+    };
+
+    const refreshDetailQuote = () => {
+        renderDetailQuote(findQuote(detailSymbol));
+    };
+
+    const infoCard = (label, value) => {
+        return `<div class="summary-card"><div class="summary-label">${label}</div>`
+            + `<div class="summary-value">${value}</div></div>`;
+    };
+
+    const renderDetailInfo = (history) => {
+        const cards = [];
+        const meta = history && history.meta;
+        // Note: meta.previousClose is deliberately not shown — for ranges
+        // beyond 1d Yahoo reports the close before the range START, which
+        // reads as nonsense next to the live price.
+        if (meta && meta.fiftyTwoWeekHigh != null) cards.push(infoCard('52W HIGH', `$${formatNumber(meta.fiftyTwoWeekHigh)}`));
+        if (meta && meta.fiftyTwoWeekLow != null) cards.push(infoCard('52W LOW', `$${formatNumber(meta.fiftyTwoWeekLow)}`));
+        if (history && history.points.length >= 2) {
+            const first = history.points[0].c;
+            const last = history.points[history.points.length - 1].c;
+            if (first > 0) {
+                const pct = ((last - first) / first) * 100;
+                const label = rangeTabsEl.querySelector(`[data-range="${history.range}"]`);
+                cards.push(infoCard(`${label ? label.textContent : history.range} CHANGE`, `${pct >= 0 ? '+' : ''}${formatNumber(pct)}%`));
+            }
+        }
+        cards.push(infoCard('CURRENCY', escapeHtml((history && history.currency) || 'USD')));
+        if (meta && meta.exchangeName) cards.push(infoCard('EXCHANGE', escapeHtml(meta.exchangeName)));
+        detailInfoEl.innerHTML = cards.join('');
+    };
+
+    const renderDetailPosition = () => {
+        if (!detailSymbol) return;
+        const pos = (portfolioData.holdings || []).find((h) => h.symbol === detailSymbol);
+        if (!pos) {
+            detailPositionEl.innerHTML = '<div class="no-holdings">You don\'t own this yet.</div>';
+            return;
+        }
+        const stale = !!pos.priceStale;
+        const cls = pos.gainLoss >= 0 ? 'positive' : 'negative';
+        const glCell = stale ? '—'
+            : `${pos.gainLoss >= 0 ? '+' : ''}${formatNumber(pos.gainLoss)} (${pos.gainLossPct >= 0 ? '+' : ''}${formatNumber(pos.gainLossPct)}%)`;
+        detailPositionEl.innerHTML = '<table class="holdings-table"><thead><tr>'
+            + '<th>SHARES</th><th>AVG</th><th>VALUE</th><th>G/L</th>'
+            + '</tr></thead><tbody><tr>'
+            + `<td>${formatNumber(pos.shares, 4)}</td>`
+            + `<td>$${formatNumber(pos.avgCost)}</td>`
+            + `<td>${stale ? '—' : '$' + formatNumber(pos.marketValue)}</td>`
+            + `<td class="${stale ? '' : cls}">${glCell}</td>`
+            + '</tr></tbody></table>';
+    };
+
+    const formatHistoryLabel = (ts, range) => {
+        const d = new Date(ts);
+        if (range === '1d' || range === '5d') {
+            return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+        }
+        if (range === '1y' || range === '5y') {
+            return `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear().toString().slice(2)}`;
+        }
+        return `${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')}.`;
+    };
+
+    const renderDetailChart = (history) => {
+        const labels = history.points.map((p) => formatHistoryLabel(p.t, history.range));
+        const values = history.points.map((p) => p.c);
+        const up = values[values.length - 1] >= values[0];
+        const lineColor = up ? '#22bb22' : '#bb2222';
+
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+        const textColor = isDark ? '#a0a0a0' : '#666666';
+
+        detailChartEmpty.style.display = 'none';
+        detailChartCanvas.style.display = 'block';
+
+        if (detailChart) {
+            detailChart.data.labels = labels;
+            detailChart.data.datasets[0].data = values;
+            detailChart.data.datasets[0].borderColor = lineColor;
+            detailChart.options.scales.x.ticks.color = textColor;
+            detailChart.options.scales.y.ticks.color = textColor;
+            detailChart.options.scales.x.grid.color = gridColor;
+            detailChart.options.scales.y.grid.color = gridColor;
+            detailChart.update('none');
+            return;
+        }
+
+        detailChart = new Chart(detailChartCanvas, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Price',
+                    data: values,
+                    borderColor: lineColor,
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHoverRadius: 3,
+                    tension: 0.15
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        titleFont: { family: "'Press Start 2P', monospace", size: 7 },
+                        bodyFont: { family: "'Press Start 2P', monospace", size: 7 },
+                        callbacks: {
+                            label: (ctx) => `$${formatNumber(ctx.parsed.y)}`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            font: { family: "'Press Start 2P', monospace", size: 6 },
+                            color: textColor,
+                            maxTicksLimit: 7
+                        },
+                        grid: { color: gridColor }
+                    },
+                    y: {
+                        ticks: {
+                            font: { family: "'Press Start 2P', monospace", size: 6 },
+                            color: textColor,
+                            callback: (v) => `$${v}`
+                        },
+                        grid: { color: gridColor }
+                    }
+                }
+            }
+        });
+    };
+
+    const loadDetailHistory = () => {
+        const symbol = detailSymbol;
+        const range = detailRange;
+        const seq = ++detailHistorySeq;
+        dlog('loadDetailHistory', symbol, range);
+        fetch(`/api/stock-history?symbol=${encodeURIComponent(symbol)}&range=${encodeURIComponent(range)}`)
             .then((r) => r.json())
-            .then((data) => {
-                if (data.error) {
-                    showToast(data.error, 'error');
+            .then((history) => {
+                if (seq !== detailHistorySeq || detailSymbol !== symbol) return;
+                if (!history || history.error || !Array.isArray(history.points) || history.points.length < 2) {
+                    detailChartCanvas.style.display = 'none';
+                    detailChartEmpty.style.display = 'block';
+                    renderDetailInfo(null);
                     return;
                 }
-                // Add to market data temporarily so trade modal works
-                const existing = marketData.find((q) => q.symbol === data.symbol);
-                if (!existing) {
-                    marketData.push(data);
-                }
-                openTrade(data.symbol);
+                renderDetailChart(history);
+                renderDetailInfo(history);
             })
-            .catch(() => { showToast('Failed to fetch quote', 'error'); });
+            .catch(() => {
+                if (seq !== detailHistorySeq) return;
+                detailChartCanvas.style.display = 'none';
+                detailChartEmpty.style.display = 'block';
+                renderDetailInfo(null);
+            });
     };
+
+    rangeTabsEl.addEventListener('click', (e) => {
+        const tab = e.target.closest('.category-tab');
+        if (!tab) return;
+        detailRange = tab.getAttribute('data-range');
+        const tabs = rangeTabsEl.querySelectorAll('.category-tab');
+        for (let i = 0; i < tabs.length; i++) {
+            tabs[i].classList.toggle('active', tabs[i] === tab);
+        }
+        loadDetailHistory();
+    });
+
+    $('detail-back').addEventListener('click', closeDetail);
+    $('detail-buy').addEventListener('click', () => { if (detailSymbol) openTrade(detailSymbol, 'buy'); });
+    $('detail-sell').addEventListener('click', () => { if (detailSymbol) openTrade(detailSymbol, 'sell'); });
 
     // --- Render Portfolio Holdings ---
     const renderPortfolio = () => {
@@ -407,7 +694,7 @@
                 ? '<span title="Live-Kurs nicht verfügbar">—</span>'
                 : `${p.gainLoss >= 0 ? '+' : ''}${formatNumber(p.gainLoss)} (${p.gainLossPct >= 0 ? '+' : ''}${formatNumber(p.gainLossPct)}%)`;
             const glCls = stale ? '' : cls;
-            html += `<tr>`
+            html += `<tr data-symbol="${escapeAttr(p.symbol)}" style="cursor:pointer">`
                 + `<td class="symbol"><span class="holding-icon">${getStockIcon(p.symbol)}</span>${escapeHtml(p.symbol)}<br><span style="color:var(--ds-text-dim);font-size:6px">${escapeHtml(p.name)}</span></td>`
                 + `<td>${formatNumber(p.shares, 4)}</td>`
                 + `<td>$${formatNumber(p.avgCost)}</td>`
@@ -427,6 +714,13 @@
             btns[k].addEventListener('click', function (e) {
                 e.stopPropagation();
                 openTrade(this.getAttribute('data-symbol'), 'sell');
+            });
+        }
+        // Row click opens the detail subpage (sell button stops propagation)
+        const rows = holdingsContainer.querySelectorAll('tbody tr[data-symbol]');
+        for (let k = 0; k < rows.length; k++) {
+            rows[k].addEventListener('click', function () {
+                openDetail(this.getAttribute('data-symbol'));
             });
         }
     };
@@ -853,7 +1147,7 @@
     dlog('console helpers: window.__stocks.{refresh,ticker,diag,probe,state}; toggle logs with window.STOCK_DEBUG=false');
 
     // --- Init ---
-    renderMarket();
+    renderMovers();
     fetchMarket();
     setInterval(() => {
         fetchMarket();

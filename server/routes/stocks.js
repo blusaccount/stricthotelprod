@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { upsertQuotes, getAllCached } from '../stock-price-cache.js';
-import { fetchQuotesViaChart, fetchSingleQuoteViaChart } from '../stock-providers/yahoo-chart.js';
+import { fetchQuotesViaChart, fetchSingleQuoteViaChart, fetchHistoryViaChart, HISTORY_RANGE_KEYS } from '../stock-providers/yahoo-chart.js';
 import { fetchQuotesViaStooq, fetchSingleQuoteViaStooq } from '../stock-providers/stooq.js';
 
 const TICKER_SYMBOLS = [
@@ -88,6 +88,9 @@ const SEARCH_CACHE_MS = 10 * 60 * 1000; // 10 minutes
 const singleQuoteCache = new Map();
 const SINGLE_QUOTE_CACHE_MS = 2 * 60 * 1000; // 2 minutes
 
+const historyCache = new Map(); // `${symbol}|${range}` -> { data, ts }
+const HISTORY_CACHE_MS = 10 * 60 * 1000; // 10 minutes
+
 // Per-IP sliding window rate limiter, mirroring the login limiter in
 // routes/auth.js. Protects the provider-backed routes from a single logged-in
 // user hammering Yahoo/Stooq from the server's IP (see issue #159).
@@ -114,6 +117,7 @@ function rateLimiter(maxPerWindow) {
 
 const stockSearchRateLimiter = rateLimiter(30);
 const stockQuoteRateLimiter = rateLimiter(30);
+const stockHistoryRateLimiter = rateLimiter(30);
 // _stock-diag?probe=1 fires up to 4 real provider requests per call, so it
 // gets a much tighter budget than plain search/quote lookups.
 const stockDiagRateLimiter = rateLimiter(5);
@@ -432,6 +436,99 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled, getExt
         } catch (err) {
             console.error('[StockQuote] Error:', err.message);
             res.status(502).json({ error: 'Failed to fetch quote' });
+        }
+    });
+
+    // History via yahoo-finance2's chart() — its crumb-cookie machinery
+    // succeeds in environments where the raw no-crumb v8 endpoint gets
+    // per-IP 429'd (mirror image of the ticker cascade, where the raw
+    // endpoints are the ones that survive Render's egress IP).
+    const YF_RANGE_DAYS = { '1d': 2, '5d': 7, '1mo': 31, '3mo': 93, '1y': 366, '5y': 1830 };
+    const YF_RANGE_INTERVALS = { '1d': '5m', '5d': '30m', '1mo': '1d', '3mo': '1d', '1y': '1wk', '5y': '1mo' };
+
+    async function fetchHistoryViaYf(symbol, range) {
+        const yf = await getYahooFinance();
+        const days = YF_RANGE_DAYS[range] || 31;
+        const interval = YF_RANGE_INTERVALS[range] || '1d';
+        const period1 = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+        const result = await yf.chart(symbol, { period1, interval });
+        const meta = result?.meta || {};
+        const points = [];
+        for (const q of result?.quotes || []) {
+            if (q?.close == null || !Number.isFinite(q.close)) continue;
+            const t = q.date instanceof Date ? q.date.getTime() : Date.parse(q.date);
+            if (!Number.isFinite(t)) continue;
+            points.push({ t, c: Math.round(q.close * 100) / 100 });
+        }
+        if (points.length === 0) throw new Error('yf.chart: no data points');
+        return {
+            symbol: (meta.symbol || symbol).replace('^', ''),
+            currency: meta.currency || 'USD',
+            range,
+            interval,
+            points,
+            meta: {
+                price: meta.regularMarketPrice ?? null,
+                previousClose: meta.chartPreviousClose ?? meta.previousClose ?? null,
+                fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh ?? null,
+                fiftyTwoWeekLow: meta.fiftyTwoWeekLow ?? null,
+                shortName: meta.shortName || meta.longName || null,
+                exchangeName: meta.fullExchangeName || meta.exchangeName || null,
+            },
+        };
+    }
+
+    async function fetchHistoryAnyProvider(symbol, range) {
+        try {
+            return await fetchHistoryViaChart(symbol, range);
+        } catch (rawErr) {
+            try {
+                return await fetchHistoryViaYf(symbol, range);
+            } catch (yfErr) {
+                throw new Error(`chart: ${rawErr.message} | yf: ${yfErr.message}`);
+            }
+        }
+    }
+
+    router.get('/api/stock-history', stockHistoryRateLimiter, async (req, res) => {
+        if (!isStockGameEnabled) {
+            return res.status(503).json({ code: 'GAME_DISABLED', error: 'Stock game is disabled by server config' });
+        }
+        try {
+            const symbol = (req.query.symbol || '').trim().toUpperCase().replace(/[^A-Z0-9.\-^=]/g, '');
+            if (!symbol || symbol.length > 12) {
+                return res.status(400).json({ error: 'Invalid symbol' });
+            }
+            const range = HISTORY_RANGE_KEYS.includes(req.query.range) ? req.query.range : '1mo';
+
+            const key = `${symbol}|${range}`;
+            const cached = historyCache.get(key);
+            if (cached && Date.now() - cached.ts < HISTORY_CACHE_MS) {
+                return res.json(cached.data);
+            }
+
+            let data;
+            try {
+                data = await fetchHistoryAnyProvider(symbol, range);
+            } catch (err) {
+                // Client-side symbols are stored without the '^' index prefix
+                // (GDAXI, not ^GDAXI) but Yahoo only knows the prefixed form.
+                const prefixed = '^' + symbol;
+                const isKnownIndex = TICKER_SYMBOLS.some(s => s.symbol === prefixed);
+                if (!isKnownIndex) throw err;
+                data = await fetchHistoryAnyProvider(prefixed, range);
+            }
+
+            historyCache.set(key, { data, ts: Date.now() });
+            if (historyCache.size > 300) {
+                const oldest = historyCache.keys().next().value;
+                historyCache.delete(oldest);
+            }
+
+            res.json(data);
+        } catch (err) {
+            console.error('[StockHistory] Error:', err.message);
+            res.status(502).json({ error: 'Failed to fetch history' });
         }
     });
 

@@ -366,6 +366,66 @@ body {
     color: var(--ds-text-dim);
 }
 
+/* ===== Detail Subpage ===== */
+.search-top { margin-bottom: 10px; }
+.search-top .search-input { padding: 10px 12px; }
+
+.search-result-item .search-result-icon { font-size: 13px; margin-right: 6px; }
+.search-result-item .search-result-price { color: var(--ds-text-dim); white-space: nowrap; margin-left: 8px; }
+
+.detail-back {
+    background: none;
+    border: none;
+    padding: 0;
+    margin-bottom: 12px;
+    cursor: pointer;
+    font-family: 'Press Start 2P', monospace;
+    display: inline-block;
+}
+
+.detail-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.detail-icon { font-size: 26px; line-height: 1; }
+.detail-title-block { flex: 1; min-width: 0; }
+.detail-symbol { font-size: 13px; color: var(--ds-text); letter-spacing: 1px; }
+.detail-name {
+    font-size: 8px;
+    color: var(--ds-text-dim);
+    margin-top: 4px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+.type-badge.detail-type {
+    position: static;
+    font-size: 6px;
+    padding: 3px 5px;
+    border: 1px solid var(--ds-text-dim);
+    color: var(--ds-text-dim);
+}
+
+.detail-price-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+.detail-price { font-size: 16px; color: var(--ds-text); }
+.detail-change { font-size: 8px; }
+.detail-change.up { color: #22bb22; }
+.detail-change.down { color: #bb2222; }
+
+.detail-actions {
+    display: flex;
+    gap: 8px;
+    margin: 4px 0 16px;
+}
+.detail-actions .btn-trade { flex: 1; }
+
 /* ===== Trade Modal ===== */
 .trade-overlay {
     display: none;

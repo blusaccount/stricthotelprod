@@ -146,3 +146,69 @@ export async function fetchSingleQuoteViaChart(symbol, opts) {
     return fetchChartOne(symbol, opts?.timeoutMs);
 }
 
+// range -> chart interval. Whitelist doubles as request validation.
+const HISTORY_RANGES = {
+    '1d': '5m',
+    '5d': '30m',
+    '1mo': '1d',
+    '3mo': '1d',
+    '1y': '1wk',
+    '5y': '1mo',
+};
+
+export const HISTORY_RANGE_KEYS = Object.keys(HISTORY_RANGES);
+
+const HISTORY_URL = (symbol, range, interval) =>
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}`;
+
+/**
+ * Fetch a close-price series for one symbol via the no-crumb v8 chart
+ * endpoint (same endpoint fetchChartOne uses, just with a wider range).
+ * @returns {Promise<{ symbol, currency, range, interval, points: Array<{t,c}>, meta }>}
+ */
+export async function fetchHistoryViaChart(symbol, range, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+    const interval = HISTORY_RANGES[range];
+    if (!interval) throw new Error(`unsupported range: ${range}`);
+    const t = withTimeout(timeoutMs);
+    try {
+        const res = await fetch(HISTORY_URL(symbol, range, interval), {
+            headers: { 'User-Agent': UA, 'Accept': 'application/json' },
+            signal: t.signal,
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+        const data = await res.json();
+        const result = data?.chart?.result?.[0];
+        const errMsg = data?.chart?.error?.description;
+        if (!result || !result.meta) throw new Error(errMsg || 'no chart result');
+
+        const meta = result.meta;
+        const ts = result.timestamp || [];
+        const closes = result.indicators?.quote?.[0]?.close || [];
+        const points = [];
+        for (let i = 0; i < ts.length; i++) {
+            const c = closes[i];
+            if (c == null || !Number.isFinite(c)) continue;
+            points.push({ t: ts[i] * 1000, c: Math.round(c * 100) / 100 });
+        }
+        if (points.length === 0) throw new Error('no data points');
+
+        return {
+            symbol: (meta.symbol || symbol).replace('^', ''),
+            currency: meta.currency || 'USD',
+            range,
+            interval,
+            points,
+            meta: {
+                price: meta.regularMarketPrice ?? null,
+                previousClose: meta.chartPreviousClose ?? meta.previousClose ?? null,
+                fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh ?? null,
+                fiftyTwoWeekLow: meta.fiftyTwoWeekLow ?? null,
+                shortName: meta.shortName || meta.longName || null,
+                exchangeName: meta.fullExchangeName || meta.exchangeName || null,
+            },
+        };
+    } finally {
+        t.clear();
+    }
+}
+
