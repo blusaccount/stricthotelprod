@@ -654,8 +654,8 @@
                 plugins: {
                     legend: { display: false },
                     tooltip: {
-                        titleFont: { family: "'Press Start 2P', monospace", size: 7 },
-                        bodyFont: { family: "'Press Start 2P', monospace", size: 7 },
+                        titleFont: { family: "'DotGothic16', monospace", size: 13 },
+                        bodyFont: { family: "'DotGothic16', monospace", size: 13 },
                         callbacks: {
                             label: (ctx) => `$${formatNumber(ctx.parsed.y)}`
                         }
@@ -664,7 +664,7 @@
                 scales: {
                     x: {
                         ticks: {
-                            font: { family: "'Press Start 2P', monospace", size: 6 },
+                            font: { family: "'DotGothic16', monospace", size: 12 },
                             color: textColor,
                             maxTicksLimit: 7
                         },
@@ -672,7 +672,7 @@
                     },
                     y: {
                         ticks: {
-                            font: { family: "'Press Start 2P', monospace", size: 6 },
+                            font: { family: "'DotGothic16', monospace", size: 12 },
                             color: textColor,
                             callback: (v) => `$${v}`
                         },
@@ -791,7 +791,7 @@
                 : `${p.gainLoss >= 0 ? '+' : ''}${formatNumber(p.gainLoss)} (${p.gainLossPct >= 0 ? '+' : ''}${formatNumber(p.gainLossPct)}%)`;
             const glCls = stale ? '' : cls;
             html += `<tr data-symbol="${escapeAttr(p.symbol)}" style="cursor:pointer">`
-                + `<td class="symbol"><span class="holding-icon">${getStockIcon(p.symbol)}</span>${escapeHtml(p.symbol)}<br><span style="color:var(--ds-text-dim);font-size:6px">${escapeHtml(p.name)}</span></td>`
+                + `<td class="symbol"><span class="holding-icon">${getStockIcon(p.symbol)}</span>${escapeHtml(p.symbol)}<br><span class="holding-name">${escapeHtml(p.name)}</span></td>`
                 + `<td>${formatNumber(p.shares, 4)}</td>`
                 + `<td>$${formatNumber(p.avgCost)}</td>`
                 + `<td>${priceCell}</td>`
@@ -1182,15 +1182,15 @@
                 plugins: {
                     legend: {
                         labels: {
-                            font: { family: "'Press Start 2P', monospace", size: 7 },
+                            font: { family: "'DotGothic16', monospace", size: 13 },
                             color: textColor,
                             boxWidth: 12,
                             padding: 8
                         }
                     },
                     tooltip: {
-                        titleFont: { family: "'Press Start 2P', monospace", size: 7 },
-                        bodyFont: { family: "'Press Start 2P', monospace", size: 7 },
+                        titleFont: { family: "'DotGothic16', monospace", size: 13 },
+                        bodyFont: { family: "'DotGothic16', monospace", size: 13 },
                         callbacks: {
                             label: (ctx) => {
                                 return `${ctx.dataset.label}: $${formatNumber(ctx.parsed.y)}`;
@@ -1201,7 +1201,7 @@
                 scales: {
                     x: {
                         ticks: {
-                            font: { family: "'Press Start 2P', monospace", size: 6 },
+                            font: { family: "'DotGothic16', monospace", size: 12 },
                             color: textColor,
                             maxTicksLimit: 8
                         },
@@ -1209,7 +1209,7 @@
                     },
                     y: {
                         ticks: {
-                            font: { family: "'Press Start 2P', monospace", size: 6 },
+                            font: { family: "'DotGothic16', monospace", size: 12 },
                             color: textColor,
                             callback: (v) => { return `$${v}`; }
                         },

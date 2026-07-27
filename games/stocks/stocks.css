@@ -14,6 +14,10 @@
     --ds-divider: #ccc;
     --ds-divider-light: #eee;
     --ds-overlay: rgba(0,0,0,0.5);
+    /* Headings/labels stay 'Press Start 2P'; running text uses DotGothic16,
+       the pixel font closest to the actual DS system font — far more
+       readable at sentence length while keeping the DS look. */
+    --ds-font-body: 'DotGothic16', 'Press Start 2P', monospace;
 }
 
 [data-theme="dark"] {
@@ -21,7 +25,7 @@
     --ds-surface: #16213e;
     --ds-border: #e0e0e0;
     --ds-text: #eaeaea;
-    --ds-text-dim: #a0a0a0;
+    --ds-text-dim: #b6b6cc;
     --ds-positive: #eaeaea;
     --ds-negative: #a0a0a0;
     --ds-highlight: #0f3460;
@@ -156,7 +160,8 @@ body {
 
 .chart-empty {
     color: var(--ds-text-dim);
-    font-size: 8px;
+    font-family: var(--ds-font-body);
+    font-size: 14px;
     text-align: center;
     padding: 20px;
 }
@@ -198,6 +203,11 @@ body {
 
 .holdings-table .symbol { font-weight: 700; }
 .holdings-table .holding-icon { font-size: 12px; margin-right: 5px; vertical-align: -2px; }
+.holdings-table .holding-name {
+    font-family: var(--ds-font-body);
+    font-size: 12px;
+    color: var(--ds-text-dim);
+}
 .holdings-table .positive { font-weight: 700; }
 .holdings-table .positive::before { content: '+'; }
 .holdings-table .negative { color: var(--ds-text-dim); }
@@ -219,7 +229,8 @@ body {
 
 .no-holdings {
     color: var(--ds-text-dim);
-    font-size: 8px;
+    font-family: var(--ds-font-body);
+    font-size: 14px;
     text-align: center;
     padding: 16px;
     background: var(--ds-surface);
@@ -269,7 +280,8 @@ body {
 }
 .search-input::placeholder {
     color: var(--ds-text-dim);
-    font-size: 8px;
+    font-family: var(--ds-font-body);
+    font-size: 14px;
 }
 
 .search-results {
@@ -300,7 +312,7 @@ body {
 .search-result-item:last-child { border-bottom: none; }
 
 .search-result-symbol { font-weight: 700; }
-.search-result-name { color: var(--ds-text-dim); font-size: 7px; }
+.search-result-name { color: var(--ds-text-dim); font-family: var(--ds-font-body); font-size: 13px; }
 .search-result-type {
     font-size: 6px;
     padding: 2px 4px;
@@ -369,7 +381,7 @@ body {
 }
 
 .stock-card .symbol { font-size: 10px; font-weight: 700; }
-.stock-card .name { font-size: 7px; color: var(--ds-text-dim); margin-top: 2px; }
+.stock-card .name { font-family: var(--ds-font-body); font-size: 13px; color: var(--ds-text-dim); margin-top: 2px; }
 .stock-card .price { font-size: 10px; font-weight: 700; text-align: right; }
 .stock-card .change { font-size: 7px; margin-top: 2px; text-align: right; }
 .stock-card .change.up { color: var(--ds-text); }
@@ -381,7 +393,7 @@ body {
     position: absolute;
     top: 4px;
     right: 4px;
-    font-size: 5px;
+    font-size: 6px;
     padding: 1px 3px;
     border: 1px solid var(--ds-text-dim);
     color: var(--ds-text-dim);
@@ -414,7 +426,8 @@ body {
 .detail-title-block { flex: 1; min-width: 0; }
 .detail-symbol { font-size: 13px; color: var(--ds-text); letter-spacing: 1px; }
 .detail-name {
-    font-size: 8px;
+    font-family: var(--ds-font-body);
+    font-size: 14px;
     color: var(--ds-text-dim);
     margin-top: 4px;
     overflow: hidden;
@@ -448,10 +461,12 @@ body {
 .detail-actions .btn-trade { flex: 1; }
 
 .detail-desc {
-    font-size: 8px;
-    color: var(--ds-text-dim);
-    line-height: 1.8;
+    font-family: var(--ds-font-body);
+    font-size: 16px;
+    color: var(--ds-text);
+    line-height: 1.45;
     margin-bottom: 12px;
+    max-width: 560px;
 }
 .detail-desc:empty { display: none; }
 
@@ -654,7 +669,8 @@ body {
     font-size: 11px;
 }
 .leaderboard-breakdown {
-    font-size: 8px;
+    font-family: var(--ds-font-body);
+    font-size: 13px;
     color: var(--ds-text-dim);
 }
 .leaderboard-detail {
