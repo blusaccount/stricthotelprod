@@ -28,12 +28,17 @@ const PAYTABLE = {
     high:   [200,  25,  7,   2,   0.4, 0.3, 0.3, 0.3, 0.4, 2,   7,   25,  200 ]
 };
 
-function dropBall() {
+// Default step source: server-authoritative CSPRNG. Tests inject a seeded
+// generator so Monte-Carlo assertions are reproducible; production never does.
+const cryptoStep = () => randomInt(0, 2);
+
+function dropBall(nextStep = cryptoStep) {
     // Returns the path as an array of 0/1 (length ROWS) and the resulting bucket.
+    // nextStep must return 0 (left) or 1 (right).
     const path = [];
     let bucket = 0;
     for (let i = 0; i < ROWS; i++) {
-        const step = randomInt(0, 2);
+        const step = nextStep();
         path.push(step);
         bucket += step;
     }
