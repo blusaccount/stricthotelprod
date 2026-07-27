@@ -4,6 +4,29 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Deflake the Plinko RTP Monte-Carlo test (2026-07-27)
+
+## What Changed
+The `every risk level achieves 93-98 % RTP over 200 K drops` test in `server/__tests__/plinko.test.js` ran an unseeded 200 K-drop simulation, so it could fail on an unlucky run (it did, once, during an unrelated stocks change, and passed on re-run). The high-risk paytable is the culprit: the 200x edge buckets have p = 1/4096 each, fat enough that 200 K drops occasionally push the measured RTP outside the band.
+
+### `server/handlers/plinko.js`
+- `dropBall()` now takes an optional `nextStep` argument (a function returning 0 or 1), defaulting to the existing `randomInt(0, 2)` CSPRNG. Production callers are unchanged — the socket handler still calls `dropBall()` with no arguments, so server-authoritative randomness is untouched.
+
+### `server/__tests__/plinko.test.js`
+- Added a local `mulberry32` PRNG and drove the RTP simulation with a fixed seed (`0xC0FFEE`), re-seeded per risk level so the same drop sequence is scored against all three paytables.
+- The band assertion (93-98 %) and the statistical intent are unchanged: the test still measures each paytable's realized house edge, it just does so over a fixed sample.
+- The `dropBall` structural test still calls `dropBall()` unseeded, so the crypto default path stays covered.
+
+## How to Verify
+- `npx vitest run server/__tests__/plinko.test.js` — 9 passed, reproducible across consecutive runs (verified 5x, identical results).
+- Seeded RTPs: low 96.117 %, medium 95.141 %, high 96.461 %. These sit within 0.05 pp of the exact analytic values (96.138 / 95.112 / 96.494, computed from the binomial bucket probabilities), so the seed produces a representative sample rather than a lucky one — margins to the band edges are 1.5-3 pp.
+
+## Open Risks / Notes
+- The test no longer exercises `randomInt`'s distribution in the RTP path — that is the point (it was testing the paytable, not the CSPRNG), and the structural `dropBall` test still hits the default source.
+- Unrelated, pre-existing in this container: all 30 tests in `server/__tests__/stocks-route.test.js` fail with `Cannot find package 'express'` — an incomplete `node_modules`, not a code defect. Fails identically without these changes. The remaining 32 files / 423 tests pass.
+
+---
+
 # Handoff: Tierlist UX — within-tier rearranging, drag edge auto-scroll (2026-07-20)
 
 ## What Changed

@@ -72,15 +72,33 @@ describe('evaluate', () => {
     });
 });
 
+// Seeded PRNG so the RTP simulation below is reproducible. Unseeded randomness
+// made this test flaky: the high-risk 200x bucket (p = 1/4096) has a fat enough
+// tail that 200 K drops occasionally landed outside the 93-98 % band.
+function mulberry32(seed) {
+    let a = seed >>> 0;
+    return () => {
+        a = (a + 0x6D2B79F5) >>> 0;
+        let t = a;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
 describe('Plinko RTP simulation', () => {
     it('every risk level achieves 93–98 % RTP over 200 K drops', { timeout: 30000 }, () => {
         const n = 200_000;
         const bet = 10;
         for (const level of RISK_LEVELS) {
+            // Same seed per level => same drop sequence, so a paytable change is
+            // the only thing that can move a level's RTP.
+            const rand = mulberry32(0xC0FFEE);
+            const nextStep = () => (rand() < 0.5 ? 0 : 1);
             let totalBet = 0, totalPay = 0;
             for (let i = 0; i < n; i++) {
                 totalBet += bet;
-                const { bucket } = dropBall();
+                const { bucket } = dropBall(nextStep);
                 totalPay += evaluate(bucket, level, bet);
             }
             const rtp = (totalPay / totalBet) * 100;
