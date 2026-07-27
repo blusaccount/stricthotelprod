@@ -1,7 +1,7 @@
 {
-  "name": "stricthotel",
+  "name": "strictlyprivate",
   "version": "1.0.0",
-  "description": "Full-stack multiplayer gaming platform built with Express, Socket.IO & PostgreSQL — real-time games, Docker-ready deployment",
+  "description": "Private StrictHotel build - the original, kept for home use. The commercial successor lives in the stricthotelprod repo.",
   "main": "server.js",
   "type": "module",
   "scripts": {
