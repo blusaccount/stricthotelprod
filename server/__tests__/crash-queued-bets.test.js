@@ -295,6 +295,102 @@ describe('phase transitions during the deduct await', () => {
     });
 });
 
+describe('cancelling a queued bet', () => {
+    it('refunds the stake and drops it from the queue', async () => {
+        const name = uniqueName();
+        const socket = setup(name);
+        startRunningRound();
+        await socket.trigger('crash-bet', { bet: 100 });
+        socket.emits.length = 0;
+
+        await socket.trigger('crash-unqueue');
+
+        expect(pendingBets.has(name)).toBe(false);
+        const refund = mockAddBalance.mock.calls.filter(c => c[0] === name && c[2] === 'crash_bet_unqueue_refund');
+        expect(refund.length).toBe(1);
+        expect(refund[0][1]).toBe(100);
+        const confirmed = socket.emits.find(e => e.event === 'crash-unqueue-confirmed');
+        expect(confirmed?.data.bet).toBe(100);
+    });
+
+    it('lets the player queue again after cancelling', async () => {
+        const name = uniqueName();
+        const socket = setup(name);
+        startRunningRound();
+        await socket.trigger('crash-bet', { bet: 100 });
+        await socket.trigger('crash-unqueue');
+        await socket.trigger('crash-bet', { bet: 25 });
+
+        expect(pendingBets.get(name)?.bet).toBe(25);
+        expect(betDeducts(name).length).toBe(2);
+    });
+
+    it('refunds only once when the cancel is double-clicked', async () => {
+        const name = uniqueName();
+        const socket = setup(name);
+        startRunningRound();
+        await socket.trigger('crash-bet', { bet: 100 });
+
+        const d = deferred();
+        mockAddBalance.mockImplementation(() => d.promise);
+        const first = socket.trigger('crash-unqueue');
+        const second = socket.trigger('crash-unqueue');
+        d.resolve(1000);
+        await Promise.all([first, second]);
+
+        const refund = mockAddBalance.mock.calls.filter(c => c[2] === 'crash_bet_unqueue_refund');
+        expect(refund.length).toBe(1);
+        expect(socket.emits.filter(e => e.event === 'crash-unqueue-confirmed').length).toBe(1);
+    });
+
+    it('cannot cancel a bet that has already gone live', async () => {
+        const name = uniqueName();
+        const socket = setup(name);
+        startRunningRound();
+        await socket.trigger('crash-bet', { bet: 100 });
+        startBettingPhase();                  // promoted into the live round
+        socket.emits.length = 0;
+
+        await socket.trigger('crash-unqueue');
+
+        expect(round.bets.get(name).bet).toBe(100);
+        expect(mockAddBalance.mock.calls.some(c => c[2] === 'crash_bet_unqueue_refund')).toBe(false);
+        expect(socket.emits.some(e =>
+            e.event === 'crash-error' && e.data.message === 'Bet already went live for this round'
+        )).toBe(true);
+    });
+
+    it('errors cleanly when there is nothing queued', async () => {
+        const name = uniqueName();
+        const socket = setup(name);
+        startRunningRound();
+
+        await socket.trigger('crash-unqueue');
+
+        expect(socket.emits.some(e =>
+            e.event === 'crash-error' && e.data.message === 'No queued bet to cancel'
+        )).toBe(true);
+    });
+
+    it('a promotion racing the refund cannot resurrect the cancelled bet', async () => {
+        const name = uniqueName();
+        const socket = setup(name);
+        startRunningRound();
+        await socket.trigger('crash-bet', { bet: 100 });
+
+        const d = deferred();
+        mockAddBalance.mockImplementation(() => d.promise);
+        const cancel = socket.trigger('crash-unqueue');
+        await settle();                       // claim taken, refund still in flight
+        startBettingPhase();                  // next round opens mid-refund
+        d.resolve(1000);
+        await cancel;
+
+        expect(round.bets.has(name)).toBe(false);
+        expect(pendingBets.has(name)).toBe(false);
+    });
+});
+
 describe('crash-state snapshot', () => {
     it('reports queued bets separately from live ones', async () => {
         const live = uniqueName();

@@ -205,6 +205,7 @@ Multiplayer multiplier game with shared rounds (betting phase → running phase 
 C->S:
 - `crash-state` - Request current round state
 - `crash-bet` - Place bet `{ bet, autoCashout? }`. During the betting phase it joins the round about to start; during running/reveal it is **queued for the next round** (stake deducted immediately, one bet per player per round either way — a player with a bet riding the current round can still queue one)
+- `crash-unqueue` - Cancel a *queued* bet and refund the stake. Only works while it is still queued — once promoted into a live round the bet is final
 - `crash-cashout` - Cash out at current multiplier (only during running phase)
 
 S->C:
@@ -215,6 +216,7 @@ S->C:
 - `crash-round-crashed` - Round ended `{ crashPoint, ... }`
 - `crash-bet-confirmed` - Bet accepted (to the bettor) `{ roundId, bet, autoCashout, balance, queued }` — `queued: true` means it rides the next round, not this one
 - `crash-bet-public` - Bet broadcast for the live bet feed. Queued bets are announced when they are promoted at the next betting phase, not when queued
+- `crash-unqueue-confirmed` - Queued bet cancelled and refunded (to the bettor) `{ bet, balance }`
 - `crash-cashout` - Cashout broadcast for the live feed
 - `crash-cashout-confirmed` - Cashout confirmed (to the bettor)
 - `crash-error` - Error response

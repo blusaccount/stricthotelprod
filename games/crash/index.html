@@ -38,6 +38,7 @@
                 <div class="block">
                     <div class="block-label">YOUR BET</div>
                     <div class="bet-info" id="bet-info">No active bet</div>
+                    <button id="unqueue-btn" class="aux-btn unqueue" type="button" hidden>CANCEL QUEUED BET</button>
                 </div>
 
                 <div class="block">
@@ -69,6 +70,11 @@
                 <div class="players-block">
                     <h2>PLAYERS THIS ROUND</h2>
                     <div id="players-list" class="players-list"></div>
+                </div>
+
+                <div class="players-block next-round" id="next-round-block" hidden>
+                    <h2>QUEUED FOR NEXT ROUND</h2>
+                    <div id="next-round-list" class="players-list"></div>
                 </div>
             </div>
         </div>

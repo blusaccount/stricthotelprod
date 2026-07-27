@@ -305,6 +305,10 @@ body {
     cursor: pointer;
 }
 .aux-btn.on { border-color: var(--cyan); color: var(--cyan); }
+/* Only ever shown while a queued stake can still be refunded. */
+.aux-btn.unqueue { border-color: var(--magenta); color: var(--magenta); align-self: flex-start; }
+.aux-btn.unqueue:hover { background: rgba(255, 62, 165, 0.12); }
+.aux-btn[hidden] { display: none; }
 .audio-row { display: flex; gap: 10px; }
 
 .players-block { border-top: 2px dashed #2c2240; padding-top: 10px; }
@@ -328,6 +332,14 @@ body {
 .player-status.cashed { color: var(--win); }
 .player-status.lost   { color: var(--loss); }
 .player-status.auto   { color: var(--cyan); }
+.player-status.queued { color: var(--magenta); }
+
+/* Roster of stakes riding the NEXT round — magenta throughout, matching the
+   queued bet-info, so it never reads as money in the current round. */
+.players-block.next-round h2 { color: var(--magenta); }
+.players-block[hidden] { display: none; }
+.player-row.queued { border-left-color: var(--magenta); background: rgba(255, 62, 165, 0.05); }
+.player-row.queued.you { border-left-color: var(--magenta); background: rgba(255, 62, 165, 0.12); }
 
 .footer {
     margin-top: 14px;

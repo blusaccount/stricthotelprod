@@ -459,6 +459,40 @@ export function registerCrashHandlers(socket, io, deps) {
         socket.emit('crash-error', { message: 'Bet failed. Try again.' });
     } });
 
+    socket.on('crash-unqueue', async () => { try {
+        if (!checkRateLimit(socket, 5)) return;
+        const player = onlinePlayers.get(socket.id);
+        if (!player || !player.name) {
+            socket.emit('crash-error', { message: 'Not logged in' });
+            return;
+        }
+        await withActionLock(actionKey('crash', player.name), async () => {
+            // Claim the entry synchronously, before any await. On the
+            // single-threaded loop that closes the window where
+            // startBettingPhase() could promote the bet into a live round
+            // while we are still refunding it.
+            const entry = pendingBets.get(player.name);
+            if (!entry) {
+                socket.emit('crash-error', {
+                    message: round.bets.has(player.name)
+                        ? 'Bet already went live for this round'
+                        : 'No queued bet to cancel'
+                });
+                return;
+            }
+            pendingBets.delete(player.name);
+            // If this throws the claim intentionally stays: the refund may have
+            // landed server-side and re-queueing would risk paying it twice.
+            const balance = await addBalance(player.name, entry.bet, 'crash_bet_unqueue_refund', { bet: entry.bet });
+            emitToUser(io, player.name, 'balance-update', { balance });
+            socket.emit('crash-unqueue-confirmed', { bet: entry.bet, balance });
+            broadcastState();
+        });
+    } catch (err) {
+        console.error('crash-unqueue error:', err.message);
+        socket.emit('crash-error', { message: 'Could not cancel the queued bet.' });
+    } });
+
     socket.on('crash-cashout', async () => { try {
         if (!checkRateLimit(socket, 10)) return;
         const player = onlinePlayers.get(socket.id);

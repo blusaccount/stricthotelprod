@@ -4,6 +4,64 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Crash — cancel a queued bet + next-round roster (2026-07-27)
+
+## Why
+Follow-up to the queued-bets entry below, closing the two gaps flagged there as
+open risks: a queued stake could not be withdrawn (coins locked for a whole
+flight after one misclick), and other players' queued bets were sent to the
+client but never rendered.
+
+## What Changed
+
+### `server/handlers/crash.js` — new `crash-unqueue`
+- Refunds a queued stake (`crash_bet_unqueue_refund`) and drops it from
+  `pendingBets`. Only valid while the bet is still queued.
+- **Claims the entry synchronously before the refund await.** This is the whole
+  correctness argument: `startBettingPhase()` promotes bets synchronously, so
+  deleting from `pendingBets` before any `await` closes the window in which a
+  round could start mid-refund and hand the player a live bet they had already
+  been refunded for. Same shape as the `claimOnce` guard in `resolveCashout`.
+- Distinguishes the two failure modes: `Bet already went live for this round`
+  (promoted while you were reading) vs `No queued bet to cancel`.
+- Bets that already went live stay final — unchanged from betting-phase
+  semantics.
+
+### `games/crash/js/game.js`, `index.html`, `crash.css`
+- `CANCEL QUEUED BET` aux button, shown only while `queuedBet` is set.
+- New `QUEUED FOR NEXT ROUND` roster (`renderPendingPlayers()`), fed by the
+  `pending` payload that was already on the wire, hidden when empty. Magenta
+  throughout to match the queued bet-info, so it never reads as money in the
+  current round.
+
+## How to Verify
+- `npx vitest run` — **478 passed / 34 files** (was 472/34). Six new tests in
+  `crash-queued-bets.test.js`: refund + dequeue, re-queue after cancel,
+  double-clicked cancel refunding once, cancel rejected once live, cancel with
+  nothing queued, and a promotion racing the refund (asserts the bet is in
+  neither map afterwards).
+- Extended the end-to-end run against the real round loop — 21 checks, all pass:
+  queue → duplicate rejected → cancel → refund verified against real balances →
+  second cancel rejected → re-queue → promoted into the next round → cancel
+  correctly refused once live.
+
+## Open Risks / Notes
+- **Cancel/re-queue is unlimited and free.** No cooldown beyond the shared
+  `checkRateLimit(socket, 5)`, and each cycle writes two currency rows
+  (`crash_bet` + `crash_bet_unqueue_refund`). It mints nothing and cannot go
+  negative, so it is a ledger-noise concern, not an exploit. If the transaction
+  log gets spammy, a per-round cancel cap is the lever.
+- `crash_bets` is bumped on every queue, so cancel/re-queue cycles inflate that
+  counter and can farm the one-time 'Lift-off' achievement's 50 SC... **no** —
+  verified: `bump` only pays a reward the first time a threshold is crossed, so
+  the 50 SC lands once. The counter is still inflated, which affects nothing
+  today (threshold 1) but would matter if a "place N Crash bets" achievement is
+  ever added — bump on promotion instead of on queue if so.
+- Still not verified in a browser (`SITE_PASSWORD` gate) — carried forward. The
+  new roster block and cancel button are unrendered-unverified in particular.
+
+---
+
 # Handoff: Crash — bet mid-round to join the next one (2026-07-27)
 
 ## Why

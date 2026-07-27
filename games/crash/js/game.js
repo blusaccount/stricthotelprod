@@ -37,6 +37,9 @@
     const cashoutBtn = document.getElementById('cashout-btn');
     const soundBtn = document.getElementById('sound-toggle');
     const playersList = document.getElementById('players-list');
+    const unqueueBtn = document.getElementById('unqueue-btn');
+    const nextRoundBlock = document.getElementById('next-round-block');
+    const nextRoundList = document.getElementById('next-round-list');
 
     // ---------- State ---------- //
     let myName = '';
@@ -56,6 +59,7 @@
     let players = [];               // public bet list mirrored from server
     let myBet = null;               // { bet, autoCashout, cashedAt, payout, lost }
     let queuedBet = null;           // { bet, autoCashout } — placed mid-round, rides the next one
+    let pendingPlayers = [];        // everyone queued for the next round
 
     // Bets are accepted in every phase: during betting they join the round that
     // is about to start, during running/reveal they are queued for the next one.
@@ -354,6 +358,9 @@
         }
         betInfo.classList.toggle('queued', !!queuedBet);
         betInfo.textContent = text;
+        // Cancelling only ever refunds a queued stake — a bet that has already
+        // gone live is final, same as one placed during the betting phase.
+        unqueueBtn.hidden = !queuedBet;
     }
 
     function pillTier(m) {
@@ -409,6 +416,33 @@
             row.appendChild(bet);
             row.appendChild(status);
             playersList.appendChild(row);
+        }
+    }
+
+    function renderPendingPlayers() {
+        nextRoundBlock.hidden = pendingPlayers.length === 0;
+        nextRoundList.innerHTML = '';
+        for (const p of pendingPlayers) {
+            const row = document.createElement('div');
+            row.className = 'player-row queued';
+            if (p.name === myName) row.classList.add('you');
+
+            const name = document.createElement('span');
+            name.className = 'player-name';
+            name.textContent = p.name;
+
+            const bet = document.createElement('span');
+            bet.className = 'player-bet';
+            bet.textContent = `${p.bet} SC`;
+
+            const status = document.createElement('span');
+            status.className = 'player-status queued';
+            status.textContent = p.autoCashout ? `auto @ ${p.autoCashout.toFixed(2)}×` : 'queued';
+
+            row.appendChild(name);
+            row.appendChild(bet);
+            row.appendChild(status);
+            nextRoundList.appendChild(row);
         }
     }
 
@@ -548,12 +582,14 @@
         // A bet queued mid-round lives in `pending` until it is promoted into
         // `bets` at the next betting phase. Rebuilt from state so it survives a
         // reload while the queue is still holding it.
-        const mineQueued = (data.pending || []).find(b => b.name === myName);
+        pendingPlayers = data.pending || [];
+        const mineQueued = pendingPlayers.find(b => b.name === myName);
         queuedBet = mineQueued
             ? { bet: mineQueued.bet, autoCashout: mineQueued.autoCashout || null }
             : null;
         players = data.bets || [];
         renderPlayers();
+        renderPendingPlayers();
         updateButtons();
 
         if (data.state === 'betting') {
@@ -610,6 +646,11 @@
     cashoutBtn.addEventListener('click', () => {
         if (roundState !== 'running' || !myBet || myBet.cashedAt) return;
         socket.emit('crash-cashout');
+    });
+
+    unqueueBtn.addEventListener('click', () => {
+        if (!queuedBet) return;
+        socket.emit('crash-unqueue');
     });
 
     for (const b of betButtons) b.addEventListener('click', () => handleBetClick(b));
@@ -672,6 +713,14 @@
         playBetPlaced();
         for (const b of betButtons) b.classList.remove('active');
         selectedBet = null;
+        updateButtons();
+    });
+    socket.on('crash-unqueue-confirmed', (data) => {
+        queuedBet = null;
+        pendingPlayers = pendingPlayers.filter(p => p.name !== myName);
+        setBalance(data.balance);
+        setStatus(`Queued bet cancelled — ${data.bet} SC refunded`, 'info');
+        renderPendingPlayers();
         updateButtons();
     });
     socket.on('crash-bet-public', (data) => {
