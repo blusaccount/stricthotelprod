@@ -111,7 +111,9 @@ body {
     font-size: 10px;
 }
 
-.stock-balance-amount { font-weight: 700; }
+/* No font-weight:700 anywhere on this page: Press Start 2P ships a single
+   weight, so "bold" is browser-synthesized and smears the pixel glyphs
+   into unreadable blobs. Hierarchy comes from size and color instead. */
 
 /* ===== Portfolio Summary ===== */
 .portfolio-summary {
@@ -137,7 +139,6 @@ body {
 
 .summary-value {
     font-size: 11px;
-    font-weight: 700;
 }
 
 .summary-value.positive { color: var(--ds-text); }
@@ -201,14 +202,12 @@ body {
     border-bottom: 1px solid var(--ds-divider);
 }
 
-.holdings-table .symbol { font-weight: 700; }
 .holdings-table .holding-icon { font-size: 12px; margin-right: 5px; vertical-align: -2px; }
 .holdings-table .holding-name {
     font-family: var(--ds-font-body);
     font-size: 12px;
     color: var(--ds-text-dim);
 }
-.holdings-table .positive { font-weight: 700; }
 .holdings-table .positive::before { content: '+'; }
 .holdings-table .negative { color: var(--ds-text-dim); }
 
@@ -311,7 +310,6 @@ body {
 .search-result-item:hover { background: var(--ds-highlight); }
 .search-result-item:last-child { border-bottom: none; }
 
-.search-result-symbol { font-weight: 700; }
 .search-result-name { color: var(--ds-text-dim); font-family: var(--ds-font-body); font-size: 13px; }
 .search-result-type {
     font-size: 6px;
@@ -380,9 +378,9 @@ body {
     align-items: flex-start;
 }
 
-.stock-card .symbol { font-size: 10px; font-weight: 700; }
+.stock-card .symbol { font-size: 10px; }
 .stock-card .name { font-family: var(--ds-font-body); font-size: 13px; color: var(--ds-text-dim); margin-top: 2px; }
-.stock-card .price { font-size: 10px; font-weight: 700; text-align: right; }
+.stock-card .price { font-size: 10px; text-align: right; }
 .stock-card .change { font-size: 7px; margin-top: 2px; text-align: right; }
 .stock-card .change.up { color: var(--ds-text); }
 .stock-card .change.up::before { content: '▲ '; }
@@ -636,7 +634,6 @@ body {
 }
 .leaderboard-rank {
     font-size: 10px;
-    font-weight: 700;
     min-width: 24px;
 }
 .leaderboard-avatar {
@@ -653,7 +650,6 @@ body {
 }
 .leaderboard-name {
     font-size: 9px;
-    font-weight: 700;
     flex: 1;
     margin: 0 8px;
 }
@@ -665,7 +661,6 @@ body {
     font-size: 9px;
 }
 .leaderboard-networth {
-    font-weight: 700;
     font-size: 11px;
 }
 .leaderboard-breakdown {

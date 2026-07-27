@@ -332,9 +332,12 @@ describe('/api/stock-history validation', () => {
         expect(res.body.summary).toBeNull();
     });
 
-    it('profile: truncates the business summary to two sentences and caches it', async () => {
+    it('profile: truncates the business summary to a short paragraph and caches it', async () => {
         const longSummary = 'Acme builds rockets. It also sells anvils worldwide. '
-            + 'Founded in 1949, the company employs 12,000 people. More filler text here.';
+            + 'Founded in 1949, the company employs 12,000 people. Headquarters sit in Toledo. '
+            + 'A fifth sentence that should be cut. And a sixth one as well.';
+        const expected = 'Acme builds rockets. It also sells anvils worldwide. '
+            + 'Founded in 1949, the company employs 12,000 people. Headquarters sit in Toledo.';
         const quoteSummary = vi.fn().mockResolvedValue({
             assetProfile: { longBusinessSummary: longSummary, sector: 'Industrials', industry: 'Aerospace' },
         });
@@ -345,11 +348,11 @@ describe('/api/stock-history validation', () => {
 
         const res = await dispatch(router, '/api/stock-profile', '4.4.4.3', { symbol: 'ACME' });
         expect(res.statusCode).toBe(200);
-        expect(res.body.summary).toBe('Acme builds rockets. It also sells anvils worldwide.');
+        expect(res.body.summary).toBe(expected);
         expect(res.body.sector).toBe('Industrials');
 
         const second = await dispatch(router, '/api/stock-profile', '4.4.4.4', { symbol: 'ACME' });
-        expect(second.body.summary).toBe('Acme builds rockets. It also sells anvils worldwide.');
+        expect(second.body.summary).toBe(expected);
         expect(quoteSummary).toHaveBeenCalledTimes(1);
     });
 

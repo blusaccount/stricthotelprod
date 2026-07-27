@@ -123,9 +123,9 @@ const stockQuoteRateLimiter = rateLimiter(30);
 const stockHistoryRateLimiter = rateLimiter(30);
 const stockProfileRateLimiter = rateLimiter(30);
 
-// First 2 sentences of a business summary — enough for "what does this
+// A short paragraph of the business summary — enough for "what does this
 // company do" without dumping Yahoo's multi-paragraph profile on the UI.
-function truncateSummary(text, maxSentences = 2, maxChars = 320) {
+function truncateSummary(text, maxSentences = 4, maxChars = 600) {
     if (typeof text !== 'string' || !text.trim()) return null;
     const sentences = text.trim().match(/[^.!?]+[.!?]+(?:\s|$)/g);
     let out = sentences ? sentences.slice(0, maxSentences).join('').trim() : text.trim();
