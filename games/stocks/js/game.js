@@ -362,9 +362,23 @@
 
     const findQuote = (symbol) => marketData.find((q) => q.symbol === symbol);
 
-    const openDetail = (symbol, hint) => {
+    const openDetail = (symbol, hint, fromHistory) => {
+        const wasOpen = detailSymbol !== null;
         detailSymbol = symbol;
         dlog('openDetail', symbol);
+
+        // Wire the subpage into browser history so back (button or phone
+        // gesture) returns to the overview instead of leaving the app.
+        // Switching detail->detail replaces the entry: back always closes.
+        if (!fromHistory) {
+            try {
+                if (wasOpen) {
+                    history.replaceState({ stocksDetail: symbol }, '', location.href);
+                } else {
+                    history.pushState({ stocksDetail: symbol }, '', location.href);
+                }
+            } catch (_) {}
+        }
 
         const quote = findQuote(symbol);
         detailIconEl.textContent = getStockIcon(symbol);
@@ -396,11 +410,26 @@
         loadDetailHistory();
     };
 
-    const closeDetail = () => {
+    const closeDetail = (fromPopstate) => {
         detailSymbol = null;
         detailView.hidden = true;
         mainView.hidden = false;
+        // BACK button: consume the history entry we pushed so the next
+        // browser-back doesn't re-close an already-closed detail view.
+        if (fromPopstate !== true && history.state && history.state.stocksDetail) {
+            try { history.back(); } catch (_) {}
+        }
     };
+
+    window.addEventListener('popstate', (e) => {
+        const stateSymbol = e.state && e.state.stocksDetail;
+        if (detailSymbol && !stateSymbol) {
+            closeDetail(true);
+        } else if (stateSymbol && stateSymbol !== detailSymbol) {
+            // Forward-navigation back into a previously opened detail page
+            openDetail(stateSymbol, null, true);
+        }
+    });
 
     const renderDetailQuote = (quote) => {
         if (!quote) {
@@ -1096,6 +1125,11 @@
     // --- Init ---
     renderMovers();
     fetchMarket();
+    // Landing on a history entry whose state says a detail page was open
+    // (e.g. browser-forward back into the app) — restore it.
+    if (history.state && history.state.stocksDetail) {
+        openDetail(history.state.stocksDetail, null, true);
+    }
     setInterval(() => {
         fetchMarket();
         requestPortfolioRefresh('60s tick');
