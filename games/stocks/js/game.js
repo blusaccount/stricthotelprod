@@ -178,11 +178,30 @@
     };
 
     // --- Determine asset type ---
+    // Yahoo's quoteType for symbols outside the curated board, learned from
+    // search results and profile lookups. Without it every searched symbol
+    // defaulted to STOCK — a European ETF was labelled "Einzelaktie".
+    const symbolTypes = new Map(); // symbol -> our type
+    const YAHOO_TYPE_MAP = {
+        EQUITY: 'STOCK',
+        ETF: 'ETF',
+        MUTUALFUND: 'ETF',
+        CRYPTOCURRENCY: 'CRYPTO',
+        FUTURE: 'COMMODITY',
+        INDEX: 'INDEX',
+        CURRENCY: 'CURRENCY',
+    };
+    const rememberType = (symbol, yahooType) => {
+        if (!symbol || typeof yahooType !== 'string') return;
+        const mapped = YAHOO_TYPE_MAP[yahooType.toUpperCase()];
+        if (mapped) symbolTypes.set(symbol, mapped);
+    };
+
     const getStockType = (symbol) => {
         if (COMMODITY_SYMBOLS.indexOf(symbol) >= 0) return 'COMMODITY';
         if (CRYPTO_SYMBOLS.indexOf(symbol) >= 0) return 'CRYPTO';
         if (ETF_SYMBOLS.indexOf(symbol) >= 0) return 'ETF';
-        return 'STOCK';
+        return symbolTypes.get(symbol) || 'STOCK';
     };
 
     // --- Asset icons ---
@@ -201,7 +220,7 @@
         'BTC-USD': '🟠', 'ETH-USD': '🔷', 'SOL-USD': '🟣', 'BNB-USD': '🟡',
         'XRP-USD': '💧', 'ADA-USD': '🔵', 'DOGE-USD': '🐕',
     };
-    const TYPE_ICONS = { STOCK: '🏢', ETF: '🧺', COMMODITY: '⛏️', CRYPTO: '🪙' };
+    const TYPE_ICONS = { STOCK: '🏢', ETF: '🧺', COMMODITY: '⛏️', CRYPTO: '🪙', INDEX: '📊', CURRENCY: '💱' };
     const getStockIcon = (symbol) => STOCK_ICONS[symbol] || TYPE_ICONS[getStockType(symbol)] || '🏢';
 
     // Short curated blurbs for every board symbol (German — that's the
@@ -264,11 +283,15 @@
         'ADA-USD': 'Cardano ist eine forschungsgetriebene Smart-Contract-Blockchain, deren Neuerungen wissenschaftlich begutachtet werden. Das macht die Entwicklung gründlich, aber langsamer als bei der Konkurrenz — die Community gehört zu den treuesten im Kryptomarkt.',
         'DOGE-USD': 'Dogecoin startete 2013 als Parodie auf den Krypto-Hype — und wurde nicht zuletzt dank Elon Musks Tweets selbst zum Phänomen. Kein Mengenlimit, kaum Weiterentwicklung, dafür Meme-Power: der Inbegriff der Spaß-Spekulation.',
     };
+    // Last-resort label when the provider has nothing at all. Kept as a
+    // full sentence so it doesn't read like a broken field.
     const TYPE_DESCRIPTIONS = {
-        STOCK: 'Einzelaktie.',
-        ETF: 'Börsengehandelter Indexfonds (ETF).',
-        COMMODITY: 'Rohstoff-Future.',
-        CRYPTO: 'Kryptowährung.',
+        STOCK: 'Einzelaktie — für dieses Papier liegt keine Beschreibung vor.',
+        ETF: 'Börsengehandelter Indexfonds (ETF), der einen Index nachbildet.',
+        COMMODITY: 'Rohstoff-Future: ein Terminkontrakt auf den Preis des Rohstoffs.',
+        CRYPTO: 'Kryptowährung, gehandelt rund um die Uhr.',
+        INDEX: 'Aktienindex, der die Entwicklung eines ganzen Marktes abbildet.',
+        CURRENCY: 'Währungspaar aus dem Devisenmarkt.',
     };
 
     // --- Top Movers (replaces the full market grid; search finds the rest) ---
@@ -383,6 +406,10 @@
                     const seen = new Set(localNow.map((l) => l.symbol));
                     const remote = (Array.isArray(results) ? results : [])
                         .filter((r) => !seen.has(r.symbol));
+                    // Yahoo's quoteType rides along on every hit — keep it so
+                    // icons, badges and the fallback label are right from the
+                    // first render, before any profile lookup returns.
+                    for (const r of remote) rememberType(r.symbol, r.type);
                     const merged = localNow.concat(remote);
                     if (merged.length === 0) {
                         searchResults.innerHTML = '<div class="search-result-item" style="color:var(--ds-text-dim);cursor:default;">No results</div>';
@@ -423,6 +450,10 @@
     const rangeTabsEl = $('range-tabs');
 
     let detailSymbol = null;
+    // The quote and profile lookups race; the profile carries the full name
+    // ("iShares STOXX Europe 600 UCITS ETF (DE)") while the quote only has
+    // the exchange's abbreviation. Once the full one lands, it stays.
+    let detailLongName = null;
     let detailRange = '1mo';
     let detailChart = null;
     let detailHistorySeq = 0; // guards against out-of-order range responses
@@ -448,10 +479,10 @@
         }
 
         const quote = findQuote(symbol);
-        detailIconEl.textContent = getStockIcon(symbol);
+        detailLongName = null;
         detailSymbolEl.textContent = symbol;
         detailNameEl.textContent = (quote && quote.name) || (hint && hint.name) || symbol;
-        detailTypeEl.textContent = getStockType(symbol);
+        applyDetailIdentity(symbol);
         renderDetailQuote(quote);
         renderDetailPosition();
         renderDetailDescription(symbol);
@@ -469,7 +500,7 @@
                     if (data.error || detailSymbol !== symbol) return;
                     customQuotes.set(data.symbol, data);
                     if (!findQuote(data.symbol)) marketData.push(data);
-                    detailNameEl.textContent = data.name || symbol;
+                    if (!detailLongName) detailNameEl.textContent = data.name || symbol;
                     renderDetailQuote(data);
                 })
                 .catch(() => { dwarn('detail quote fetch failed for', symbol); });
@@ -521,6 +552,13 @@
         renderDetailQuote(findQuote(detailSymbol));
     };
 
+    // Icon and type badge both hang off getStockType, which can sharpen once
+    // a profile lookup returns — set them together.
+    const applyDetailIdentity = (symbol) => {
+        detailIconEl.textContent = getStockIcon(symbol);
+        detailTypeEl.textContent = getStockType(symbol);
+    };
+
     const detailDescEl = $('detail-desc');
     const profileCache = new Map(); // symbol -> summary string ('' = none found)
 
@@ -542,21 +580,27 @@
             setDescription(curated, false);
             return;
         }
-        const typeFallback = TYPE_DESCRIPTIONS[getStockType(symbol)] || '';
         const cached = profileCache.get(symbol);
         if (cached !== undefined) {
-            setDescription(cached || typeFallback, !!cached);
+            setDescription(cached || TYPE_DESCRIPTIONS[getStockType(symbol)] || '', !!cached);
             return;
         }
-        setDescription(typeFallback, false);
+        setDescription(TYPE_DESCRIPTIONS[getStockType(symbol)] || '', false);
         fetch(`/api/stock-profile?symbol=${encodeURIComponent(symbol)}`)
             .then((r) => r.json())
             .then((data) => {
                 const summary = (data && typeof data.summary === 'string') ? data.summary : '';
                 profileCache.set(symbol, summary);
-                if (summary && detailSymbol === symbol) {
-                    setDescription(summary, true);
+                if (data) rememberType(symbol, data.quoteType);
+                if (detailSymbol !== symbol) return;
+                // Type may only now be known — redo icon, badge and the
+                // fallback label together.
+                applyDetailIdentity(symbol);
+                if (data && data.longName) {
+                    detailLongName = data.longName;
+                    detailNameEl.textContent = data.longName;
                 }
+                setDescription(summary || TYPE_DESCRIPTIONS[getStockType(symbol)] || '', !!summary);
             })
             .catch(() => { profileCache.set(symbol, ''); });
     };

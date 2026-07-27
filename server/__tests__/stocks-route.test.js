@@ -423,6 +423,57 @@ describe('/api/stock-history validation', () => {
         expect(res.body.summary).toBe('Acme builds rockets and sells anvils to coyotes worldwide.');
     });
 
+    it('profile: describes a non-US ETF from fund metadata when no summary exists', async () => {
+        // Real shape for EXSA.DE: assetProfile has no longBusinessSummary at
+        // all, only fundProfile carries anything usable.
+        const quoteSummary = vi.fn().mockResolvedValue({
+            assetProfile: { phone: '00800 4384 2222', maxAge: 86400 },
+            quoteType: { quoteType: 'ETF', longName: 'iShares STOXX Europe 600 UCITS ETF (DE) EUR (Dist)' },
+            fundProfile: {
+                family: 'BlackRock Asset Management Deutschland AG - ETF',
+                legalType: 'Exchange Traded Fund',
+                categoryName: null,
+                feesExpensesInvestment: { annualReportExpenseRatio: 0.002 },
+            },
+        });
+        const router = createStocksRouter({
+            getYahooFinance: async () => ({ quote: vi.fn(), quoteSummary }),
+            isStockGameEnabled: true,
+        });
+
+        const res = await dispatch(router, '/api/stock-profile', '4.4.6.1', { symbol: 'EXSA.DE' });
+        expect(res.body.summary).toBe('Exchange Traded Fund from BlackRock Asset Management '
+            + 'Deutschland AG. Ongoing charges are 0.20% per year.');
+        expect(res.body.quoteType).toBe('ETF');
+        expect(res.body.longName).toBe('iShares STOXX Europe 600 UCITS ETF (DE) EUR (Dist)');
+    });
+
+    it('profile: omits the fee sentence when no expense ratio is reported', async () => {
+        const quoteSummary = vi.fn().mockResolvedValue({
+            quoteType: { quoteType: 'ETF' },
+            fundProfile: { family: 'Some Issuer', legalType: 'Exchange Traded Fund' },
+        });
+        const router = createStocksRouter({
+            getYahooFinance: async () => ({ quote: vi.fn(), quoteSummary }),
+            isStockGameEnabled: true,
+        });
+
+        const res = await dispatch(router, '/api/stock-profile', '4.4.6.2', { symbol: 'XYZ.DE' });
+        expect(res.body.summary).toBe('Exchange Traded Fund from Some Issuer.');
+    });
+
+    it('profile: reports quoteType even when nothing describes the symbol', async () => {
+        const quoteSummary = vi.fn().mockResolvedValue({ quoteType: { quoteType: 'FUTURE' } });
+        const router = createStocksRouter({
+            getYahooFinance: async () => ({ quote: vi.fn(), quoteSummary }),
+            isStockGameEnabled: true,
+        });
+
+        const res = await dispatch(router, '/api/stock-profile', '4.4.6.3', { symbol: 'ZW=F' });
+        expect(res.body.summary).toBeNull();
+        expect(res.body.quoteType).toBe('FUTURE');
+    });
+
     it('serves cached history without a provider call', async () => {
         const router = makeHistoryRouter();
         const payload = {

@@ -154,6 +154,30 @@ const CRYPTO_STAT_SENTENCE = [
 // no more informative than the asset-type label the client already shows.
 const MIN_USEFUL_DESCRIPTION = 45;
 
+// Non-US ETFs (EXSA.DE, IWDA.AS, ...) carry no business summary — Yahoo
+// only exposes fund metadata. Build a factual line from that rather than
+// leaving the player with a bare type label. Nothing is inferred from the
+// fund name: only fields the provider actually returns are used.
+function describeFund(fundProfile) {
+    if (!fundProfile) return null;
+    const legalType = typeof fundProfile.legalType === 'string' ? fundProfile.legalType.trim() : '';
+    // "BlackRock Asset Management Deutschland AG - ETF" — drop the suffix.
+    const family = typeof fundProfile.family === 'string'
+        ? fundProfile.family.replace(/\s*-\s*ETF\s*$/i, '').trim()
+        : '';
+    if (!legalType && !family) return null;
+
+    const sentences = [];
+    if (legalType && family) sentences.push(`${legalType} from ${family}.`);
+    else sentences.push(`${legalType || family}.`);
+
+    const ter = fundProfile.feesExpensesInvestment?.annualReportExpenseRatio;
+    if (typeof ter === 'number' && ter > 0) {
+        sentences.push(`Ongoing charges are ${(ter * 100).toFixed(2)}% per year.`);
+    }
+    return sentences.join(' ');
+}
+
 function sanitizeCryptoDescription(text) {
     if (typeof text !== 'string' || !text.trim()) return null;
     const out = splitSentences(text)
@@ -604,23 +628,28 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled, getExt
             return res.json(cached.data);
         }
 
-        let data = { symbol, summary: null, sector: null, industry: null };
+        let data = { symbol, summary: null, sector: null, industry: null, quoteType: null, longName: null };
         try {
             const yf = await getYahooFinance();
-            const result = await yf.quoteSummary(symbol, { modules: ['assetProfile'] });
+            // quoteType so the client can label a searched symbol correctly
+            // (a European ETF is not an "Einzelaktie"); fundProfile because
+            // non-US ETFs carry no business summary at all.
+            const result = await yf.quoteSummary(symbol, { modules: ['assetProfile', 'quoteType', 'fundProfile'] });
             const profile = result?.assetProfile;
-            if (profile) {
-                data = {
-                    symbol,
-                    summary: truncateSummary(profile.longBusinessSummary)
-                        || sanitizeCryptoDescription(profile.description),
-                    sector: profile.sector || null,
-                    industry: profile.industry || null,
-                };
-            }
+            data = {
+                symbol,
+                summary: truncateSummary(profile?.longBusinessSummary)
+                    || sanitizeCryptoDescription(profile?.description)
+                    || describeFund(result?.fundProfile),
+                sector: profile?.sector || null,
+                industry: profile?.industry || null,
+                quoteType: result?.quoteType?.quoteType || null,
+                longName: result?.quoteType?.longName || null,
+            };
         } catch (err) {
-            // Non-equities (futures, crypto) and provider hiccups land here —
-            // cache the empty result too so we don't re-ask Yahoo per click.
+            // Futures and indices have no fundamentals at all, plus provider
+            // hiccups — cache the empty result too so we don't re-ask Yahoo
+            // on every click.
         }
 
         profileCache.set(symbol, { data, ts: Date.now() });
