@@ -524,25 +524,38 @@
     const detailDescEl = $('detail-desc');
     const profileCache = new Map(); // symbol -> summary string ('' = none found)
 
+    // Curated blurbs are ours and stay unmarked; anything pulled from the
+    // provider is credited so the language switch to English reads as
+    // sourced text rather than an inconsistency.
+    const setDescription = (text, fromProvider) => {
+        if (!text) {
+            detailDescEl.textContent = '';
+            return;
+        }
+        detailDescEl.innerHTML = escapeHtml(text)
+            + (fromProvider ? ' <span class="detail-desc-source">via Yahoo Finance</span>' : '');
+    };
+
     const renderDetailDescription = (symbol) => {
         const curated = STOCK_DESCRIPTIONS[symbol];
         if (curated) {
-            detailDescEl.textContent = curated;
+            setDescription(curated, false);
             return;
         }
+        const typeFallback = TYPE_DESCRIPTIONS[getStockType(symbol)] || '';
         const cached = profileCache.get(symbol);
         if (cached !== undefined) {
-            detailDescEl.textContent = cached || TYPE_DESCRIPTIONS[getStockType(symbol)] || '';
+            setDescription(cached || typeFallback, !!cached);
             return;
         }
-        detailDescEl.textContent = TYPE_DESCRIPTIONS[getStockType(symbol)] || '';
+        setDescription(typeFallback, false);
         fetch(`/api/stock-profile?symbol=${encodeURIComponent(symbol)}`)
             .then((r) => r.json())
             .then((data) => {
                 const summary = (data && typeof data.summary === 'string') ? data.summary : '';
                 profileCache.set(symbol, summary);
                 if (summary && detailSymbol === symbol) {
-                    detailDescEl.textContent = summary;
+                    setDescription(summary, true);
                 }
             })
             .catch(() => { profileCache.set(symbol, ''); });

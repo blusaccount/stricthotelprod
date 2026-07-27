@@ -468,6 +468,12 @@ body {
 }
 .detail-desc:empty { display: none; }
 
+.detail-desc-source {
+    font-size: 12px;
+    color: var(--ds-text-dim);
+    white-space: nowrap;
+}
+
 /* ===== Trade Modal ===== */
 .trade-overlay {
     display: none;

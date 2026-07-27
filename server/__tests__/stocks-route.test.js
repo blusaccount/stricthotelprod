@@ -356,6 +356,73 @@ describe('/api/stock-history validation', () => {
         expect(quoteSummary).toHaveBeenCalledTimes(1);
     });
 
+    it('profile: strips live stats out of the crypto description fallback', async () => {
+        // Shape copied from a real Yahoo response: no longBusinessSummary,
+        // and the description splices in supply/price/volume numbers that
+        // are stale the moment they are served.
+        const description = 'Bitcoin (BTC) is a cryptocurrency launched in 2010. '
+            + 'Users are able to generate BTC through the process of mining. '
+            + 'Bitcoin has a current supply of 20,061,815. '
+            + 'The last known price of Bitcoin is 65,307.74957973 USD and is up 1.41 over the last 24 hours. '
+            + 'It is currently trading on 12674 active market(s) with $16,338,705,542.03 traded over the last 24 hours. '
+            + 'More information can be found at https://bitcoin.org/.';
+        const quoteSummary = vi.fn().mockResolvedValue({ assetProfile: { description } });
+        const router = createStocksRouter({
+            getYahooFinance: async () => ({ quote: vi.fn(), quoteSummary }),
+            isStockGameEnabled: true,
+        });
+
+        const res = await dispatch(router, '/api/stock-profile', '4.4.5.1', { symbol: 'BTC-USD' });
+        expect(res.body.summary).toBe('Bitcoin (BTC) is a cryptocurrency launched in 2010. '
+            + 'Users are able to generate BTC through the process of mining.');
+        expect(res.body.summary).not.toMatch(/65,307|current supply|active market|bitcoin\.org/);
+    });
+
+    it('profile: repairs the missing space Yahoo emits after a launch year', async () => {
+        const description = 'Chainlink (LINK) is a cryptocurrency launched in 2017and operates '
+            + 'on the Ethereum platform. Chainlink has a current supply of 1,000,000,000.';
+        const quoteSummary = vi.fn().mockResolvedValue({ assetProfile: { description } });
+        const router = createStocksRouter({
+            getYahooFinance: async () => ({ quote: vi.fn(), quoteSummary }),
+            isStockGameEnabled: true,
+        });
+
+        const res = await dispatch(router, '/api/stock-profile', '4.4.5.2', { symbol: 'LINK-USD' });
+        expect(res.body.summary).toBe('Chainlink (LINK) is a cryptocurrency launched in 2017 '
+            + 'and operates on the Ethereum platform.');
+    });
+
+    it('profile: drops a crypto description that says nothing beyond the asset type', async () => {
+        // Real Ethereum response — everything but the stats is "is a cryptocurrency ."
+        const description = 'Ethereum (ETH) is a cryptocurrency . '
+            + 'Ethereum has a current supply of 120,682,635.85310371. '
+            + 'The last known price of Ethereum is 1,957.76122164 USD and is up 3.94 over the last 24 hours.';
+        const quoteSummary = vi.fn().mockResolvedValue({ assetProfile: { description } });
+        const router = createStocksRouter({
+            getYahooFinance: async () => ({ quote: vi.fn(), quoteSummary }),
+            isStockGameEnabled: true,
+        });
+
+        const res = await dispatch(router, '/api/stock-profile', '4.4.5.3', { symbol: 'ETH-USD' });
+        expect(res.body.summary).toBeNull();
+    });
+
+    it('profile: prefers the business summary over the crypto description', async () => {
+        const quoteSummary = vi.fn().mockResolvedValue({
+            assetProfile: {
+                longBusinessSummary: 'Acme builds rockets and sells anvils to coyotes worldwide.',
+                description: 'Acme (ACME) is a cryptocurrency launched in 2010 somewhere far away.',
+            },
+        });
+        const router = createStocksRouter({
+            getYahooFinance: async () => ({ quote: vi.fn(), quoteSummary }),
+            isStockGameEnabled: true,
+        });
+
+        const res = await dispatch(router, '/api/stock-profile', '4.4.5.4', { symbol: 'ACME' });
+        expect(res.body.summary).toBe('Acme builds rockets and sells anvils to coyotes worldwide.');
+    });
+
     it('serves cached history without a provider call', async () => {
         const router = makeHistoryRouter();
         const payload = {

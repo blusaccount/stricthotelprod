@@ -123,14 +123,48 @@ const stockQuoteRateLimiter = rateLimiter(30);
 const stockHistoryRateLimiter = rateLimiter(30);
 const stockProfileRateLimiter = rateLimiter(30);
 
+// A sentence ends where punctuation is followed by a capital letter. Naive
+// splitting on '.' would cut decimals ("supply of 120,682,635.85310371")
+// and abbreviations ("Apple Inc. designs") into bogus sentences.
+function splitSentences(text) {
+    return text.trim().split(/(?<=[.!?])\s+(?=[A-Z])/);
+}
+
 // A short paragraph of the business summary — enough for "what does this
 // company do" without dumping Yahoo's multi-paragraph profile on the UI.
 function truncateSummary(text, maxSentences = 4, maxChars = 600) {
     if (typeof text !== 'string' || !text.trim()) return null;
-    const sentences = text.trim().match(/[^.!?]+[.!?]+(?:\s|$)/g);
-    let out = sentences ? sentences.slice(0, maxSentences).join('').trim() : text.trim();
+    let out = splitSentences(text).slice(0, maxSentences).join(' ').trim();
     if (out.length > maxChars) out = out.slice(0, maxChars - 1).trimEnd() + '…';
     return out;
+}
+
+// Crypto has no longBusinessSummary; Yahoo only offers an auto-generated
+// `description` that splices in stats — supply, "last known price", 24h
+// volume — which are stale by the time we serve them and would contradict
+// the live quote shown directly above. Keep the descriptive opening only.
+const CRYPTO_STAT_SENTENCE = [
+    /current supply of/i,
+    /last known price/i,
+    /currently trading on/i,
+    /more information can be found at/i,
+];
+
+// Below this the remainder is just "Ethereum (ETH) is a cryptocurrency." —
+// no more informative than the asset-type label the client already shows.
+const MIN_USEFUL_DESCRIPTION = 45;
+
+function sanitizeCryptoDescription(text) {
+    if (typeof text !== 'string' || !text.trim()) return null;
+    const out = splitSentences(text)
+        .filter(s => !CRYPTO_STAT_SENTENCE.some(p => p.test(s)))
+        .join(' ')
+        // Yahoo emits "launched in 2017and operates" — no space after the year.
+        .replace(/(\d{4})and\b/g, '$1 and')
+        .replace(/\s+([.,])/g, '$1')
+        .replace(/\s+/g, ' ')
+        .trim();
+    return out.length >= MIN_USEFUL_DESCRIPTION ? out : null;
 }
 // _stock-diag?probe=1 fires up to 4 real provider requests per call, so it
 // gets a much tighter budget than plain search/quote lookups.
@@ -578,7 +612,8 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled, getExt
             if (profile) {
                 data = {
                     symbol,
-                    summary: truncateSummary(profile.longBusinessSummary),
+                    summary: truncateSummary(profile.longBusinessSummary)
+                        || sanitizeCryptoDescription(profile.description),
                     sector: profile.sector || null,
                     industry: profile.industry || null,
                 };
