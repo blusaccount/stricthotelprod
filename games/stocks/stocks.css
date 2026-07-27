@@ -447,6 +447,14 @@ body {
 }
 .detail-actions .btn-trade { flex: 1; }
 
+.detail-desc {
+    font-size: 8px;
+    color: var(--ds-text-dim);
+    line-height: 1.8;
+    margin-bottom: 12px;
+}
+.detail-desc:empty { display: none; }
+
 /* ===== Trade Modal ===== */
 .trade-overlay {
     display: none;

@@ -319,6 +319,40 @@ describe('/api/stock-history validation', () => {
         expect(res.body.code).toBe('GAME_DISABLED');
     });
 
+    it('profile: rejects an invalid symbol with 400', async () => {
+        const router = makeHistoryRouter();
+        const res = await dispatch(router, '/api/stock-profile', '4.4.4.1', { symbol: '!!!' });
+        expect(res.statusCode).toBe(400);
+    });
+
+    it('profile: returns summary null when the provider has no assetProfile', async () => {
+        const router = makeHistoryRouter(); // mock yf has no quoteSummary -> throws
+        const res = await dispatch(router, '/api/stock-profile', '4.4.4.2', { symbol: 'GC=F' });
+        expect(res.statusCode).toBe(200);
+        expect(res.body.summary).toBeNull();
+    });
+
+    it('profile: truncates the business summary to two sentences and caches it', async () => {
+        const longSummary = 'Acme builds rockets. It also sells anvils worldwide. '
+            + 'Founded in 1949, the company employs 12,000 people. More filler text here.';
+        const quoteSummary = vi.fn().mockResolvedValue({
+            assetProfile: { longBusinessSummary: longSummary, sector: 'Industrials', industry: 'Aerospace' },
+        });
+        const router = createStocksRouter({
+            getYahooFinance: async () => ({ quote: vi.fn(), quoteSummary }),
+            isStockGameEnabled: true,
+        });
+
+        const res = await dispatch(router, '/api/stock-profile', '4.4.4.3', { symbol: 'ACME' });
+        expect(res.statusCode).toBe(200);
+        expect(res.body.summary).toBe('Acme builds rockets. It also sells anvils worldwide.');
+        expect(res.body.sector).toBe('Industrials');
+
+        const second = await dispatch(router, '/api/stock-profile', '4.4.4.4', { symbol: 'ACME' });
+        expect(second.body.summary).toBe('Acme builds rockets. It also sells anvils worldwide.');
+        expect(quoteSummary).toHaveBeenCalledTimes(1);
+    });
+
     it('serves cached history without a provider call', async () => {
         const router = makeHistoryRouter();
         const payload = {

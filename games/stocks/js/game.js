@@ -204,6 +204,73 @@
     const TYPE_ICONS = { STOCK: '🏢', ETF: '🧺', COMMODITY: '⛏️', CRYPTO: '🪙' };
     const getStockIcon = (symbol) => STOCK_ICONS[symbol] || TYPE_ICONS[getStockType(symbol)] || '🏢';
 
+    // Short curated blurbs for every board symbol (German — that's the
+    // player base). Searched symbols outside the board get a live company
+    // profile from /api/stock-profile instead.
+    const STOCK_DESCRIPTIONS = {
+        AAPL: 'iPhone, Mac und App Store: das wertvollste Konsumelektronik-Unternehmen der Welt.',
+        MSFT: 'Windows, Office und die Azure-Cloud — dazu ein großer Anteil an OpenAI.',
+        NVDA: 'Marktführer bei Grafik- und KI-Chips, das Herz des KI-Booms.',
+        TSLA: 'Elektroautos, Energiespeicher und Robotik von Elon Musk.',
+        AMZN: 'Weltgrößter Online-Händler und mit AWS Marktführer im Cloud-Geschäft.',
+        META: 'Facebook, Instagram und WhatsApp — verdient mit Werbung, investiert in KI und VR.',
+        GOOGL: 'Google-Mutter Alphabet: Suche, YouTube, Android und Cloud.',
+        NFLX: 'Weltgrößter Streaming-Dienst mit über 300 Mio. Abonnenten.',
+        AMD: 'Prozessoren und Grafikchips — schärfster Konkurrent von NVIDIA und Intel.',
+        CRM: 'Salesforce: weltgrößter Anbieter von Cloud-Software für Kundenverwaltung.',
+        AVGO: 'Broadcom: Chips für Netzwerke, Smartphones und KI-Rechenzentren plus Software.',
+        ORCL: 'Datenbank-Riese, inzwischen groß im Cloud- und KI-Rechenzentrumsgeschäft.',
+        ADBE: 'Photoshop, Illustrator und PDF: die Standard-Software für Kreative.',
+        DIS: 'Disney: Filmstudios, Freizeitparks, Marvel, Star Wars und Disney+.',
+        PYPL: 'Online-Bezahldienst mit über 400 Mio. aktiven Konten.',
+        INTC: 'Traditionsreicher Chip-Hersteller im Umbau — kämpft um den Anschluss.',
+        BA: 'Boeing: einer von zwei großen Flugzeugbauern der Welt, dazu Rüstung und Raumfahrt.',
+        V: 'Visa: das weltgrößte Zahlungsnetzwerk — verdient an fast jeder Kartenzahlung mit.',
+        JPM: 'Die größte Bank der USA: Investmentbanking, Privatkunden, Vermögensverwaltung.',
+        WMT: 'Weltgrößter Einzelhändler nach Umsatz, mit stark wachsendem Online-Geschäft.',
+        KO: 'Coca-Cola: das bekannteste Getränke-Portfolio der Welt, ein Dividenden-Klassiker.',
+        PEP: 'PepsiCo: Getränke plus Snack-Imperium (Lay’s, Doritos, Quaker).',
+        JNJ: 'Pharma- und Medizintechnik-Konzern, einer der stabilsten Dividendenzahler.',
+        PG: 'Procter & Gamble: Alltagsmarken wie Gillette, Pampers und Ariel.',
+        'BRK-B': 'Warren Buffetts Holding: Versicherungen, Eisenbahn, Energie und ein riesiges Aktienportfolio.',
+        XOM: 'ExxonMobil: einer der größten Öl- und Gaskonzerne der Welt.',
+        UNH: 'Größter US-Krankenversicherer mit angeschlossenen Gesundheitsdiensten.',
+        URTH: 'ETF auf den MSCI World: rund 1.500 Unternehmen aus 23 Industrieländern in einem Papier.',
+        QQQ: 'ETF auf den Nasdaq-100: die 100 größten Tech-lastigen US-Unternehmen.',
+        GDAXI: 'Der deutsche Leitindex: die 40 größten börsennotierten Unternehmen Deutschlands.',
+        DIA: 'ETF auf den Dow Jones: 30 US-Blue-Chips, der älteste US-Aktienindex.',
+        SPY: 'Der größte ETF der Welt: bildet den S&P 500 mit den 500 wichtigsten US-Unternehmen ab.',
+        VGK: 'ETF auf europäische Aktien: große Unternehmen aus UK, Frankreich, Deutschland und Co.',
+        EEM: 'ETF auf Schwellenländer: China, Indien, Taiwan, Brasilien und weitere Emerging Markets.',
+        IWM: 'ETF auf den Russell 2000: 2.000 kleinere US-Unternehmen (Small Caps).',
+        VTI: 'ETF auf den kompletten US-Aktienmarkt: über 3.500 Unternehmen von groß bis klein.',
+        ARKK: 'Aktiv gemanagter Innovations-ETF (Cathie Wood): disruptive Tech, hohes Risiko, hohe Schwankung.',
+        XLF: 'Sektor-ETF für US-Finanzwerte: Banken, Versicherer, Zahlungsdienstleister.',
+        XLE: 'Sektor-ETF für US-Energie: vor allem Öl- und Gasriesen wie Exxon und Chevron.',
+        GLD: 'ETF, der physisches Gold hält: Goldpreis-Investment ohne eigenen Tresor.',
+        TLT: 'ETF auf US-Staatsanleihen mit 20+ Jahren Laufzeit — reagiert stark auf Zinsänderungen.',
+        'GC=F': 'Gold-Future: der Preis einer Feinunze Gold, klassischer Krisen- und Inflationsschutz.',
+        'SI=F': 'Silber-Future: Edelmetall mit starker Industrienachfrage (Solar, Elektronik) — schwankt stärker als Gold.',
+        'PL=F': 'Platin-Future: seltenes Edelmetall für Katalysatoren und Schmuck.',
+        'HG=F': 'Kupfer-Future: das Industriemetall schlechthin und Konjunkturbarometer der Weltwirtschaft.',
+        'CL=F': 'WTI-Rohöl-Future: der US-Referenzpreis für Öl.',
+        'BZ=F': 'Brent-Rohöl-Future: der europäische Referenzpreis für Öl aus der Nordsee.',
+        'NG=F': 'Erdgas-Future (Henry Hub): der US-Gaspreis, stark wetter- und saisonabhängig.',
+        'BTC-USD': 'Die erste und größte Kryptowährung — auf 21 Mio. Stück begrenzt, oft „digitales Gold" genannt.',
+        'ETH-USD': 'Zweitgrößte Kryptowährung und die Plattform für Smart Contracts, DeFi und NFTs.',
+        'SOL-USD': 'Schnelle, günstige Blockchain — beliebt für DeFi und Meme-Coins.',
+        'BNB-USD': 'Der Token der größten Krypto-Börse Binance.',
+        'XRP-USD': 'Ripples Token für schnelle, günstige internationale Zahlungen.',
+        'ADA-USD': 'Cardano: forschungsgetriebene Smart-Contract-Blockchain.',
+        'DOGE-USD': 'Die Meme-Kryptowährung: 2013 als Witz gestartet, von Elon Musk groß gemacht.',
+    };
+    const TYPE_DESCRIPTIONS = {
+        STOCK: 'Einzelaktie.',
+        ETF: 'Börsengehandelter Indexfonds (ETF).',
+        COMMODITY: 'Rohstoff-Future.',
+        CRYPTO: 'Kryptowährung.',
+    };
+
     // --- Top Movers (replaces the full market grid; search finds the rest) ---
     const MOVERS_COUNT = 8;
     const renderMovers = () => {
@@ -387,6 +454,7 @@
         detailTypeEl.textContent = getStockType(symbol);
         renderDetailQuote(quote);
         renderDetailPosition();
+        renderDetailDescription(symbol);
 
         mainView.hidden = true;
         detailView.hidden = false;
@@ -451,6 +519,33 @@
 
     const refreshDetailQuote = () => {
         renderDetailQuote(findQuote(detailSymbol));
+    };
+
+    const detailDescEl = $('detail-desc');
+    const profileCache = new Map(); // symbol -> summary string ('' = none found)
+
+    const renderDetailDescription = (symbol) => {
+        const curated = STOCK_DESCRIPTIONS[symbol];
+        if (curated) {
+            detailDescEl.textContent = curated;
+            return;
+        }
+        const cached = profileCache.get(symbol);
+        if (cached !== undefined) {
+            detailDescEl.textContent = cached || TYPE_DESCRIPTIONS[getStockType(symbol)] || '';
+            return;
+        }
+        detailDescEl.textContent = TYPE_DESCRIPTIONS[getStockType(symbol)] || '';
+        fetch(`/api/stock-profile?symbol=${encodeURIComponent(symbol)}`)
+            .then((r) => r.json())
+            .then((data) => {
+                const summary = (data && typeof data.summary === 'string') ? data.summary : '';
+                profileCache.set(symbol, summary);
+                if (summary && detailSymbol === symbol) {
+                    detailDescEl.textContent = summary;
+                }
+            })
+            .catch(() => { profileCache.set(symbol, ''); });
     };
 
     const infoCard = (label, value) => {

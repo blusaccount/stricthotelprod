@@ -91,6 +91,9 @@ const SINGLE_QUOTE_CACHE_MS = 2 * 60 * 1000; // 2 minutes
 const historyCache = new Map(); // `${symbol}|${range}` -> { data, ts }
 const HISTORY_CACHE_MS = 10 * 60 * 1000; // 10 minutes
 
+const profileCache = new Map(); // symbol -> { data, ts }
+const PROFILE_CACHE_MS = 24 * 60 * 60 * 1000; // company profiles barely change
+
 // Per-IP sliding window rate limiter, mirroring the login limiter in
 // routes/auth.js. Protects the provider-backed routes from a single logged-in
 // user hammering Yahoo/Stooq from the server's IP (see issue #159).
@@ -118,6 +121,17 @@ function rateLimiter(maxPerWindow) {
 const stockSearchRateLimiter = rateLimiter(30);
 const stockQuoteRateLimiter = rateLimiter(30);
 const stockHistoryRateLimiter = rateLimiter(30);
+const stockProfileRateLimiter = rateLimiter(30);
+
+// First 2 sentences of a business summary — enough for "what does this
+// company do" without dumping Yahoo's multi-paragraph profile on the UI.
+function truncateSummary(text, maxSentences = 2, maxChars = 320) {
+    if (typeof text !== 'string' || !text.trim()) return null;
+    const sentences = text.trim().match(/[^.!?]+[.!?]+(?:\s|$)/g);
+    let out = sentences ? sentences.slice(0, maxSentences).join('').trim() : text.trim();
+    if (out.length > maxChars) out = out.slice(0, maxChars - 1).trimEnd() + '…';
+    return out;
+}
 // _stock-diag?probe=1 fires up to 4 real provider requests per call, so it
 // gets a much tighter budget than plain search/quote lookups.
 const stockDiagRateLimiter = rateLimiter(5);
@@ -537,6 +551,49 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled, getExt
             console.error('[StockHistory] Error:', err.message);
             res.status(502).json({ error: 'Failed to fetch history' });
         }
+    });
+
+    // Company profile for the detail subpage. Board symbols use curated
+    // client-side blurbs; this only serves searched symbols. Failure is a
+    // 200 with summary:null — the client falls back to a generic type label.
+    router.get('/api/stock-profile', stockProfileRateLimiter, async (req, res) => {
+        if (!isStockGameEnabled) {
+            return res.status(503).json({ code: 'GAME_DISABLED', error: 'Stock game is disabled by server config' });
+        }
+        const symbol = (req.query.symbol || '').trim().toUpperCase().replace(/[^A-Z0-9.\-^=]/g, '');
+        if (!symbol || symbol.length > 12) {
+            return res.status(400).json({ error: 'Invalid symbol' });
+        }
+
+        const cached = profileCache.get(symbol);
+        if (cached && Date.now() - cached.ts < PROFILE_CACHE_MS) {
+            return res.json(cached.data);
+        }
+
+        let data = { symbol, summary: null, sector: null, industry: null };
+        try {
+            const yf = await getYahooFinance();
+            const result = await yf.quoteSummary(symbol, { modules: ['assetProfile'] });
+            const profile = result?.assetProfile;
+            if (profile) {
+                data = {
+                    symbol,
+                    summary: truncateSummary(profile.longBusinessSummary),
+                    sector: profile.sector || null,
+                    industry: profile.industry || null,
+                };
+            }
+        } catch (err) {
+            // Non-equities (futures, crypto) and provider hiccups land here —
+            // cache the empty result too so we don't re-ask Yahoo per click.
+        }
+
+        profileCache.set(symbol, { data, ts: Date.now() });
+        if (profileCache.size > 500) {
+            const oldest = profileCache.keys().next().value;
+            profileCache.delete(oldest);
+        }
+        res.json(data);
     });
 
     // Diagnostic endpoint — no auth (state is non-sensitive: counts, error
