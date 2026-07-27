@@ -629,6 +629,31 @@
     $('detail-buy').addEventListener('click', () => { if (detailSymbol) openTrade(detailSymbol, 'buy'); });
     $('detail-sell').addEventListener('click', () => { if (detailSymbol) openTrade(detailSymbol, 'sell'); });
 
+    // Header back arrow — contextual: an open detail page closes first;
+    // from the overview it walks the browser history (in the shell that is
+    // the previously visited app). Falls back to the lobby.
+    let headerBackSound = null;
+    $('header-back').addEventListener('click', () => {
+        try {
+            if (!headerBackSound) {
+                headerBackSound = new Audio('/userinput/switch.mp3');
+                headerBackSound.volume = 0.12;
+                headerBackSound.preload = 'auto';
+            }
+            headerBackSound.currentTime = 0;
+            headerBackSound.play().catch(() => {});
+        } catch (_) {}
+        if (detailSymbol) {
+            closeDetail();
+            return;
+        }
+        if (history.length > 1) {
+            history.back();
+        } else {
+            window.location.href = '/';
+        }
+    });
+
     // --- Render Portfolio Holdings ---
     const renderPortfolio = () => {
         const h = portfolioData.holdings;
