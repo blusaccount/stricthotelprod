@@ -7,25 +7,40 @@ import { pushActivity } from '../activity-feed.js';
 import { actionKey, withActionLock, claimOnce } from '../lib/action-guard.js';
 
 // ============================================================================
-// Crash — single global round, exponential multiplier curve, server-authoritative.
+// Crash — single global round, server-authoritative, with a launch phase.
 //
-// Crash distribution: P(C ≥ x) = (1 − HOUSE_EDGE) / x for x ≥ 1.
-// Sampled by inverse CDF; on a per-player basis the expected return is exactly
-// (1 − HOUSE_EDGE) regardless of cash-out target, so RTP is a constant 96 %.
+// The multiplier runs 0.00× → 1.00× → ∞:
+//   launch (t ≤ LAUNCH_MS): m = t / LAUNCH_MS                 — linear 0 → 1
+//   flight (t >  LAUNCH_MS): m = exp(GROWTH_RATE · (t − LAUNCH_MS))
+// Cashing out below 1.00× returns LESS than the stake (a partial bail-out),
+// at 1.00× it is break-even, above it is profit.
 //
-// Multiplier curve: m(t) = exp(GROWTH_RATE · t), with t in seconds since round start.
+// Crash distribution:
+//   P(C ≥ x) = 1 − HOUSE_EDGE · x     for 0 ≤ x ≤ 1
+//   P(C ≥ x) = (1 − HOUSE_EDGE) / x   for x ≥ 1
+// The HOUSE_EDGE share of rounds dies during the launch phase, spread
+// uniformly over [0, 1) — that is what makes a doomed round visible instead
+// of an instant blink. Above 1.00× the expected return is exactly
+// (1 − HOUSE_EDGE) regardless of cash-out target, so RTP stays a flat 96 %.
+//
+// Bailing out below 1.00× is always EV-worse than holding (the remaining risk
+// of dying before 1.00× is at most HOUSE_EDGE). It exists as a panic option,
+// and the client labels it as a loss rather than dressing it up as a win.
+//
 // Round phases: BETTING (6 s) → RUNNING (until crash) → REVEAL (4 s) → loop.
 // ============================================================================
 
 const HOUSE_EDGE = 0.04;
-const GROWTH_RATE = 0.08;          // per second
+const GROWTH_RATE = 0.08;          // per second, flight phase only
+const LAUNCH_MS = 3_000;           // 0.00× → 1.00× ramp
 const BETTING_MS = 6_000;
 const REVEAL_MS = 4_000;
 const TICK_MS = 100;                // multiplier broadcast cadence
 const CRASH_BETS = STANDARD_CASINO_BETS;
-const MAX_ROUND_MS = 120_000;       // safety cap (~134000× hard ceiling)
+const MAX_ROUND_MS = 120_000;       // safety cap (~11600× hard ceiling)
 const MAX_AUTO_CASHOUT = 1_000_000; // sane cap for autoCashout input
-const MIN_CASHOUT = 1.01;           // cash-outs below this would refund the bet (no risk)
+const MIN_CASHOUT = 0.01;           // manual bail-out floor; under 1.00× this is a partial loss
+const MIN_AUTO_CASHOUT = 1.01;      // auto targets are profit targets — never schedule a loss
 
 // ---------- math helpers ---------- //
 
@@ -39,18 +54,25 @@ function cryptoRandom() {
 
 function sampleCrashMultiplier() {
     const u = cryptoRandom();
-    if (u < HOUSE_EDGE) return 1.00;
+    // Doomed rounds (HOUSE_EDGE share) die during the launch phase, uniformly
+    // spread over [0, 1) instead of all landing on 1.00 — same probability
+    // mass as before, but the player sees the rocket die at e.g. 0.43×.
+    if (u < HOUSE_EDGE) return u / HOUSE_EDGE;
     const c = (1 - HOUSE_EDGE) / (1 - u);
     // Cap to a sane upper bound (one in a million).
     return Math.min(c, 100_000);
 }
 
 function multiplierAt(elapsedMs) {
-    return Math.exp(GROWTH_RATE * (elapsedMs / 1000));
+    if (elapsedMs <= 0) return 0;
+    if (elapsedMs < LAUNCH_MS) return elapsedMs / LAUNCH_MS;
+    return Math.exp(GROWTH_RATE * ((elapsedMs - LAUNCH_MS) / 1000));
 }
 
 function timeForMultiplier(target) {
-    return (Math.log(Math.max(1, target)) / GROWTH_RATE) * 1000;
+    if (target <= 0) return 0;
+    if (target <= 1) return target * LAUNCH_MS;
+    return LAUNCH_MS + (Math.log(target) / GROWTH_RATE) * 1000;
 }
 
 // ---------- round state ---------- //
@@ -153,7 +175,10 @@ function runRunningLoop() {
         // Resolve auto-cashouts that have crossed their target.
         const currentMult = multiplierAt(elapsed);
         for (const [name, b] of round.bets) {
-            if (!b.cashedAt && b.autoCashout && currentMult >= b.autoCashout && b.autoCashout <= round.crashMultiplier) {
+            if (!b.cashedAt && b.autoCashout
+                && b.autoCashout >= MIN_AUTO_CASHOUT
+                && currentMult >= b.autoCashout
+                && b.autoCashout <= round.crashMultiplier) {
                 resolveCashout(name, b.autoCashout, true).catch(err =>
                     console.error('auto-cashout failed:', err.message));
             }
@@ -217,8 +242,10 @@ async function resolveCashout(playerName, atMultiplier, isAuto = false) {
     // Claim won — from here on this cash-out is ours alone. If addBalance
     // below throws, the claim intentionally stays set: the booking may
     // have landed server-side, and releasing would risk a double payout.
-    // Floor (not round) so the house never gives away fractional SC.
-    const payout = Math.floor(b.bet * m);
+    // Round, not floor: flooring silently ate the entire margin of small bets
+    // (a 1.01× cash-out on 50 SC paid exactly the stake back, i.e. +0 SC) and
+    // pushed the real RTP well below the advertised 96 %.
+    const payout = Math.round(b.bet * m);
     b.payout = payout;
     b.isAuto = isAuto;
     const updated = await addBalance(playerName, payout, 'crash_payout', {
@@ -302,8 +329,8 @@ export function registerCrashHandlers(socket, io, deps) {
         let autoCashout = null;
         if (data?.autoCashout != null) {
             const a = Number(data.autoCashout);
-            if (!Number.isFinite(a) || a < 1.01 || a > MAX_AUTO_CASHOUT) {
-                socket.emit('crash-error', { message: 'Auto-cashout must be 1.01 – 1,000,000' });
+            if (!Number.isFinite(a) || a < MIN_AUTO_CASHOUT || a > MAX_AUTO_CASHOUT) {
+                socket.emit('crash-error', { message: `Auto-cashout must be ${MIN_AUTO_CASHOUT.toFixed(2)} – 1,000,000` });
                 return;
             }
             autoCashout = +a.toFixed(2);
@@ -399,7 +426,7 @@ export function registerCrashHandlers(socket, io, deps) {
                 return;
             }
             if (m < MIN_CASHOUT) {
-                socket.emit('crash-error', { message: `Cash out unlocks at ${MIN_CASHOUT.toFixed(2)}×` });
+                socket.emit('crash-error', { message: 'Round just launched — wait a moment.' });
                 return;
             }
             const result = await resolveCashout(player.name, m, false);
@@ -416,6 +443,8 @@ export function registerCrashHandlers(socket, io, deps) {
 export {
     HOUSE_EDGE,
     GROWTH_RATE,
+    LAUNCH_MS,
+    MIN_AUTO_CASHOUT,
     BETTING_MS,
     REVEAL_MS,
     TICK_MS,

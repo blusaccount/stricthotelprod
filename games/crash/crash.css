@@ -145,6 +145,7 @@ body {
     text-shadow: 0 4px 0 #000, 0 0 24px rgba(255, 204, 51, 0.7);
     letter-spacing: 4px;
 }
+.multiplier-display.below-even { color: var(--accent); text-shadow: 0 4px 0 #000, 0 0 28px rgba(255, 204, 51, 0.75); }
 .multiplier-display.cashed   { color: var(--win); text-shadow: 0 4px 0 #000, 0 0 28px rgba(124, 255, 139, 0.85); }
 .multiplier-display.crashed  { color: var(--red); text-shadow: 0 4px 0 #000, 0 0 28px rgba(255, 56, 56, 0.95); animation: crashShake 0.5s ease-in-out; }
 .state-sub {
@@ -172,6 +173,7 @@ body {
     background: rgba(0,0,0,0.5);
     letter-spacing: 1px;
 }
+.recent-pill.dead { color: #7a6b8f; border-color: rgba(122, 107, 143, 0.6); text-decoration: line-through; }
 .recent-pill.low  { color: var(--loss); border-color: rgba(255, 106, 122, 0.6); }
 .recent-pill.mid  { color: var(--accent); border-color: rgba(255, 204, 51, 0.6); }
 .recent-pill.high { color: var(--magenta); border-color: rgba(255, 62, 165, 0.7); text-shadow: 0 0 6px var(--magenta); }
@@ -265,6 +267,16 @@ body {
 }
 .primary-btn.cashout:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 6px 0 #003c10, 0 0 26px rgba(124, 255, 139, 0.85); }
 .primary-btn.cashout:not(:disabled):active { transform: translateY(2px); box-shadow: 0 2px 0 #003c10; }
+
+/* Below 1.00× a cash-out is a partial loss — never render it as a win. */
+.primary-btn.cashout.rescue {
+    border-color: var(--loss);
+    background: linear-gradient(180deg, #ffb0ba 0%, #b93142 100%);
+    color: #24000a;
+    box-shadow: 0 4px 0 #4a0010, 0 0 16px rgba(255, 106, 122, 0.5);
+}
+.primary-btn.cashout.rescue:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 6px 0 #4a0010, 0 0 26px rgba(255, 106, 122, 0.85); }
+.primary-btn.cashout.rescue:not(:disabled):active { transform: translateY(2px); box-shadow: 0 2px 0 #4a0010; }
 
 .primary-btn:disabled { cursor: not-allowed; filter: grayscale(0.7); opacity: 0.55; }
 

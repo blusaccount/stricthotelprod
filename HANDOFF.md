@@ -4,6 +4,46 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Crash — 0.00x launch phase with a below-break-even rescue window (2026-07-27)
+
+## Why
+The round used to open at 1.00x, so the lowest-risk play (`MIN_CASHOUT = 1.01`, reachable in 0.12 s) won 95 % of rounds. Worse, `Math.floor(bet * 1.01)` paid **+0 SC** on every bet level up to 50 — the player "won" almost every round and received nothing, at a real 95.05 % RTP. The 4 % of doomed rounds were an invisible 100 ms blink at exactly 1.00.
+
+## What Changed
+
+### `server/handlers/crash.js`
+- **Curve is now two-phase.** `multiplierAt()`: linear `t / LAUNCH_MS` for the 0.00x -> 1.00x launch (`LAUNCH_MS = 3000`), then the existing `exp(GROWTH_RATE * (t - LAUNCH_MS))`. `timeForMultiplier()` inverts both branches. Continuous at 1.00x.
+- **Doomed rounds are now visible.** `sampleCrashMultiplier()` returns `u / HOUSE_EDGE` instead of `1.00` for `u < HOUSE_EDGE` — the same 4 % probability mass, but spread uniformly over `[0, 1)` so the rocket dies at e.g. 0.43x instead of blinking out.
+- **RTP above 1.00x is untouched**: `P(C >= x) = 0.96 / x` for `x >= 1` still holds exactly, so every cash-out target keeps its 96 % expected return.
+- `MIN_CASHOUT` 1.01 -> 0.01 (manual bail-out allowed inside the launch phase, at a partial loss). New `MIN_AUTO_CASHOUT = 1.01` — auto targets stay profit targets, you cannot schedule a loss.
+- **Fixed a latent bypass**: the auto-cashout sweep never checked any minimum, so an auto target below the floor would have skipped it entirely. It now enforces `MIN_AUTO_CASHOUT`.
+- `Math.floor(b.bet * m)` -> `Math.round(...)`. Flooring was costing small bets their whole margin.
+
+### `games/crash/js/game.js`
+- Mirrors `LAUNCH_MS` / `GROWTH_RATE` and the piecewise `multiplierAt()` (kept in sync deliberately — see verification).
+- Y axis is piecewise: bottom 28 % of the plot is the 0 -> 1.00x launch band, above that the existing log scale. Dashed `1.00x BREAK EVEN` line plus a red danger tint below it.
+- Curve is amber below 1.00x, green above, red on crash. Removed the old `Math.max(1, m)` clamps that would have flattened the launch phase onto the baseline.
+- Cash-out button is a live P/L readout: `RETTEN -60 SC` (red) below 1.00x, `CASH OUT +N SC` above. New `signed()` helper — every delta in the UI (bet info, player list, status line) now carries an explicit sign instead of hardcoded `+`.
+- Recent-crash pills got a `dead` tier (struck through) for rounds that never reached 1.00x.
+
+### `games/crash/crash.css`, `games/crash/index.html`
+- `.primary-btn.cashout.rescue`, `.recent-pill.dead`, `.multiplier-display.below-even`. Footer now states the launch phase and that bailing below 1.00x returns less than the stake.
+
+## How to Verify
+- `npx vitest run` — 459 passed / 33 files. Six tests in `crash.test.js` encoded the old curve and were rewritten; new coverage: launch-phase linearity, inversion inside the launch phase, uniformity of the doomed rounds across `[0, 1)`, and an explicit test that bailing below break-even is EV-worse than holding (`EV ~ t * (1 - edge * t)`).
+- **Client/server curve parity checked numerically**: max `|client - server|` over 0-60 s is exactly `0`.
+- **Real round loop driven for 90 s against a fake `io`** (5 complete rounds): ticks start at 0.036, stay monotone and finite, and one round crashed at 0.05x — the launch-phase death working end to end.
+
+## Open Risks / Notes
+- **The rescue window is a deliberate trap.** Bailing below 1.00x is always EV-worse than holding, because the remaining risk of dying before break-even is at most 4 %. This was flagged to the maintainer and chosen anyway; the UI is therefore required to label it as a loss, never as a win. Do not "helpfully" restyle it green.
+- **Mechanically nothing changed for the house.** Still 4 % doomed rounds, still 96 % RTP. The launch phase buys drama, not margin. If the goal is for the house to win more *rounds*, that is the `MIN_CASHOUT` lever (1.30 -> 26 % house-won rounds, 1.50 -> 36 %), deliberately not applied here.
+- The lowest slice of doomed rounds is still near-instant: a 0.05x crash dies 150 ms in. Inherent to the uniform spread; raising `LAUNCH_MS` stretches it but lengthens every round.
+- `LAUNCH_MS` / `GROWTH_RATE` are duplicated in the client. The parity script in the verification above is the guard; if you change one, change both.
+- Rounds are ~3 s longer. Time to 2.00x went from 8.7 s to 11.7 s.
+- **Not verified in a browser.** The site sits behind the `SITE_PASSWORD` login gate and the preview pane was not compositing frames this session, so the canvas rendering (launch band, break-even line, rescue button) is unverified visually — logic and math are covered by the checks above. Worth one manual look.
+
+---
+
 # Handoff: Deflake the Plinko RTP Monte-Carlo test (2026-07-27)
 
 ## What Changed

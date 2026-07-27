@@ -1,6 +1,22 @@
 // Crash client — single global round, animated multiplier curve, cash-out anytime.
+//
+// The curve runs 0.00× → 1.00× → ∞. Below 1.00× a cash-out returns less than
+// the stake, so every label in that zone is rendered as a loss, never as a win.
+// Curve constants mirror server/handlers/crash.js — keep them in sync.
 (() => {
     'use strict';
+
+    const LAUNCH_MS = 3000;     // 0.00× → 1.00× ramp
+    const GROWTH_RATE = 0.08;   // per second, flight phase only
+
+    function multiplierAt(elapsedMs) {
+        if (elapsedMs <= 0) return 0;
+        if (elapsedMs < LAUNCH_MS) return elapsedMs / LAUNCH_MS;
+        return Math.exp(GROWTH_RATE * ((elapsedMs - LAUNCH_MS) / 1000));
+    }
+
+    // Signed SC delta of a cash-out, formatted with an explicit sign.
+    function signed(n) { return `${n >= 0 ? '+' : '−'}${Math.abs(n)}`; }
 
     const socket = io();
     window.__strictAchievementSocket = socket;
@@ -31,8 +47,8 @@
     // Round state mirrored from server.
     let roundState = 'betting';   // betting | running | reveal
     let roundId = 0;
-    let displayMultiplier = 1.00;
-    let lastTick = { elapsedMs: 0, multiplier: 1.0, atTime: performance.now() };
+    let displayMultiplier = 0;
+    let lastTick = { elapsedMs: 0, multiplier: 0, atTime: performance.now() };
     let crashedAt = 0;
     let bettingEndsAt = 0;
     let revealEndsAt = 0;
@@ -55,12 +71,21 @@
         return fit;
     }
 
+    // Y axis is piecewise: the 0 → 1.00× launch zone gets a fixed band at the
+    // bottom, everything above 1.00× gets a log scale so ×10 and ×100 are
+    // equal screen steps. Both branches meet at 1.00× — the break-even line.
+    const LAUNCH_BAND = 0.28;   // share of plot height given to the launch zone
+
+    function plotTop()    { return 30; }
+    function plotBottom() { return H - 30; }
+    function breakEvenY() { return plotBottom() - (plotBottom() - plotTop()) * LAUNCH_BAND; }
+
     function multToY(m, viewMax) {
-        // Logarithmic Y-axis so x10 = same screen distance as x100.
-        const ln = Math.log(m);
-        const lnMax = Math.log(viewMax);
-        const ratio = ln / lnMax;
-        return H - 30 - ratio * (H - 60);
+        const bottom = plotBottom();
+        const bandH = (bottom - plotTop()) * LAUNCH_BAND;
+        if (m <= 1) return bottom - Math.max(0, m) * bandH;
+        const ratio = Math.log(m) / Math.log(Math.max(1.01, viewMax));
+        return breakEvenY() - Math.min(1, ratio) * (bottom - plotTop() - bandH);
     }
     function timeToX(elapsedMs) {
         // Auto-scale x-axis: pin current time to 80% of width, anchor 0 at 5%.
@@ -87,6 +112,26 @@
             ctx.stroke();
         }
 
+        // Break-even line at 1.00×. Everything below it is the danger zone:
+        // bailing out down there returns less than the stake.
+        const beY = breakEvenY();
+        ctx.fillStyle = 'rgba(255, 56, 56, 0.06)';
+        ctx.fillRect(0, beY, W, plotBottom() - beY);
+        ctx.save();
+        ctx.setLineDash([6, 6]);
+        ctx.strokeStyle = 'rgba(255, 204, 51, 0.55)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, beY);
+        ctx.lineTo(W, beY);
+        ctx.stroke();
+        ctx.restore();
+        ctx.font = '10px "Press Start 2P", monospace';
+        ctx.fillStyle = 'rgba(255, 204, 51, 0.75)';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('1.00× BREAK EVEN', 8, beY - 6);
+
         if (roundState === 'betting') {
             // Empty playfield with placeholder curve hint.
             return;
@@ -99,20 +144,25 @@
         // Filled area under curve
         ctx.beginPath();
         const last = curvePoints[curvePoints.length - 1];
-        ctx.moveTo(timeToX(0), multToY(1, viewMax));
+        ctx.moveTo(timeToX(0), multToY(0, viewMax));
         for (const p of curvePoints) {
-            ctx.lineTo(timeToX(p.t), multToY(Math.max(1, p.m), viewMax));
+            ctx.lineTo(timeToX(p.t), multToY(p.m, viewMax));
         }
         ctx.lineTo(timeToX(last.t), H);
         ctx.lineTo(timeToX(0), H);
         ctx.closePath();
+        const inProfit = displayMultiplier >= 1;
         const grad = ctx.createLinearGradient(0, 0, 0, H);
         if (roundState === 'crashed' || roundState === 'reveal') {
             grad.addColorStop(0, 'rgba(255, 56, 56, 0.45)');
             grad.addColorStop(1, 'rgba(255, 56, 56, 0)');
-        } else {
+        } else if (inProfit) {
             grad.addColorStop(0, 'rgba(124, 255, 139, 0.5)');
             grad.addColorStop(1, 'rgba(124, 255, 139, 0)');
+        } else {
+            // Still climbing through the danger zone — not green yet.
+            grad.addColorStop(0, 'rgba(255, 204, 51, 0.45)');
+            grad.addColorStop(1, 'rgba(255, 204, 51, 0)');
         }
         ctx.fillStyle = grad;
         ctx.fill();
@@ -121,7 +171,7 @@
         ctx.beginPath();
         ctx.moveTo(timeToX(curvePoints[0].t), multToY(curvePoints[0].m, viewMax));
         for (const p of curvePoints) {
-            ctx.lineTo(timeToX(p.t), multToY(Math.max(1, p.m), viewMax));
+            ctx.lineTo(timeToX(p.t), multToY(p.m, viewMax));
         }
         ctx.lineWidth = 4;
         ctx.lineCap = 'round';
@@ -129,9 +179,12 @@
         if (roundState === 'crashed' || roundState === 'reveal') {
             ctx.strokeStyle = '#ff3838';
             ctx.shadowColor = '#ff3838';
-        } else {
+        } else if (inProfit) {
             ctx.strokeStyle = '#7cff8b';
             ctx.shadowColor = '#7cff8b';
+        } else {
+            ctx.strokeStyle = '#ffcc33';
+            ctx.shadowColor = '#ffcc33';
         }
         ctx.shadowBlur = 14;
         ctx.stroke();
@@ -139,7 +192,7 @@
 
         // Rocket / X marker at the end of the curve
         const tipX = timeToX(last.t);
-        const tipY = multToY(Math.max(1, last.m), viewMax);
+        const tipY = multToY(last.m, viewMax);
         ctx.font = '32px "Press Start 2P", monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -152,7 +205,7 @@
             // Interpolate multiplier locally between server ticks for smoothness.
             const dt = performance.now() - lastTick.atTime;
             const projected = lastTick.elapsedMs + dt;
-            const m = Math.exp(0.08 * (projected / 1000));
+            const m = multiplierAt(projected);
             displayMultiplier = m;
             curvePoints.push({ t: projected, m });
             if (curvePoints.length > 800) curvePoints.shift();
@@ -163,16 +216,34 @@
         } else if (roundState === 'betting') {
             const remaining = Math.max(0, bettingEndsAt - Date.now());
             stateSub.textContent = `Next round in ${(remaining / 1000).toFixed(1)}s`;
-            displayMultiplier = 1.0;
+            displayMultiplier = 0;
         }
         drawCurve();
+        updateCashoutLabel();
         requestAnimationFrame(animationFrame);
+    }
+
+    // The cash-out button doubles as the live P/L readout: below 1.00× it is a
+    // bail-out at a loss, above it a win. Never dress the loss up as a gain.
+    function updateCashoutLabel() {
+        if (!myBet || myBet.cashedAt || roundState !== 'running') {
+            cashoutBtn.textContent = 'CASH OUT';
+            cashoutBtn.classList.remove('rescue');
+            return;
+        }
+        const delta = Math.round(myBet.bet * displayMultiplier) - myBet.bet;
+        const rescue = displayMultiplier < 1;
+        cashoutBtn.classList.toggle('rescue', rescue);
+        cashoutBtn.textContent = rescue
+            ? `RETTEN ${signed(delta)} SC`
+            : `CASH OUT ${signed(delta)} SC`;
     }
 
     function updateMultiplierDisplay(m, crashed) {
         const text = `${m.toFixed(2)}×`;
         multDisp.textContent = text;
         multDisp.classList.toggle('crashed', crashed);
+        multDisp.classList.toggle('below-even', !crashed && m < 1);
         if (myBet && myBet.cashedAt && !crashed) {
             multDisp.classList.add('cashed');
         } else {
@@ -213,9 +284,13 @@
 
         if (myBet) {
             if (myBet.cashedAt) {
-                betInfo.classList.remove('active', 'lost');
-                betInfo.classList.add('cashed');
-                betInfo.textContent = `Cashed at ${myBet.cashedAt.toFixed(2)}× → +${myBet.payout - myBet.bet} SC`;
+                const delta = myBet.payout - myBet.bet;
+                betInfo.classList.remove('active');
+                betInfo.classList.toggle('cashed', delta >= 0);
+                betInfo.classList.toggle('lost', delta < 0);
+                betInfo.textContent = myBet.cashedAt < 1
+                    ? `Rescued at ${myBet.cashedAt.toFixed(2)}× → ${signed(delta)} SC`
+                    : `Cashed at ${myBet.cashedAt.toFixed(2)}× → ${signed(delta)} SC`;
             } else if (myBet.lost) {
                 betInfo.classList.remove('active', 'cashed');
                 betInfo.classList.add('lost');
@@ -234,7 +309,8 @@
     function pillTier(m) {
         if (m >= 10) return 'high';
         if (m >= 2)  return 'mid';
-        return 'low';
+        if (m >= 1)  return 'low';
+        return 'dead';   // never reached break-even
     }
     function renderRecentCrashes() {
         recentEl.innerHTML = '';
@@ -252,8 +328,8 @@
             const row = document.createElement('div');
             row.className = 'player-row';
             if (p.name === myName) row.classList.add('you');
-            if (p.cashedAt) row.classList.add('cashed');
-            else if (roundState === 'reveal' && !p.cashedAt) row.classList.add('lost');
+            if (p.cashedAt) row.classList.add(p.payout >= p.bet ? 'cashed' : 'lost');
+            else if (roundState === 'reveal') row.classList.add('lost');
 
             const name = document.createElement('span');
             name.className = 'player-name';
@@ -266,8 +342,9 @@
             const status = document.createElement('span');
             status.className = 'player-status';
             if (p.cashedAt) {
-                status.classList.add('cashed');
-                status.textContent = `${p.cashedAt.toFixed(2)}× +${p.payout - p.bet}`;
+                const delta = p.payout - p.bet;
+                status.classList.add(delta >= 0 ? 'cashed' : 'lost');
+                status.textContent = `${p.cashedAt.toFixed(2)}× ${signed(delta)}`;
             } else if (roundState === 'reveal') {
                 status.classList.add('lost');
                 status.textContent = `−${p.bet}`;
@@ -427,15 +504,15 @@
             curvePoints.length = 0;
             multDisp.classList.remove('crashed');
             if (prev !== 'betting') stopRocketHum();
-            updateMultiplierDisplay(1.0, false);
+            updateMultiplierDisplay(0, false);
         } else if (data.state === 'running') {
             lastTick = {
                 elapsedMs: data.elapsedMs || 0,
-                multiplier: data.multiplier || 1.0,
+                multiplier: data.multiplier || 0,
                 atTime: performance.now()
             };
             curvePoints.length = 0;
-            curvePoints.push({ t: 0, m: 1 });
+            curvePoints.push({ t: 0, m: 0 });
             curvePoints.push({ t: lastTick.elapsedMs, m: lastTick.multiplier });
             if (prev !== 'running') startRocketHum();
         } else if (data.state === 'reveal') {
@@ -539,8 +616,13 @@
             myBet.cashedAt = data.multiplier;
             myBet.payout = data.payout;
             setBalance(data.balance);
-            playCashout();
-            setStatus(`Cashed at ${data.multiplier.toFixed(2)}× · +${data.payout - myBet.bet} SC`, 'big');
+            const delta = data.payout - myBet.bet;
+            if (delta >= 0) {
+                playCashout();
+                setStatus(`Cashed at ${data.multiplier.toFixed(2)}× · ${signed(delta)} SC`, 'big');
+            } else {
+                setStatus(`Rescued ${data.payout} SC of ${myBet.bet} at ${data.multiplier.toFixed(2)}×`, 'loss');
+            }
         } else {
             setStatus(`${data.name} cashed at ${data.multiplier.toFixed(2)}×`, 'info');
         }
