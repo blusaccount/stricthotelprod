@@ -204,17 +204,17 @@ Multiplayer multiplier game with shared rounds (betting phase → running phase 
 
 C->S:
 - `crash-state` - Request current round state
-- `crash-bet` - Place bet for current round `{ bet, autoCashout? }` (only during betting phase)
+- `crash-bet` - Place bet `{ bet, autoCashout? }`. During the betting phase it joins the round about to start; during running/reveal it is **queued for the next round** (stake deducted immediately, one bet per player per round either way — a player with a bet riding the current round can still queue one)
 - `crash-cashout` - Cash out at current multiplier (only during running phase)
 
 S->C:
-- `crash-state` - Current round snapshot
+- `crash-state` - Current round snapshot. `bets` are live in the current round, `pending` are queued for the next one `[{ name, bet, autoCashout }]`
 - `crash-round-betting` - Betting phase started `{ roundId, durationMs }`
 - `crash-round-running` - Round started running `{ roundId, startedAt }`
 - `crash-tick` - Multiplier tick (~60fps cadence on server)
 - `crash-round-crashed` - Round ended `{ crashPoint, ... }`
-- `crash-bet-confirmed` - Bet accepted (to the bettor)
-- `crash-bet-public` - Bet broadcast for the live bet feed
+- `crash-bet-confirmed` - Bet accepted (to the bettor) `{ roundId, bet, autoCashout, balance, queued }` — `queued: true` means it rides the next round, not this one
+- `crash-bet-public` - Bet broadcast for the live bet feed. Queued bets are announced when they are promoted at the next betting phase, not when queued
 - `crash-cashout` - Cashout broadcast for the live feed
 - `crash-cashout-confirmed` - Cashout confirmed (to the bettor)
 - `crash-error` - Error response

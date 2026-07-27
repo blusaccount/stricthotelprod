@@ -89,6 +89,12 @@ const round = {
     history: []              // recent crash multipliers (max 20)
 };
 
+// Bets placed while a round is running (or during the crash reveal) for the
+// NEXT round. The stake is deducted at queue time — the player has committed —
+// and the entry is promoted into round.bets when the next betting phase opens.
+// Deliberately outside `round`, which is replaced wholesale each round.
+const pendingBets = new Map();   // playerName -> same shape as round.bets
+
 let roundTimer = null;
 let mainLoopIo = null;
 let onlinePlayersRef = null;
@@ -109,6 +115,14 @@ function publicBets() {
     return out;
 }
 
+function publicPending() {
+    const out = [];
+    for (const [name, b] of pendingBets) {
+        out.push({ name, bet: b.bet, autoCashout: b.autoCashout || null });
+    }
+    return out;
+}
+
 function broadcastState() {
     if (!mainLoopIo) return;
     const now = Date.now();
@@ -116,6 +130,7 @@ function broadcastState() {
         state: round.state,
         roundId: round.id,
         bets: publicBets(),
+        pending: publicPending(),
         history: round.history.slice(0, 20)
     };
     if (round.state === 'betting') {
@@ -151,8 +166,19 @@ function startBettingPhase() {
     round.bets = new Map();
     round.crashMultiplier = 0;
     round.crashTime = 0;
+    // Promote bets queued during the previous round. Their stake was already
+    // deducted when they were queued, so this is a pure move.
+    const promoted = [];
+    for (const [name, b] of pendingBets) {
+        round.bets.set(name, b);
+        promoted.push({ roundId: round.id, name, bet: b.bet, autoCashout: b.autoCashout || null });
+    }
+    pendingBets.clear();
     broadcastState();
-    if (mainLoopIo) mainLoopIo.emit('crash-round-betting', { roundId: round.id, durationMs: BETTING_MS });
+    if (mainLoopIo) {
+        mainLoopIo.emit('crash-round-betting', { roundId: round.id, durationMs: BETTING_MS });
+        for (const p of promoted) mainLoopIo.emit('crash-bet-public', p);
+    }
     scheduleNext(BETTING_MS, startRunningPhase);
 }
 
@@ -301,6 +327,7 @@ export function registerCrashHandlers(socket, io, deps) {
             state: round.state,
             roundId: round.id,
             bets: publicBets(),
+            pending: publicPending(),
             history: round.history.slice(0, 20)
         };
         if (round.state === 'betting') base.timeRemaining = Math.max(0, round.bettingEndsAt - now);
@@ -340,11 +367,21 @@ export function registerCrashHandlers(socket, io, deps) {
         // check twice and one stake vanished. Under the per-player lock the
         // duplicate re-checks only after the original committed.
         await withActionLock(actionKey('crash', player.name), async () => {
-            if (round.state !== 'betting') {
+            // A bet placed mid-flight (or during the reveal) is queued for the
+            // NEXT round rather than rejected. Note the duplicate check is
+            // phase-specific: a player who already has a bet riding the current
+            // round must still be able to queue one for the next.
+            const queueing = round.state === 'running' || round.state === 'reveal';
+            if (!queueing && round.state !== 'betting') {
                 socket.emit('crash-error', { message: 'Betting is closed for this round' });
                 return;
             }
-            if (round.bets.has(player.name)) {
+            if (queueing) {
+                if (pendingBets.has(player.name)) {
+                    socket.emit('crash-error', { message: 'Bet already queued for the next round' });
+                    return;
+                }
+            } else if (round.bets.has(player.name)) {
                 socket.emit('crash-error', { message: 'Bet already placed for this round' });
                 return;
             }
@@ -353,25 +390,48 @@ export function registerCrashHandlers(socket, io, deps) {
             // this check the bet would land in an already-running round.
             const placedInRoundId = round.id;
 
-            const balanceAfterBet = await deductBalance(player.name, bet, 'crash_bet', { bet, autoCashout });
+            const balanceAfterBet = await deductBalance(player.name, bet, 'crash_bet', { bet, autoCashout, queued: queueing });
             if (balanceAfterBet === null) {
                 socket.emit('crash-error', { message: 'Not enough coins' });
                 return;
             }
-            // Refund + bail if the round flipped while we were deducting.
-            if (round.state !== 'betting' || round.id !== placedInRoundId) {
-                await addBalance(player.name, bet, 'crash_bet_refund_state_race', { bet, originalRound: placedInRoundId });
-                socket.emit('crash-error', { message: 'Betting closed before bet was confirmed' });
-                emitToUser(io, player.name, 'balance-update', { balance: balanceAfterBet + bet });
-                return;
-            }
-            round.bets.set(player.name, {
+            const entry = {
                 socketId: socket.id,
                 bet,
                 autoCashout,
                 cashedAt: null,
                 payout: 0
-            });
+            };
+            // Re-resolve the destination after the await — the phase may have
+            // moved under us.
+            let queued;
+            if (!queueing) {
+                // Immediate bet: it belongs to the round that was open when the
+                // player clicked. If that round has closed, refund rather than
+                // silently rolling it into the next one.
+                if (round.state !== 'betting' || round.id !== placedInRoundId) {
+                    await addBalance(player.name, bet, 'crash_bet_refund_state_race', { bet, originalRound: placedInRoundId });
+                    socket.emit('crash-error', { message: 'Betting closed before bet was confirmed' });
+                    emitToUser(io, player.name, 'balance-update', { balance: balanceAfterBet + bet });
+                    return;
+                }
+                round.bets.set(player.name, entry);
+                queued = false;
+            } else if (round.state === 'betting' && !round.bets.has(player.name)) {
+                // The next round opened while we were deducting — that IS the
+                // round this bet was meant for, so place it live instead of
+                // holding it back another full round.
+                round.bets.set(player.name, entry);
+                queued = false;
+            } else if ((round.state === 'running' || round.state === 'reveal') && !pendingBets.has(player.name)) {
+                pendingBets.set(player.name, entry);
+                queued = true;
+            } else {
+                await addBalance(player.name, bet, 'crash_bet_refund_state_race', { bet, originalRound: placedInRoundId });
+                socket.emit('crash-error', { message: 'Bet could not be queued. Try again.' });
+                emitToUser(io, player.name, 'balance-update', { balance: balanceAfterBet + bet });
+                return;
+            }
             // Achievement: first bet
             const unlocks = await bump(player.name, 'crash_bets', 1);
             notifyUnlocks(io, onlinePlayers, player.name, unlocks);
@@ -381,14 +441,18 @@ export function registerCrashHandlers(socket, io, deps) {
                 roundId: round.id,
                 bet,
                 autoCashout,
-                balance: balanceAfterBet
+                balance: balanceAfterBet,
+                queued
             });
-            if (mainLoopIo) mainLoopIo.emit('crash-bet-public', {
+            // Queued bets are announced when they go live (startBettingPhase),
+            // not now — they have no row in the current round's bet list.
+            if (!queued && mainLoopIo) mainLoopIo.emit('crash-bet-public', {
                 roundId: round.id,
                 name: player.name,
                 bet,
                 autoCashout
             });
+            if (queued) broadcastState();
         });
     } catch (err) {
         console.error('crash-bet error:', err.message);
@@ -457,5 +521,7 @@ export {
     // drive the auto-cashout entry point (normally only the tick loop
     // calls it) against the manual crash-cashout handler.
     round,
-    resolveCashout
+    resolveCashout,
+    pendingBets,
+    startBettingPhase
 };

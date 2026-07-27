@@ -55,6 +55,16 @@
     let recentCrashes = [];
     let players = [];               // public bet list mirrored from server
     let myBet = null;               // { bet, autoCashout, cashedAt, payout, lost }
+    let queuedBet = null;           // { bet, autoCashout } — placed mid-round, rides the next one
+
+    // Bets are accepted in every phase: during betting they join the round that
+    // is about to start, during running/reveal they are queued for the next one.
+    // One bet per player per round either way.
+    function bettingOpen() {
+        if (roundState === 'betting') return !myBet;
+        if (roundState === 'running' || roundState === 'reveal') return !queuedBet;
+        return false;
+    }
 
     // Curve drawing buffer. On overflow it is resampled down to a uniform
     // spacing over the whole round rather than truncated, so it always still
@@ -299,10 +309,13 @@
         const inBetting = roundState === 'betting';
         const inRunning = roundState === 'running';
         const haveBet = !!myBet && !myBet.cashedAt;
+        const open = bettingOpen();
 
-        for (const b of betButtons) b.disabled = !inBetting || !!myBet;
-        autoInput.disabled = !inBetting || !!myBet;
-        placeBetBtn.disabled = !inBetting || selectedBet === null || !!myBet;
+        for (const b of betButtons) b.disabled = !open;
+        autoInput.disabled = !open;
+        placeBetBtn.disabled = !open || selectedBet === null;
+        placeBetBtn.textContent = inBetting ? 'PLACE BET' : 'BET NEXT ROUND';
+        placeBetBtn.classList.toggle('queueing', !inBetting);
         cashoutBtn.disabled = !(inRunning && haveBet);
 
         if (currentBalance !== null) {
@@ -312,28 +325,35 @@
             }
         }
 
+        let text;
         if (myBet) {
             if (myBet.cashedAt) {
                 const delta = myBet.payout - myBet.bet;
                 betInfo.classList.remove('active');
                 betInfo.classList.toggle('cashed', delta >= 0);
                 betInfo.classList.toggle('lost', delta < 0);
-                betInfo.textContent = myBet.cashedAt < 1
+                text = myBet.cashedAt < 1
                     ? `Rescued at ${myBet.cashedAt.toFixed(2)}× → ${signed(delta)} SC`
                     : `Cashed at ${myBet.cashedAt.toFixed(2)}× → ${signed(delta)} SC`;
             } else if (myBet.lost) {
                 betInfo.classList.remove('active', 'cashed');
                 betInfo.classList.add('lost');
-                betInfo.textContent = `Lost ${myBet.bet} SC at ${crashedAt.toFixed(2)}×`;
+                text = `Lost ${myBet.bet} SC at ${crashedAt.toFixed(2)}×`;
             } else {
                 betInfo.classList.remove('cashed', 'lost');
                 betInfo.classList.add('active');
-                betInfo.textContent = `${myBet.bet} SC active${myBet.autoCashout ? ` · auto @ ${myBet.autoCashout.toFixed(2)}×` : ''}`;
+                text = `${myBet.bet} SC active${myBet.autoCashout ? ` · auto @ ${myBet.autoCashout.toFixed(2)}×` : ''}`;
             }
         } else {
             betInfo.classList.remove('active', 'cashed', 'lost');
-            betInfo.textContent = inBetting ? 'No active bet — place one!' : 'Wait for next round';
+            text = inBetting ? 'No active bet — place one!' : queuedBet ? '' : 'Bet now to join the next round';
         }
+        if (queuedBet) {
+            const q = `${queuedBet.bet} SC queued for next round${queuedBet.autoCashout ? ` · auto @ ${queuedBet.autoCashout.toFixed(2)}×` : ''}`;
+            text = text ? `${text} · ${q}` : q;
+        }
+        betInfo.classList.toggle('queued', !!queuedBet);
+        betInfo.textContent = text;
     }
 
     function pillTier(m) {
@@ -525,6 +545,13 @@
         } else {
             myBet = null;
         }
+        // A bet queued mid-round lives in `pending` until it is promoted into
+        // `bets` at the next betting phase. Rebuilt from state so it survives a
+        // reload while the queue is still holding it.
+        const mineQueued = (data.pending || []).find(b => b.name === myName);
+        queuedBet = mineQueued
+            ? { bet: mineQueued.bet, autoCashout: mineQueued.autoCashout || null }
+            : null;
         players = data.bets || [];
         renderPlayers();
         updateButtons();
@@ -541,10 +568,15 @@
                 multiplier: data.multiplier || 0,
                 atTime: performance.now()
             };
-            curvePoints.length = 0;
-            curvePoints.push({ t: 0, m: 0 });
-            curvePoints.push({ t: lastTick.elapsedMs, m: lastTick.multiplier });
-            if (prev !== 'running') startRocketHum();
+            // Only seed the curve when entering the phase. A crash-state can now
+            // arrive mid-flight (someone queued a bet for the next round), and
+            // resetting on every one of them would wipe the drawn curve.
+            if (prev !== 'running') {
+                curvePoints.length = 0;
+                curvePoints.push({ t: 0, m: 0 });
+                curvePoints.push({ t: lastTick.elapsedMs, m: lastTick.multiplier });
+                startRocketHum();
+            }
         } else if (data.state === 'reveal') {
             crashedAt = data.crashMultiplier || 0;
             revealEndsAt = Date.now() + (data.timeRemaining || 0);
@@ -560,7 +592,7 @@
 
     // ---------- Wire up ---------- //
     function handleBetClick(btn) {
-        if (roundState !== 'betting' || myBet) return;
+        if (!bettingOpen()) return;
         const v = Number(btn.getAttribute('data-bet'));
         if (!Number.isInteger(v)) return;
         selectedBet = v;
@@ -570,7 +602,7 @@
     }
 
     placeBetBtn.addEventListener('click', () => {
-        if (roundState !== 'betting' || selectedBet === null || myBet) return;
+        if (!bettingOpen() || selectedBet === null) return;
         const auto = autoInput.value.trim() === '' ? null : Number(autoInput.value);
         socket.emit('crash-bet', { bet: selectedBet, autoCashout: auto });
     });
@@ -627,11 +659,17 @@
         // applyState (via subsequent crash-state) will set roundState to 'reveal'
     });
     socket.on('crash-bet-confirmed', (data) => {
-        myBet = { bet: data.bet, autoCashout: data.autoCashout, cashedAt: null, payout: 0, lost: false };
-        roundId = data.roundId;
+        const auto = data.autoCashout ? ` · auto @ ${data.autoCashout.toFixed(2)}×` : '';
+        if (data.queued) {
+            queuedBet = { bet: data.bet, autoCashout: data.autoCashout || null };
+            setStatus(`Queued ${data.bet} SC for the next round${auto}`, 'info');
+        } else {
+            myBet = { bet: data.bet, autoCashout: data.autoCashout, cashedAt: null, payout: 0, lost: false };
+            roundId = data.roundId;
+            setStatus(`Bet placed: ${data.bet} SC${auto}`, 'info');
+        }
         setBalance(data.balance);
         playBetPlaced();
-        setStatus(`Bet placed: ${data.bet} SC${data.autoCashout ? ` · auto @ ${data.autoCashout.toFixed(2)}×` : ''}`, 'info');
         for (const b of betButtons) b.classList.remove('active');
         selectedBet = null;
         updateButtons();

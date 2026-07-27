@@ -205,6 +205,10 @@ body {
     letter-spacing: 1px;
     line-height: 1.6;
 }
+/* Queued for the NEXT round — magenta so it never reads as money riding the
+   current one. Declared first on purpose: when a player has both a live bet
+   and a queued one, the live stake's colour must win. */
+.bet-info.queued { border-color: var(--magenta); color: var(--magenta); box-shadow: 0 0 14px rgba(255, 62, 165, 0.22); }
 .bet-info.active { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 14px rgba(62, 255, 225, 0.25); }
 .bet-info.cashed { border-color: var(--win);  color: var(--win);  }
 .bet-info.lost   { border-color: var(--loss); color: var(--loss); }
@@ -258,6 +262,16 @@ body {
 }
 .primary-btn.bet:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 6px 0 #6a4a00, 0 0 26px rgba(255, 204, 51, 0.7); }
 .primary-btn.bet:not(:disabled):active { transform: translateY(2px); box-shadow: 0 2px 0 #6a4a00; }
+
+/* Same button, but the stake rides the NEXT round — magenta, matching the
+   queued bet-info, so it is never mistaken for buying into the live round. */
+.primary-btn.bet.queueing {
+    background: linear-gradient(180deg, #ff8ac9 0%, #c2187a 100%);
+    color: #2a0018;
+    box-shadow: 0 4px 0 #6a0038, 0 0 16px rgba(255, 62, 165, 0.4);
+}
+.primary-btn.bet.queueing:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 6px 0 #6a0038, 0 0 26px rgba(255, 62, 165, 0.7); }
+.primary-btn.bet.queueing:not(:disabled):active { transform: translateY(2px); box-shadow: 0 2px 0 #6a0038; }
 
 .primary-btn.cashout {
     border-color: var(--win);

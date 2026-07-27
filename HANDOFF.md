@@ -4,6 +4,84 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Crash — bet mid-round to join the next one (2026-07-27)
+
+## Why
+Requested by the maintainer: while a round is in flight you had to sit out the
+whole flight *and* the 4 s reveal before you could bet again. `crash-bet` now
+accepts in every phase — during betting it joins the round about to start,
+during running/reveal it is queued for the next round.
+
+## What Changed
+
+### `server/handlers/crash.js`
+- New module-level `pendingBets` Map (`playerName -> same shape as round.bets`).
+  Deliberately **outside** `round`, which is replaced wholesale each round.
+- `crash-bet` accepts during `running` / `reveal` and queues. **The stake is
+  deducted at queue time** — the player has committed, and it avoids a bet that
+  silently evaporates at promotion because the balance moved.
+- The duplicate check is now **phase-specific**, which is the subtle part: a
+  player with a bet riding the current round must still be able to queue one for
+  the next, so queueing checks `pendingBets`, not `round.bets`.
+- `startBettingPhase()` promotes every pending bet into `round.bets` (a pure
+  move — no second deduction) and emits their `crash-bet-public` then.
+- Post-await phase re-resolution. Immediate bets keep the old semantics: if the
+  round closed under the `deductBalance` await, refund (unchanged). A *queued*
+  bet whose next round opened during the await is placed live in that round
+  instead of being held back another full round.
+- `crash-state` snapshot gained `pending: [{ name, bet, autoCashout }]`, so a
+  queued bet survives a page reload.
+- `crash-bet-confirmed` gained `queued: true|false`.
+
+### `games/crash/js/game.js`
+- `bettingOpen()` replaces the scattered `roundState !== 'betting' || myBet`
+  guards; new `queuedBet` state rebuilt from `crash-state.pending`.
+- Place-bet button relabels to `BET NEXT ROUND` (magenta `.queueing`) outside the
+  betting phase; `bet-info` appends `N SC queued for next round`.
+- **Fixed a latent bug this would otherwise have exposed**: `applyState` reset
+  `curvePoints` on *every* `crash-state` while running. That was harmless when
+  state was only broadcast on phase transitions, but the server now broadcasts
+  mid-flight when someone queues — which would have wiped every player's drawn
+  curve. The reset is now guarded to the `prev !== 'running'` transition.
+
+### `games/crash/crash.css`, `games/crash/index.html`, `docs/EVENTS.md`
+- `.bet-info.queued` + `.primary-btn.bet.queueing` in magenta. `.queued` is
+  declared **before** `.active`/`.cashed`/`.lost` on purpose so a live stake's
+  colour wins when a player has both.
+- Status/footer copy updated; Crash section of EVENTS.md rewritten.
+
+## How to Verify
+- `npx vitest run` — **472 passed / 34 files** (was 459/33). New file
+  `server/__tests__/crash-queued-bets.test.js`, 13 tests: queueing during
+  running and during reveal, auto-cashout carried through, queueing while a bet
+  is already riding, duplicate rejection, double-click race inside the deduct
+  await, insufficient funds, promotion without re-deduction, no re-promotion on
+  the following round, both phase-flip-during-await directions, and the
+  `crash-state` split between `bets` and `pending`.
+- **Driven end-to-end against the real round loop** (real timers, real in-memory
+  currency, no mocks): queued mid-flight → landed in `pendingBets`, stayed out of
+  the live round, survived a duplicate attempt, then promoted into round 2 with
+  its auto-cashout intact and no second deduction. All 13 checks passed.
+
+## Open Risks / Notes
+- **No cancel.** A queued bet cannot be withdrawn, matching existing bet
+  semantics (a bet placed during the betting phase is already final). But a bet
+  queued 2 s into a 60 s round locks those coins for the whole flight. If that
+  annoys players, a `crash-unqueue` refunding from `pendingBets` is the fix —
+  deliberately not built, since it was not asked for.
+- Other players' queued bets are in the `pending` payload but **not rendered** —
+  "PLAYERS THIS ROUND" still lists only the live round. Data is there if a
+  "next round" section is wanted later.
+- `stopCrashLoop()` drops `pendingBets` without refunding, exactly as it already
+  drops `round.bets`. On a real restart those stakes are lost. Pre-existing
+  pattern, not made worse, but now there is a second map with the same exposure.
+- The `crash_first` "Lift-off" achievement (+50 SC) fires on a queued bet too —
+  correct, but it means a first-bet balance delta is −50, not −100. Cost an
+  assertion in verification; noted so the next reader does not re-derive it.
+- Still not verified in a browser (`SITE_PASSWORD` gate) — carried forward.
+
+---
+
 # Handoff: Crash — curve rendered as a vertical line after ~6.4s (2026-07-27)
 
 ## Why
