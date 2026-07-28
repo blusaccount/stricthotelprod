@@ -17,7 +17,7 @@ This guide helps LLM agents work effectively in this repo. Keep it short, stay i
 
 **Client:**
 - Public pages: [public/](public/) (`index.html`, `login.html`, `contacts.html`, `shop.html`, `achievements.html`, `nostalgiabait/`)
-- Public modules: `shell.js`, `lobby.js`, `lobby-watchparty.js`, `contacts.js`, `ambience.js`, `pictochat.js`, `soundboard.js`, `shop.js` + `shell.css`, `lobby.css`
+- Public modules: `shell.js`, `lobby.js`, `lobby-watchparty.js`, `contacts.js`, `pictochat.js`, `soundboard.js` (dormant — empty sound list, panel hides itself), `shop.js` + `shell.css`, `lobby.css`
 - Game frontends: [games/](games/) (15 directories: `maexchen`, `watchparty`, `stocks`, `strictly7s`, `loop-machine`, `strictbrain`, `turkish`, `shopping`, `casino` (hub), `blackjack`, `plinko`, `crash`, `roulette`, `tierlist`, `food-guessr`)
 - Shared modules: [shared/js/](shared/js/) — `core.js`, `lobby.js`, `socket-init.js`, `chat.js`, `creator.js`, `avatars.js`, `emotes.js`, `reactions.js`, `iframe-helper.js`, `ambient.js`, `achievement-toast.js`, `starfield-parallax.js`, `stock-ticker.js`, `tts.js`
 - Shared styles: [shared/css/theme.css](shared/css/theme.css)

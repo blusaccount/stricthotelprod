@@ -4,6 +4,72 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Soundboard emptied, retention set to 24 months (2026-07-28)
+
+## Why
+Operator answered the two open questions from the legal groundwork: the
+soundboard clips are all meme audio pulled from the internet, and the retention
+period should be 24 months.
+
+## Soundboard — clips removed, feature left standing
+
+All nine files deleted from `shared/audio/soundboard/`. None had a licence
+behind it, which is unremarkable among friends and untenable for a public
+commercial site.
+
+Nothing else was torn out. `SOUNDS` in `public/soundboard.js` is now an empty
+array, and the module hides the lobby panel and returns early when it is empty —
+rather than rendering a grid with no buttons and a volume slider that controls
+silence. The socket handler, the panel markup and the "Drop the Beat"
+achievement are all still wired; refilling the array is the only step needed to
+bring it back. `shared/audio/soundboard/README.md` explains that, including the
+instruction to record source and licence **as files are added**, since doing it
+afterwards is exactly how the previous set became unattributable.
+
+`public/credits.html` now states plainly that no audio is served.
+
+**Known cosmetic consequence:** the `sound_first` achievement ("Drop the Beat")
+is currently unobtainable — 57 achievements, one of them unreachable until the
+soundboard is refilled. Left in place on the reading that this is dormant
+rather than deleted. Removing it is a two-line change if that turns out to be
+the wrong call.
+
+## Retention — 24 months is now the default, not just an option
+
+`ACCOUNT_RETENTION_MONTHS` used to be opt-in, so an unset value meant no
+deletion at all — which would have made the privacy notice a promise nothing
+kept. `DEFAULT_RETENTION_MONTHS = 24` now applies when the variable is unset or
+empty, matching the period stated in `public/datenschutz.html`.
+
+- `ACCOUNT_RETENTION_MONTHS=0` is the documented way to switch deletion off.
+- Junk, negatives and anything under the six-month floor fall back to 24 with a
+  warning, instead of being honoured against real data.
+- The privacy notice no longer carries a red placeholder here: it states 24
+  months, names the last login as the trigger, and lists what goes with the
+  account.
+
+## How to Verify
+- `npm test` -> **480 passed / 34 files** (retention tests 14 -> 17).
+- Boot messages: unset and `=36` both start the job; `=0` reports
+  `disabled (ACCOUNT_RETENTION_MONTHS=0)`; `=3` warns about the floor and falls
+  back to 24. (In this environment they then report `disabled (no database)`,
+  which is correct — there is no Postgres here.)
+- Headless Chromium on the lobby: soundboard panel is `display: none` and
+  `hidden`, **no 404s**, no JS errors, and the layout closes up cleanly with
+  Pictochat moving into the space.
+
+## Open Risks / Next Steps
+- Retention still has not run against a real Postgres. Call
+  `findDormantPlayers(24)` before the first live run to see what it would take.
+  On a fresh production database nothing is 24 months old yet, so there is time.
+- `DEFAULT_RETENTION_MONTHS` and the number in `public/datenschutz.html` are two
+  places holding one fact. They will drift unless changed together.
+- Imprint and privacy notice still carry their `.legal-todo` fields for the
+  operator's name, address, contact and VAT status. Deliberately deferred until
+  the business is registered — the site cannot go public before then anyway.
+
+---
+
 # Handoff: Soundboard provenance documented, account retention built (2026-07-28)
 
 ## Why

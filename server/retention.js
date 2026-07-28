@@ -4,10 +4,12 @@
 // for the purpose it was collected for. A player who has not come back in years
 // no longer has a game to keep a score in, so their row has to go.
 //
-// **Off by default.** Deleting player data is irreversible and the right period
-// is a decision for the operator, not a default someone inherits by accident.
-// Set ACCOUNT_RETENTION_MONTHS to switch it on, and put the same number in the
-// privacy notice — the two must agree.
+// The period is 24 months, chosen by the operator and stated in
+// public/datenschutz.html. Those two have to agree: the privacy notice is a
+// promise, and a promise nothing enforces is worse than no promise.
+//
+// ACCOUNT_RETENTION_MONTHS overrides it; ACCOUNT_RETENTION_MONTHS=0 switches
+// deletion off entirely, which anyone self-hosting may well want.
 //
 // Activity is `last_seen_at` (stamped on every register-player), falling back
 // to `updated_at` and `created_at` for rows that predate that column.
@@ -28,14 +30,25 @@ const NAME_KEYED_TABLES = [
 
 let timerId = null;
 
+export const DEFAULT_RETENTION_MONTHS = 24;
+
 export function getRetentionMonths() {
-    const raw = Number(process.env.ACCOUNT_RETENTION_MONTHS);
-    if (!Number.isFinite(raw) || raw <= 0) return null;
+    const configured = process.env.ACCOUNT_RETENTION_MONTHS;
+    if (configured === undefined || configured === '') return DEFAULT_RETENTION_MONTHS;
+
+    const raw = Number(configured);
+    if (!Number.isFinite(raw)) {
+        console.warn(`[retention] ACCOUNT_RETENTION_MONTHS="${configured}" is not a number — falling back to ${DEFAULT_RETENTION_MONTHS} months`);
+        return DEFAULT_RETENTION_MONTHS;
+    }
+    // An explicit 0 is the documented way to switch deletion off.
+    if (raw === 0) return null;
     // A period under six months would delete players who simply took a summer
-    // off; treat anything shorter as a configuration mistake.
+    // off; treat anything shorter as a configuration mistake rather than
+    // honouring it against real data.
     if (raw < 6) {
-        console.warn(`[retention] ACCOUNT_RETENTION_MONTHS=${raw} is below the 6-month floor — ignoring`);
-        return null;
+        console.warn(`[retention] ACCOUNT_RETENTION_MONTHS=${raw} is below the 6-month floor — falling back to ${DEFAULT_RETENTION_MONTHS} months`);
+        return DEFAULT_RETENTION_MONTHS;
     }
     return Math.floor(raw);
 }
@@ -89,13 +102,7 @@ export async function purgeDormantPlayers(months) {
 export function startRetentionJob() {
     const months = getRetentionMonths();
     if (months === null) {
-        // getRetentionMonths already warns when a value was present but
-        // rejected, so distinguish the two cases rather than claiming
-        // "not set" for a value the operator did set.
-        const reason = process.env.ACCOUNT_RETENTION_MONTHS
-            ? 'ACCOUNT_RETENTION_MONTHS rejected — see the warning above'
-            : 'ACCOUNT_RETENTION_MONTHS not set';
-        console.log(`[retention] disabled (${reason})`);
+        console.log('[retention] disabled (ACCOUNT_RETENTION_MONTHS=0)');
         return;
     }
     if (!isDatabaseEnabled()) {

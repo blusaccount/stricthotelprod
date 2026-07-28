@@ -7,6 +7,7 @@ vi.mock('../db.js', () => ({
 
 import { isDatabaseEnabled, query } from '../db.js';
 import {
+    DEFAULT_RETENTION_MONTHS,
     getRetentionMonths,
     findDormantPlayers,
     purgeDormantPlayers,
@@ -28,13 +29,19 @@ describe('account retention', () => {
     });
 
     describe('getRetentionMonths', () => {
-        it('is off unless explicitly configured', () => {
-            expect(getRetentionMonths()).toBeNull();
+        it('defaults to the 24 months the privacy notice states', () => {
+            expect(getRetentionMonths()).toBe(DEFAULT_RETENTION_MONTHS);
+            expect(DEFAULT_RETENTION_MONTHS).toBe(24);
         });
 
-        it('reads a configured period', () => {
-            process.env.ACCOUNT_RETENTION_MONTHS = '24';
+        it('treats an empty value as unset', () => {
+            process.env.ACCOUNT_RETENTION_MONTHS = '';
             expect(getRetentionMonths()).toBe(24);
+        });
+
+        it('honours an explicit override', () => {
+            process.env.ACCOUNT_RETENTION_MONTHS = '36';
+            expect(getRetentionMonths()).toBe(36);
         });
 
         it('floors fractional values', () => {
@@ -42,19 +49,26 @@ describe('account retention', () => {
             expect(getRetentionMonths()).toBe(18);
         });
 
-        it('refuses a period under six months', () => {
+        it('switches deletion off only on an explicit zero', () => {
+            process.env.ACCOUNT_RETENTION_MONTHS = '0';
+            expect(getRetentionMonths()).toBeNull();
+        });
+
+        it('falls back to the default rather than honouring a period under six months', () => {
             // Shorter than this would delete players who took a summer off.
             const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
             process.env.ACCOUNT_RETENTION_MONTHS = '3';
-            expect(getRetentionMonths()).toBeNull();
+            expect(getRetentionMonths()).toBe(24);
             expect(warn).toHaveBeenCalled();
         });
 
-        it('ignores junk, zero and negatives', () => {
-            for (const v of ['abc', '0', '-12', '']) {
-                process.env.ACCOUNT_RETENTION_MONTHS = v;
-                expect(getRetentionMonths()).toBeNull();
-            }
+        it('falls back to the default on junk and negatives', () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            process.env.ACCOUNT_RETENTION_MONTHS = 'abc';
+            expect(getRetentionMonths()).toBe(24);
+            process.env.ACCOUNT_RETENTION_MONTHS = '-12';
+            expect(getRetentionMonths()).toBe(24);
+            expect(warn).toHaveBeenCalled();
         });
     });
 
@@ -132,10 +146,19 @@ describe('account retention', () => {
     });
 
     describe('startRetentionJob', () => {
-        it('stays off when unconfigured, and says so', () => {
+        it('runs at the default period when unconfigured', () => {
             const log = vi.spyOn(console, 'log').mockImplementation(() => {});
             startRetentionJob();
-            expect(log.mock.calls.flat().join(' ')).toContain('disabled');
+            const said = log.mock.calls.flat().join(' ');
+            expect(said).toContain('enabled');
+            expect(said).toContain('24 months');
+        });
+
+        it('stays off on an explicit zero, and says why', () => {
+            const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+            process.env.ACCOUNT_RETENTION_MONTHS = '0';
+            startRetentionJob();
+            expect(log.mock.calls.flat().join(' ')).toContain('ACCOUNT_RETENTION_MONTHS=0');
         });
 
         it('stays off without a database even when configured', () => {
