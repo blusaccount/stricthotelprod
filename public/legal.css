@@ -1,0 +1,130 @@
+/* Shared styling for the legal pages (Impressum, Datenschutz, Credits). */
+
+body.legal-body {
+    margin: 0;
+    padding: 0;
+    background: var(--arcade-bg-2);
+    color: var(--arcade-ink);
+    font-family: 'Press Start 2P', monospace;
+    line-height: 1.9;
+}
+
+.legal-wrap {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 32px 20px 80px;
+}
+
+.legal-back {
+    display: inline-block;
+    margin-bottom: 24px;
+    color: var(--arcade-cyan);
+    text-decoration: none;
+    font-size: 9px;
+    letter-spacing: 1px;
+}
+
+.legal-back:hover { text-decoration: underline; }
+
+.legal-wrap h1 {
+    font-size: 16px;
+    color: var(--arcade-gold);
+    letter-spacing: 2px;
+    margin: 0 0 8px;
+}
+
+.legal-updated {
+    font-size: 8px;
+    color: var(--arcade-dim);
+    margin-bottom: 32px;
+}
+
+.legal-wrap h2 {
+    font-size: 11px;
+    color: var(--arcade-cyan);
+    letter-spacing: 1px;
+    margin: 36px 0 12px;
+    border-bottom: 1px solid var(--arcade-border);
+    padding-bottom: 8px;
+}
+
+.legal-wrap h3 {
+    font-size: 9px;
+    color: var(--arcade-magenta);
+    letter-spacing: 1px;
+    margin: 24px 0 8px;
+}
+
+.legal-wrap p,
+.legal-wrap li,
+.legal-wrap td,
+.legal-wrap th {
+    font-size: 9px;
+    letter-spacing: 0.3px;
+}
+
+.legal-wrap ul { padding-left: 20px; }
+.legal-wrap li { margin-bottom: 8px; }
+
+.legal-wrap a { color: var(--arcade-cyan); }
+
+.legal-wrap table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 20px;
+}
+
+.legal-wrap th,
+.legal-wrap td {
+    border: 1px solid var(--arcade-border);
+    padding: 10px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.legal-wrap th {
+    background: var(--arcade-panel);
+    color: var(--arcade-gold);
+}
+
+/* Highlights every value the operator still has to fill in before going
+   public. Search the page for this class to find open TODOs. */
+.legal-todo {
+    background: rgba(255, 56, 56, 0.18);
+    border: 1px dashed var(--arcade-red);
+    color: var(--arcade-loss);
+    padding: 2px 6px;
+}
+
+.legal-note {
+    border-left: 3px solid var(--arcade-gold);
+    background: var(--arcade-panel);
+    padding: 12px 16px;
+    margin: 20px 0;
+}
+
+.legal-footer {
+    margin-top: 48px;
+    padding-top: 20px;
+    border-top: 1px solid var(--arcade-border);
+    font-size: 8px;
+    color: var(--arcade-dim);
+}
+
+.legal-footer a { color: var(--arcade-dim); margin-right: 16px; }
+
+/* Consent controls used on the privacy page (the modal ships its own styles). */
+.legal-wrap .consent-btn {
+    padding: 10px 14px;
+    border: 2px solid var(--arcade-cyan);
+    background: transparent;
+    color: var(--arcade-cyan);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 9px;
+    letter-spacing: 0.5px;
+}
+
+.legal-wrap .consent-btn:hover {
+    background: rgba(62, 255, 225, 0.14);
+}

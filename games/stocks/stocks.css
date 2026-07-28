@@ -762,62 +762,12 @@ body {
 }
 
 /* ===== Ambience Music ===== */
-.ambience-control {
-    position: fixed;
-    bottom: 60px;
-    right: 12px;
-    z-index: 1000;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
 
-.ambience-volume {
-    display: flex;
-    align-items: center;
-}
 
-.ambience-volume input[type=range] {
-    width: 80px;
-    accent-color: var(--ds-border);
-    cursor: pointer;
-}
 
-.ambience-mute {
-    background: var(--ds-surface);
-    border: 2px solid var(--ds-border);
-    color: var(--ds-text);
-    font-family: 'Press Start 2P', monospace;
-    font-size: 14px;
-    width: 40px;
-    height: 40px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 0;
-    transition: all 0.15s;
-}
 
-.ambience-mute:hover {
-    background: var(--ds-highlight);
-    box-shadow: 3px 3px 0 var(--ds-border);
-}
 
-.ambience-mute.muted {
-    border-color: var(--ds-text-dim);
-    background: var(--ds-highlight);
-}
 
-.ambience-yt-container {
-    position: fixed;
-    top: -9999px;
-    left: -9999px;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    pointer-events: none;
-}
 
 /* Large screens */
 @media (min-width: 1024px) {

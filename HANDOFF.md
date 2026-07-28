@@ -4,6 +4,134 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Legal groundwork for a public launch (2026-07-28)
+
+## Why
+The site is being prepared for public, commercial operation (ad-funded,
+free-to-play). Everything below was verified in the code first — this entry
+records only what was actually found and changed, not what the docs claim.
+
+Four things made the site unpublishable as it stood:
+
+1. `games/shopping/index.html` shipped a **live Google AdSense publisher ID**
+   (`ca-pub-...`) inside a parody ad-spam game whose own copy invites the
+   visitor to close ads to spawn more. Real ad units surrounded by fake ones,
+   next to close buttons, is invalid traffic under AdSense policy — and an
+   AdSense ban is account-wide and permanent, not page-scoped.
+2. The lobby (`public/index.html`) and the stock game each ran a **hidden
+   YouTube player** for background music (`public/ambience.js`, plus an inline
+   copy in `games/stocks/index.html`). Audio-only playback in an invisible
+   player contradicts the YouTube API Services Terms regardless of
+   monetisation.
+3. Fonts came from `fonts.googleapis.com`/`fonts.gstatic.com` on 27 pages, and
+   Chart.js / canvas-confetti from jsDelivr — each one transmits the visitor
+   IP to a third party with no legal basis.
+4. There was no imprint, no privacy notice, and no consent step before the
+   YouTube embeds loaded.
+
+## What Changed
+
+**AdSense removed** (`games/shopping/index.html`)
+- The `adsbygoogle.js` script tag, the `<ins class="adsbygoogle">` unit and the
+  `adsbygoogle.push({})` call are gone. Ad popups now render `randomFakeAd()`,
+  eight parody placements using the existing `.ad-placeholder` style.
+- The intro screen gained a one-line disclaimer that the ads are satire and no
+  network is embedded, so the page does not contradict the privacy notice.
+
+**Hidden ambience players removed**
+- Deleted `public/ambience.js`; removed the player container, the mute button
+  and the volume slider from `public/index.html`, and the matching CSS from
+  `public/shell.css` and `public/lobby.css`.
+- Removed the inline duplicate (container, control, and the whole background
+  music `<script>` block) from `games/stocks/index.html` plus its CSS in
+  `games/stocks/stocks.css`.
+- `public/lobby-watchparty.js` lost `autoMuteAmbience()` and its call site;
+  it existed only to silence the player that no longer exists.
+
+**Third-party assets self-hosted**
+- `shared/fonts/` — Press Start 2P, Orbitron, DotGothic16, M PLUS Rounded 1c
+  and Patrick Hand as woff2, latin + latin-ext subsets only, 312 KB total,
+  with one `<family>.css` per family and `LICENSE.md` recording the OFL.
+  Orbitron is a variable font, so its three weights share one file.
+- `shared/vendor/` — Chart.js 4.4.7 and canvas-confetti 1.6.0, with a README
+  recording version, license and the pages that load them.
+- All 28 affected HTML files now link the local stylesheets; the
+  `preconnect` hints to Google were dropped with them.
+
+**YouTube consent gate** (`shared/js/yt-consent.js`, new)
+- `StrictConsent.youtube()` returns a promise that resolves once the IFrame API
+  is loaded, and rejects with `Error('consent-denied')` if the visitor says no.
+  The API script is injected only after consent. Decision is stored in
+  localStorage under `consent-youtube`, and only when the "remember" box is
+  ticked — nothing is written before a button is clicked.
+- All three injection sites now go through it: `public/lobby-watchparty.js`,
+  `games/watchparty/js/watchparty.js`,
+  `public/nostalgiabait/shared/player.js`. Each handles the rejection by
+  restoring its own placeholder or overlay.
+- Queue thumbnails from `i.ytimg.com` are also gated — without consent the
+  list renders a neutral glyph (`.lobby-wp-queue-thumb-blank`).
+- `StrictConsent.revokeYouTube()` backs the revoke button on the privacy page.
+
+**Legal pages** (`public/impressum.html`, `datenschutz.html`, `credits.html`,
+shared `public/legal.css`)
+- The privacy notice describes what the code actually does: the `connect.sid`
+  session cookie and its real settings, the localStorage keys, the exact
+  database tables from `server/sql/persistence.sql`, the volatile 500-line log
+  ring buffer, the 60-second login rate limiter, and the three third parties
+  that can be reached (YouTube on consent, Wikipedia/Wikimedia in Food Guessr,
+  Riot on user action).
+- Every value the operator still has to supply is wrapped in `.legal-todo` and
+  rendered in red. Searching a page for that class lists the open items.
+- `server/routes/auth.js` exempts the three pages plus `legal.css` and
+  `yt-consent.js` from the password gate — an imprint has to be reachable
+  without a barrier.
+- Links added to the sidebar (`.shell-legal-links`) and the login page.
+
+## How to Verify
+- `npm test` → **478 passed / 34 files**, unchanged.
+- Start with `PORT=3111 SITE_PASSWORD=STRICT SESSION_SECRET=test node server.js`.
+- Anonymous `curl` → `/impressum.html`, `/datenschutz.html`, `/credits.html`,
+  `/legal.css` all `200`; `/shop.html` still `302` to the login.
+- Headless Chromium over `/`, `/games/watchparty/`, `/nostalgiabait/`,
+  `/nostalgiabait/ps1/`, `/games/stocks/`, `/games/strictbrain/`,
+  `/games/shopping/`, `/games/casino/`, `/shop.html` and the three legal pages:
+  **zero JS errors and zero requests to any host other than localhost**.
+- Consent gate, driven against a stubbed `iframe_api`:
+  - decline → no player built, status reads "ohne Einwilligung kein Player",
+    nothing written to localStorage when "remember" is unticked;
+  - accept → player built once with the right video ID, `consent-youtube`
+    set to `granted`;
+  - reload with consent present → loads silently, no second prompt.
+
+## Open Risks / Next Steps
+- **The legal pages are drafts.** Every `.legal-todo` field (name, address,
+  e-mail, VAT status, hoster) must be filled and the text reviewed by someone
+  qualified before the site goes public. An incomplete imprint is actionable
+  under German law.
+- **`public/assets/tierlist/` — 459 images imported from Wikipedia by
+  `scripts/import-tierlist-items.mjs` with no attribution recorded.** Most
+  Wikipedia media is CC BY-SA, which makes crediting the author and naming the
+  licence mandatory; some files are ND or non-commercial. The importer needs to
+  pull licence metadata from the Wikimedia Commons API and emit it into
+  `credits.html`. Until then the site must not run commercially.
+- **`shared/audio/soundboard/` has undocumented provenance.** Several files are
+  meme sounds lifted from protected works. Clear or replace them.
+- **Stock prices still come from unofficial Yahoo endpoints** via
+  `yahoo-finance2` plus Stooq. Yahoo forbids commercial use of the data, and
+  `server/stock-providers/yahoo-chart.js` already documents 429s from cloud
+  IPs. A licensed 15-minute-delayed feed is the replacement.
+- **Food Guessr still calls `en.wikipedia.org` and `wikimedia.org` from the
+  browser.** Proxying those two through the server removes the last
+  third-party IP transfer and lets the Wikimedia user-agent policy be met.
+- **LoL Betting**: Riot's developer terms rule out betting applications.
+  Feature has to be rebuilt without stakes or dropped.
+- **Ads and YouTube cannot share a page.** The lobby and the watch party carry
+  the embedded player, so ad inventory has to live on the other games. Adding
+  AdSense back also means a certified CMP for EEA traffic, which the current
+  click-to-load gate deliberately avoids needing.
+
+---
+
 # Handoff: Repo identity — stricthotelprod (2026-07-28)
 
 ## Why

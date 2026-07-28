@@ -5,19 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StrictHotel</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👽</text></svg>">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/shared/css/theme.css">
     <link rel="stylesheet" href="/shell.css">
     <link rel="stylesheet" href="/lobby.css">
+    <link rel="stylesheet" href="/shared/fonts/press-start-2p.css">
+    <script src="/shared/js/yt-consent.js"></script>
 </head>
 <body class="shell-body">
-
-<!-- Hidden YouTube player for ambience audio -->
-<div class="ambience-yt-container" aria-hidden="true">
-    <div id="ambience-yt-player"></div>
-</div>
 
 <div class="shell-root">
 
@@ -53,10 +47,6 @@
 
         <button class="shell-icon-btn btn-make-it-rain" id="btn-make-it-rain" disabled title="Make It Rain (20 Coins)" aria-label="Make It Rain (20 Coins)">💸</button>
 
-        <button class="shell-icon-btn ambience-mute" id="ambience-mute" type="button" title="Toggle Ambience" aria-label="Toggle Ambience">
-            <span class="ambience-mute-icon" aria-hidden="true">🎵</span>
-        </button>
-        <input class="shell-ambience-volume" id="ambience-volume" type="range" min="0" max="100" value="30" title="Ambience Volume" aria-label="Ambience Volume">
     </header>
 
     <!-- ============= SIDEBAR ============= -->
@@ -116,6 +106,12 @@
             <a class="shell-nav-item" data-shell-link="/achievements.html" data-game="achievements">
                 <span class="shell-nav-icon">🏅</span><span class="shell-nav-label">Achievements</span>
             </a>
+
+            <div class="shell-legal-links">
+                <a href="/impressum.html" target="_blank" rel="noopener">Impressum</a>
+                <a href="/datenschutz.html" target="_blank" rel="noopener">Datenschutz</a>
+                <a href="/credits.html" target="_blank" rel="noopener">Credits</a>
+            </div>
 
         </nav>
     </aside>
@@ -297,8 +293,6 @@
 
 <!-- Stock Ticker (top bar variant on shell) — disabled here, lives in stocks app only -->
 
-<!-- Ambience Background Audio -->
-<script src="/ambience.js"></script>
 
 <!-- Starfield Parallax -->
 <script src="/shared/js/starfield-parallax.js"></script>

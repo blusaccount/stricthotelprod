@@ -42,15 +42,9 @@
         return '';
     }
 
-    // --- Load YouTube IFrame API ---
+    // --- Load YouTube IFrame API (behind the GDPR consent gate) ---
     function loadYouTubeAPI() {
-        if (window.YT && window.YT.Player) return Promise.resolve();
-        return new Promise(function (resolve) {
-            var tag = document.createElement('script');
-            tag.src = 'https://www.youtube.com/iframe_api';
-            document.head.appendChild(tag);
-            window.onYouTubeIframeAPIReady = resolve;
-        });
+        return window.StrictConsent.youtube();
     }
 
     // --- Create YouTube Player ---

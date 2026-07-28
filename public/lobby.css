@@ -437,51 +437,7 @@ body .ticker-change.up   { color: var(--arcade-win); }
 body .ticker-change.down { color: var(--arcade-loss); }
 
 /* ============= Ambience control ============= */
-.ambience-control {
-    position: fixed;
-    bottom: 44px;
-    right: 12px;
-    z-index: 1000;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.ambience-volume input[type=range] {
-    width: 80px;
-    accent-color: var(--arcade-gold);
-    cursor: pointer;
-}
-.ambience-mute {
-    background: #120a1c;
-    border: 2px solid var(--arcade-frame);
-    color: var(--arcade-ink);
-    font-family: 'Press Start 2P', monospace;
-    font-size: 14px;
-    width: 40px;
-    height: 40px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
-}
-.ambience-mute:hover {
-    background: var(--arcade-cyan);
-    color: #001a14;
-    border-color: var(--arcade-cyan);
-    box-shadow: 0 0 14px rgba(62, 255, 225, 0.45);
-}
-.ambience-mute.muted { border-color: var(--arcade-loss); background: rgba(255, 56, 56, 0.18); }
 
-.ambience-yt-container {
-    position: fixed;
-    top: -9999px;
-    left: -9999px;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    pointer-events: none;
-}
 
 /* ============= Responsive ============= */
 
@@ -1081,6 +1037,14 @@ body .ticker-change.down { color: var(--arcade-loss); }
     object-fit: cover;
     border: 1px solid var(--arcade-border);
     flex-shrink: 0;
+}
+.lobby-wp-queue-thumb-blank {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--arcade-dim);
+    font-size: 12px;
 }
 .lobby-wp-queue-meta {
     flex: 1;

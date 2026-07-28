@@ -197,17 +197,7 @@ body.shell-body > .shell-root { width: 100%; }
     transform: translateY(1px);
     box-shadow: none;
 }
-.shell-icon-btn.ambience-mute {
-    border-color: var(--arcade-cyan);
-    color: var(--arcade-cyan);
-}
-.shell-icon-btn.ambience-mute.muted { opacity: 0.5; }
 
-.shell-ambience-volume {
-    width: 80px;
-    flex-shrink: 0;
-    accent-color: var(--arcade-cyan);
-}
 
 /* Streak pill in shell context */
 .shell-pill.streak-pill {
@@ -458,13 +448,6 @@ body.shell-body > .shell-root { width: 100%; }
 }
 
 /* ============= AMBIENCE CONTAINER ============= */
-.ambience-yt-container {
-    position: fixed;
-    width: 1px; height: 1px;
-    top: -10px; left: -10px;
-    overflow: hidden;
-    pointer-events: none;
-}
 
 /* ============= RESPONSIVE ============= */
 @media (min-width: 2200px) {
@@ -521,6 +504,27 @@ body.shell-body > .shell-root { width: 100%; }
 @media (max-width: 600px) {
     .shell-pill .streak-divider { display: none; }
     .shell-pill .streak-reward { display: none; }
-    .shell-ambience-volume { display: none; }
     .shell-brand { font-size: 10px; letter-spacing: 2px; }
+}
+
+/* Legal links pinned to the bottom of the sidebar. § 5 DDG wants the imprint
+   reachable from every page; the sidebar is on every page inside the shell. */
+.shell-legal-links {
+    padding: 16px 12px 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    border-top: 1px solid var(--arcade-border);
+}
+
+.shell-legal-links a {
+    color: var(--arcade-dim);
+    text-decoration: none;
+    font-size: 7px;
+    letter-spacing: 0.5px;
+}
+
+.shell-legal-links a:hover {
+    color: var(--arcade-cyan);
+    text-decoration: underline;
 }
