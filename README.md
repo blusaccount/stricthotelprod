@@ -10,6 +10,7 @@ StrictHotel is an experimental minigame collection: fast, visual web experiences
 - **Social Features**: Collaborative pixel doodle board, lobby watch-party mini-player with shared queue, contacts app, character creator, dormant soundboard (see `shared/audio/soundboard/README.md`)
 - **Persistent Data**: PostgreSQL database for player profiles, portfolios, and game history (in-memory fallback for local dev)
 - **Login Protection**: Session-based password gate plus trust-on-first-use name ownership (owner tokens)
+- **Accounts (optional)**: Discord sign-in binds a player name to a Discord account so it survives cleared browser storage. Guests keep working exactly as before
 
 ## Repo Structure
 - **Server**: `server.js` starts [server/index.js](server/index.js) (Express + Socket.IO)
@@ -64,6 +65,10 @@ See `.env.example` for all available options. Key variables:
 - `SITE_PASSWORD` - Login password (code default: ADMIN; `.env.example` ships STRICT)
 - `DATABASE_URL` - PostgreSQL connection string (optional, uses in-memory fallback if not set)
 - `PORT` - HTTP port (default: 3000)
+
+**Accounts (optional):**
+- `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` - Enables Discord sign-in. Unset = guests only
+- `DISCORD_REDIRECT_URI` - Override when the callback URL can't be derived from the request
 
 **Features:**
 - `GAME_ENABLED` (default: `true`) - Toggles stock market APIs and socket events

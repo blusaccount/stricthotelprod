@@ -141,6 +141,18 @@ S->C:
 - `picto-clear` - Clear broadcast
 - `picto-message` - Message broadcast
 
+## Account (Discord sign-in)
+**Route:** [server/routes/discord-auth.js](../server/routes/discord-auth.js)
+
+S->C:
+- `account-identity` - Sent after `register-player` when a Discord account is signed in. `{ name, discordUsername, adopted, bound }`. `adopted` means the name came from the account rather than from what the browser asked for; `bound` means the account was just tied to this name.
+
+HTTP:
+- `GET /api/account` - `{ configured, discord }` (no auth required)
+- `GET /auth/discord` - start the OAuth flow
+- `GET /auth/discord/callback` - return from Discord
+- `POST /auth/discord/logout` - drop the binding, stay signed in to the site
+
 ## Soundboard (Lobby Audio)
 **Handler:** [server/handlers/soundboard.js](../server/handlers/soundboard.js)
 

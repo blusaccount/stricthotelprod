@@ -28,6 +28,7 @@ import turkishRouter from './routes/turkish.js';
 import nostalgiaRouter from './routes/nostalgiabait.js';
 import { createStocksRouter } from './routes/stocks.js';
 import { createFoodGuessrRouter } from './routes/food-guessr.js';
+import { createDiscordAuthRouter, isDiscordConfigured } from './routes/discord-auth.js';
 import { startRetentionJob, stopRetentionJob } from './retention.js';
 import { getAllHeldSymbols } from './stock-game.js';
 import { startPeriodicCleanup } from './cleanup.js';
@@ -61,7 +62,7 @@ if (!process.env.SESSION_SECRET) {
 // Session middleware
 // Dev fallback is a stable string (not Math.random()) so sessions survive restarts in local dev.
 // Production is guarded above; this fallback is never used when NODE_ENV=production.
-app.use(session({
+const sessionMiddleware = session({
     secret: process.env.SESSION_SECRET || 'strict-hotel-dev-insecure-fallback',
     resave: false,
     saveUninitialized: false,
@@ -69,15 +70,27 @@ app.use(session({
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict'
+        // 'lax' rather than 'strict': the Discord OAuth callback is a
+        // cross-site navigation back into this origin, and a strict cookie is
+        // not sent on it, so the session that started the flow would be lost.
+        sameSite: 'lax'
     }
-}));
+});
+app.use(sessionMiddleware);
+
+// Socket.IO gets the same session. Until now the socket had no session at all,
+// so every game event bypassed the site password gate entirely — and there was
+// no way for a socket to know which Discord account was signed in.
+io.engine.use(sessionMiddleware);
 
 // Body parser for login
 app.use(express.json());
 
 // Auth routes (login must be before auth middleware)
 app.use(createAuthRouter());
+// Discord sign-in is itself a way through the gate, so its routes have to sit
+// in front of the gate — otherwise signing in would require being signed in.
+app.use(createDiscordAuthRouter());
 app.use(authMiddleware);
 
 // Shell deep-link middleware. The lobby is now an SPA-style shell and any
@@ -236,6 +249,10 @@ server.listen(PORT, async () => {
         // Kick off one immediate fetch so the cache is hot before the first user opens Stocks
         stocksRouter.fetchTickerQuotes().catch(() => {});
     }
+
+    console.log(isDiscordConfigured()
+        ? '✓ Discord sign-in configured'
+        : 'Discord sign-in not configured (DISCORD_CLIENT_ID / DISCORD_CLIENT_SECRET unset) — guests only');
 
     // Delete dormant accounts, if the operator configured a period.
     startRetentionJob();

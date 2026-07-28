@@ -5,42 +5,67 @@ import { saveCharacter, getCharacter } from '../character-store.js';
 import { bump } from '../achievements.js';
 import { notifyUnlocks } from './achievements.js';
 import { pushActivity } from '../activity-feed.js';
-import { claimName, isValidOwnerToken } from '../identity.js';
+import { claimName, claimNameForDiscord, isValidOwnerToken } from '../identity.js';
+import { sessionDiscord } from '../routes/discord-auth.js';
 
 export function registerCurrencyHandlers(socket, io, { checkRateLimit, onlinePlayers }) {
     socket.on('register-player', async (data) => { try {
         if (!checkRateLimit(socket)) return;
         if (!data || typeof data !== 'object') return;
 
-        const name = sanitizeName(data.name);
-        if (!name) return;
+        const requested = sanitizeName(data.name);
         const character = validateCharacter(data.character);
         const game = validateGameType(data.game);
 
-        // Owner-token format check before any DB writes (claimName inserts a
-        // player row, which would otherwise flip isNewPlayer below).
-        if (!isValidOwnerToken(data.ownerToken)) {
+        // A signed-in Discord account outranks the browser's owner token: the
+        // token lives in localStorage and dies with a cleared cache, the
+        // account does not.
+        const discord = sessionDiscord(socket.request.session);
+
+        // Guests still need a well-formed owner token. Signed-in players do
+        // not — their identity comes from the session — but the token is
+        // still honoured when present, so signing out drops them back to the
+        // same guest identity they had before.
+        if (!discord && !isValidOwnerToken(data.ownerToken)) {
             socket.emit('register-player-error', {
                 code: 'INVALID_TOKEN',
                 message: 'Owner token missing or malformed — clear your site data and reload.'
             });
             return;
         }
+        if (!discord && !requested) return;
 
-        // Detect first-ever registration BEFORE claimName creates the row.
-        const firstTime = await isNewPlayer(name);
+        // Detect first-ever registration BEFORE the claim creates the row.
+        const firstTime = requested ? await isNewPlayer(requested) : false;
 
-        // Trust-On-First-Use ownership: claim the name with the browser's
-        // long-lived ownerToken. A name owned by a different token is rejected.
-        const claim = await claimName(name, data.ownerToken);
+        const claim = discord
+            ? await claimNameForDiscord(requested, discord.id, discord.username, data.ownerToken)
+            : await claimName(requested, data.ownerToken);
+
         if (!claim.ok) {
             socket.emit('register-player-error', {
                 code: claim.reason === 'taken' ? 'NAME_TAKEN' : 'CLAIM_FAILED',
                 message: claim.reason === 'taken'
-                    ? `Der Name "${name}" gehört bereits jemandem. Wähle einen anderen.`
+                    ? `Der Name "${requested}" gehört bereits jemandem. Wähle einen anderen.`
                     : 'Name konnte nicht beansprucht werden.'
             });
             return;
+        }
+
+        // For a signed-in player the account decides the name, which may differ
+        // from what this browser asked for (fresh device, cleared storage).
+        const name = claim.name || requested;
+        if (!name) return;
+
+        // Tell the client which name it actually got, so localStorage and the
+        // name field stop disagreeing with the server.
+        if (discord) {
+            socket.emit('account-identity', {
+                name,
+                discordUsername: discord.username,
+                adopted: Boolean(claim.adopted),
+                bound: Boolean(claim.bound),
+            });
         }
 
         // Leave any prior user-room (in case the socket re-registers under a

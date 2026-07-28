@@ -80,6 +80,14 @@ alter table players add column if not exists character_data jsonb;
 -- TOFU owner token for player names (claimed on first register-player)
 alter table players add column if not exists owner_token text;
 
+-- Discord account bound to this player name, once the player signs in. Null
+-- for guests, who keep the owner-token identity they always had.
+alter table players add column if not exists discord_id text;
+alter table players add column if not exists discord_username text;
+
+create unique index if not exists players_discord_id_idx
+  on players (discord_id) where discord_id is not null;
+
 -- Last time this player registered from a browser. Distinct from updated_at,
 -- which only moves when the balance changes: someone can play Watch Party or
 -- Food Guessr for months without a single coin transaction. Drives the

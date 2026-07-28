@@ -528,3 +528,72 @@ body.shell-body > .shell-root { width: 100%; }
     color: var(--arcade-cyan);
     text-decoration: underline;
 }
+
+/* ============= ACCOUNT (optional Discord sign-in) ============= */
+.shell-pill.account-pill {
+    gap: 8px;
+    font-size: 9px;
+}
+
+.account-badge { font-size: 12px; }
+
+.account-name {
+    color: var(--arcade-cyan);
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.account-btn {
+    background: transparent;
+    border: 2px solid var(--arcade-border);
+    color: var(--arcade-dim);
+    font-family: inherit;
+    font-size: 8px;
+    letter-spacing: 1px;
+    padding: 5px 8px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.account-btn:hover {
+    border-color: var(--arcade-cyan);
+    color: var(--arcade-cyan);
+}
+
+.account-btn.account-btn-primary {
+    border-color: #5865f2;      /* Discord blurple */
+    color: #b9c0ff;
+}
+
+.account-btn.account-btn-primary:hover {
+    background: #5865f2;
+    color: #fff;
+}
+
+/* Feedback after the redirect back from Discord. */
+.account-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translate(-50%, 20px);
+    max-width: min(520px, 92vw);
+    padding: 12px 18px;
+    background: var(--arcade-panel);
+    border: 2px solid var(--arcade-border);
+    color: var(--arcade-ink);
+    font-size: 9px;
+    line-height: 1.8;
+    letter-spacing: 0.5px;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 250ms ease-out, transform 250ms ease-out;
+    z-index: 9999;
+}
+
+.account-toast.visible { opacity: 1; transform: translate(-50%, 0); }
+.account-toast-ok { border-color: var(--arcade-win); }
+.account-toast-error { border-color: var(--arcade-loss); }

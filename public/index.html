@@ -47,6 +47,10 @@
 
         <button class="shell-icon-btn btn-make-it-rain" id="btn-make-it-rain" disabled title="Make It Rain (20 Coins)" aria-label="Make It Rain (20 Coins)">💸</button>
 
+        <!-- Optional Discord sign-in. Hidden entirely when the server has no
+             Discord credentials configured. -->
+        <div class="shell-pill account-pill" id="account-pill" hidden></div>
+
     </header>
 
     <!-- ============= SIDEBAR ============= -->
@@ -285,6 +289,7 @@
 <script src="/pictochat.js"></script>
 
 <!-- Soundboard -->
+<script src="/account.js"></script>
 <script src="/soundboard.js"></script>
 
 <!-- Stock Ticker (top bar variant on shell) — disabled here, lives in stocks app only -->

@@ -4,6 +4,110 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Discord sign-in — accounts, Phase 1 part one (2026-07-28)
+
+## Why
+Identity was a name plus an owner token in localStorage. Clearing site data
+destroyed it, a second device was a second person, and nothing could ever be
+sold to it. Discord because the site is already used from inside a Discord call,
+so it is the account these players actually have — and it means no password
+handling here at all.
+
+**Signing in stays optional.** Guests keep the trust-on-first-use flow
+unchanged; every game works without an account.
+
+## What Changed
+
+**The socket had no session at all.** `io` was constructed without the express
+session, so every game event bypassed the site password gate, and a socket had
+no way to know who was signed in. `io.engine.use(sessionMiddleware)` fixes both.
+The session cookie also moves from `sameSite: 'strict'` to `'lax'` — the OAuth
+callback is a cross-site navigation back into this origin, and a strict cookie
+is not sent on it, so the session that started the flow would be lost.
+
+**`server/routes/discord-auth.js`** — `/auth/discord`, `/auth/discord/callback`,
+`POST /auth/discord/logout`, `GET /api/account`.
+- Scope is `identify` only: id, display name, avatar. **Not `email`** — nothing
+  here sends mail, and asking for data we have no use for is exactly what the
+  privacy notice promises not to do.
+- The access token is used once and never stored.
+- CSRF state in the session, compared in constant time, with a 10-minute TTL.
+- Mounted **before** `authMiddleware`, because signing in is a way through the
+  gate; a successful sign-in also sets `session.authenticated`, so a player
+  never needs the shared password.
+- Inert without `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET`: routes answer
+  503, `/api/account` reports `configured: false`, and the UI hides itself.
+- `DISCORD_API_BASE` exists so the flow can be driven against a stand-in server
+  in tests. It must never point anywhere but discord.com in production.
+
+**`server/identity.js`** gained `claimNameForDiscord`, `nameForDiscordId`,
+`unbindDiscordId`. Three cases:
+1. The account already owns a name -> **that name wins**, whatever the browser
+   asked for. Otherwise clearing localStorage would let one person start a
+   second life under a new name.
+2. The name is free, or this browser owns it through the owner token -> bind.
+   **This is the migration path**: an existing guest signs in and keeps their
+   balance, portfolio and achievements.
+3. Somebody else owns it -> refused, same as the guest path.
+
+The owner token is kept bound alongside the account, so signing out drops the
+player back to the same guest identity rather than a new one.
+
+**`server/handlers/currency.js`** prefers the session's Discord identity over
+the owner token, and emits `account-identity` so the client learns which name
+it actually got.
+
+**`public/account.js`** owns the top-bar control and the correction of
+localStorage when the account's name differs from the browser's.
+
+**Schema**: `players.discord_id` + `discord_username`, with a partial unique
+index on `discord_id` so one account cannot hold two names.
+
+## The bug worth remembering
+
+The first end-to-end run passed three of four cases and failed the important
+one: on a fresh device the account was bound to a *new* name instead of
+returning the one it already owned. The cause was not in the binding logic — it
+was that **the lobby only registers on a name change, on character creation, or
+on socket reconnect**. After the redirect back from Discord none of those
+happen, so no `register-player` was emitted and the binding never took place.
+Sign-in silently did nothing until the player retyped their name.
+`registerAsAccount()` in `public/account.js` now triggers a registration as soon
+as `/api/account` reports a signed-in user.
+
+## How to Verify
+- `npm test` -> **499 passed / 35 files** (+19 in
+  `server/__tests__/discord-identity.test.js`).
+- End to end against a stand-in Discord server
+  (`scratchpad/fake-discord.mjs`), in a real browser:
+  1. Guest: unchanged, sign-in button offered.
+  2. Sign-in binds the existing guest name — "Lukas" kept, toast confirms.
+  3. Fresh device asking for a different name: server returns "Lukas", input
+     and localStorage corrected, "welcome back" toast.
+  4. A second Discord account claiming "Lukas" -> `NAME_TAKEN`.
+  5. `/auth/discord` without the site password lands on the lobby signed in.
+  6. Sign-out returns to guest, name preserved, `/api/account` reports null.
+- Every callback failure path redirects with a reason: `no_state`, `bad_state`,
+  `no_code`, `access_denied`.
+- Unconfigured server: `/api/account` -> `configured: false`, `/auth/discord`
+  -> 503, account pill hidden, guest registration works, no JS errors.
+
+## Open Risks / Next Steps
+- **Never exercised against real Discord.** The flow is verified against a
+  stand-in that speaks the same three endpoints. Registering the application,
+  setting the redirect URI byte-for-byte and running it once for real is still
+  outstanding — and needs a domain, which does not exist yet.
+- **No GDPR export or deletion endpoint yet.** Accounts now hold a Discord id,
+  which makes Art. 15 and Art. 17 requests concrete. That is the next piece of
+  Phase 1.
+- Sign-out reloads the page. Honest, but crude — the socket is registered under
+  the account identity and every panel would otherwise keep showing it.
+- One test run failed once, transiently, under load and could not be
+  reproduced in six consecutive runs afterwards. Worth watching rather than
+  chasing.
+
+---
+
 # Handoff: Soundboard emptied, retention set to 24 months (2026-07-28)
 
 ## Why

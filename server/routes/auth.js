@@ -80,6 +80,9 @@ export function authMiddleware(req, res, next) {
     // Allow access to login page, health check, and static assets needed for login
     if (req.path === '/login.html' ||
         req.path === '/health' ||
+        // Signing in with Discord is a way *through* this gate.
+        req.path.startsWith('/auth/discord') ||
+        req.path === '/api/account' ||
         req.path === '/admin/logs' ||
         req.path === '/admin/release-name' ||
         PUBLIC_PAGES.has(req.path) ||

@@ -157,3 +157,131 @@ export async function verifyOwner(playerName, ownerToken) {
     const res = await claimName(playerName, ownerToken);
     return res.ok;
 }
+
+// ============== DISCORD-BOUND IDENTITY ==============
+//
+// A signed-in Discord account is a stronger claim to a name than the owner
+// token, because the token lives in localStorage and dies with a cleared
+// cache. Once a name is bound to a Discord ID, that binding wins.
+//
+// The binding is deliberately one name per account: this is a game with one
+// balance and one portfolio per player, not a multi-character system.
+
+const memoryDiscord = new Map(); // discordId -> playerName
+
+/** The player name bound to a Discord account, or null. */
+export async function nameForDiscordId(discordId) {
+    if (!discordId) return null;
+    if (!isDatabaseEnabled()) return memoryDiscord.get(discordId) || null;
+    try {
+        const r = await query('select name from players where discord_id = $1', [discordId]);
+        return r.rows[0]?.name || null;
+    } catch (err) {
+        console.error('nameForDiscordId error:', err.message);
+        return null;
+    }
+}
+
+/**
+ * Claim a name on behalf of a signed-in Discord account.
+ *
+ * The three cases that matter:
+ *   1. The account already owns a name -> that name wins, whatever the browser
+ *      asked for. Otherwise clearing localStorage on one device would let the
+ *      same person start a second life under a different name.
+ *   2. The name is free, or this browser already owns it through the owner
+ *      token -> bind it to the account. This is how an existing guest keeps
+ *      their balance, portfolio and achievements when they first sign in.
+ *   3. Somebody else owns it -> refused, same as the guest path.
+ *
+ * @returns {Promise<{ok: true, name: string, bound: boolean, adopted: boolean}
+ *                  | {ok: false, reason: 'taken'|'invalid_name'}>}
+ *   bound   — the account was just tied to this name
+ *   adopted — the name came from the account, not from what the browser asked
+ */
+export async function claimNameForDiscord(requestedName, discordId, discordUsername, ownerToken) {
+    if (!discordId) return { ok: false, reason: 'invalid_name' };
+
+    const existing = await nameForDiscordId(discordId);
+    if (existing) {
+        // Case 1. Refresh the display name in passing — people rename on
+        // Discord and the contacts list should not show a stale handle.
+        await setDiscordUsername(existing, discordUsername);
+        return { ok: true, name: existing, bound: false, adopted: existing !== requestedName };
+    }
+
+    if (!requestedName) return { ok: false, reason: 'invalid_name' };
+
+    // Case 2 or 3: does this browser already hold the name?
+    const owner = await getOwnerFromDb(requestedName);
+    if (owner && !(isValidOwnerToken(ownerToken) && owner === ownerToken)) {
+        return { ok: false, reason: 'taken' };
+    }
+
+    const bound = await bindDiscordId(requestedName, discordId, discordUsername);
+    if (!bound) return { ok: false, reason: 'taken' };
+
+    // Keep the owner token bound too, so the same browser still works if the
+    // player later signs out and continues as a guest.
+    if (isValidOwnerToken(ownerToken)) await setOwnerInDb(requestedName, ownerToken);
+
+    return { ok: true, name: requestedName, bound: true, adopted: false };
+}
+
+async function bindDiscordId(playerName, discordId, discordUsername) {
+    if (!isDatabaseEnabled()) {
+        for (const [id, name] of memoryDiscord) {
+            if (name === playerName && id !== discordId) return false;
+        }
+        memoryDiscord.set(discordId, playerName);
+        return true;
+    }
+    try {
+        await query(
+            `insert into players (name, balance, last_seen_at) values ($1, 1000, now())
+             on conflict (name) do nothing`,
+            [playerName]
+        );
+        // Conditional on the row still being unbound, so two sockets racing
+        // the same name cannot both think they won.
+        const r = await query(
+            `update players set discord_id = $2, discord_username = $3
+             where name = $1 and discord_id is null
+             returning discord_id`,
+            [playerName, discordId, discordUsername || null]
+        );
+        return r.rowCount > 0;
+    } catch (err) {
+        // Unique violation: this Discord account is already bound elsewhere.
+        console.error('bindDiscordId error:', err.message);
+        return false;
+    }
+}
+
+async function setDiscordUsername(playerName, discordUsername) {
+    if (!discordUsername || !isDatabaseEnabled()) return;
+    try {
+        await query(
+            'update players set discord_username = $2 where name = $1 and discord_username is distinct from $2',
+            [playerName, discordUsername]
+        );
+    } catch (err) {
+        console.error('setDiscordUsername error:', err.message);
+    }
+}
+
+/** Drop the Discord binding from a name, leaving the player as a guest. */
+export async function unbindDiscordId(discordId) {
+    if (!discordId) return false;
+    if (!isDatabaseEnabled()) return memoryDiscord.delete(discordId);
+    try {
+        const r = await query(
+            'update players set discord_id = null, discord_username = null where discord_id = $1',
+            [discordId]
+        );
+        return r.rowCount > 0;
+    } catch (err) {
+        console.error('unbindDiscordId error:', err.message);
+        return false;
+    }
+}

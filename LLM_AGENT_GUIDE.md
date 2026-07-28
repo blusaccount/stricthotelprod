@@ -11,19 +11,19 @@ This guide helps LLM agents work effectively in this repo. Keep it short, stay i
   - Core: `lobby.js`, `currency.js`, `pictochat.js`, `soundboard.js`, `lobby-watchparty.js`, `activity-feed.js`, `daily-streak.js`, `achievements.js`
   - Games: `maexchen.js`, `watchparty.js`, `stocks.js`, `loop-machine.js`, `brain-versus.js`, `tierlist.js`, `food-guessr.js`
   - Casino: `strictly7s.js`, `plinko.js`, `crash.js`, `blackjack.js`, `roulette.js`
-- Express routes: [server/routes/](server/routes/) (`auth.js`, `stocks.js`, `turkish.js`, `nostalgiabait.js`, `food-guessr.js`)
+- Express routes: [server/routes/](server/routes/) (`auth.js`, `discord-auth.js`, `stocks.js`, `turkish.js`, `nostalgiabait.js`, `food-guessr.js`)
 - Server modules (top level): `db.js`, `currency.js`, `identity.js`, `stock-game.js`, `stock-price-cache.js`, `stock-providers/`, `character-store.js`, `room-manager.js`, `game-logic.js`, `socket-utils.js`, `portfolio-history.js`, `pictochat-store.js`, `tierlist-store.js`, `food-leaderboards-store.js`, `food-ratings-store.js`, `turkish-lessons.js`, `turkish-streaks.js`, `brain-leaderboards.js`, `achievements.js`, `activity-feed.js`, `daily-streak.js`, `keep-alive.js`, `log-buffer.js`, `cleanup.js`, `retention.js`, `rate-limit.js`, `sql/`
 - Admin/observability: `/admin/logs` endpoint backed by in-memory ring buffer (`log-buffer.js`), `LOGS_TOKEN`-gated; keep-alive cron in `keep-alive.js` to keep Render free tier awake
 
 **Client:**
 - Public pages: [public/](public/) (`index.html`, `login.html`, `contacts.html`, `shop.html`, `achievements.html`, `nostalgiabait/`)
-- Public modules: `shell.js`, `lobby.js`, `lobby-watchparty.js`, `contacts.js`, `pictochat.js`, `soundboard.js` (dormant — empty sound list, panel hides itself), `shop.js` + `shell.css`, `lobby.css`
+- Public modules: `shell.js`, `account.js`, `lobby.js`, `lobby-watchparty.js`, `contacts.js`, `pictochat.js`, `soundboard.js` (dormant — empty sound list, panel hides itself), `shop.js` + `shell.css`, `lobby.css`
 - Game frontends: [games/](games/) (15 directories: `maexchen`, `watchparty`, `stocks`, `strictly7s`, `loop-machine`, `strictbrain`, `turkish`, `shopping`, `casino` (hub), `blackjack`, `plinko`, `crash`, `roulette`, `tierlist`, `food-guessr`)
 - Shared modules: [shared/js/](shared/js/) — `core.js`, `lobby.js`, `socket-init.js`, `chat.js`, `creator.js`, `avatars.js`, `emotes.js`, `reactions.js`, `iframe-helper.js`, `ambient.js`, `achievement-toast.js`, `starfield-parallax.js`, `stock-ticker.js`, `tts.js`
 - Shared styles: [shared/css/theme.css](shared/css/theme.css)
 
 **Tests:**
-- [server/__tests__/](server/__tests__/) - Vitest tests for all server modules (34 test files)
+- [server/__tests__/](server/__tests__/) - Vitest tests for all server modules (35 test files)
 
 ## Core flows (mental model)
 
@@ -79,7 +79,7 @@ This guide helps LLM agents work effectively in this repo. Keep it short, stay i
 - Check [docs/EVENTS.md](docs/EVENTS.md) for socket event contracts
 - Prefer existing helpers and patterns before adding new ones
 - Keep changes minimal, additive, and reversible
-- Run `npm test` before committing changes (all tests across 34 files should pass)
+- Run `npm test` before committing changes (all tests across 35 files should pass)
 - Validate behavior manually if you touch sockets, auth, or game logic
 - Update HANDOFF.md with your changes and verification notes
 
