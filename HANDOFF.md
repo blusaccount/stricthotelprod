@@ -4,6 +4,102 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Tierlist image attribution and licence pruning (2026-07-28)
+
+## Why
+459 images under `public/assets/tierlist/` were downloaded from Wikipedia
+articles by `scripts/import-tierlist-items.mjs` and re-hosted here with no
+attribution recorded anywhere. Most Wikimedia media is Creative Commons, where
+naming author and licence is mandatory, and a minority is non-free entirely.
+This was the largest outstanding legal item before a public launch.
+
+## What Changed
+
+**New script** — `scripts/build-tierlist-credits.mjs`
+- Resolves every catalogue entry back to its source file via the Wikipedia
+  `pageimages` API, then pulls `extmetadata` (licence, author, licence URL,
+  description page) for each file. Batched 50 at a time, ~20 requests total.
+- Classifies each licence. Commercial re-use permitted: CC0, CC BY, CC BY-SA,
+  public domain, GFDL, OFL, bare Attribution. Blocked: anything NC, ND, fair
+  use or non-free. **Anything it cannot classify counts as blocked** — silence
+  is not permission.
+- Writes `public/assets/tierlist/attribution.json` and prints a report grouped
+  by licence and by rejection reason.
+- `--prune` removes blocked items from `games/tierlist/js/items.js` and deletes
+  their image files.
+
+Three bugs surfaced while getting the join right, all worth knowing about:
+- **Unicode form.** File names round-trip through two APIs that disagree on NFC
+  vs NFD and on spaces vs underscores. `ML-Wächter_(cropped).JPG` silently fell
+  out of the join until keys were canonicalised (`fileKey`).
+- **Redirect collisions.** The catalogue holds both "Lawn gnome" and "Garden
+  gnome", and the first redirects to the second, so the API returns 49 pages
+  for 50 titles. Inverting the API's `normalized`/`redirects` lists loses all
+  but one requested title per page. Fixed by resolving **forward** instead
+  (`forwardResolver`) — requested title to final page, never the reverse.
+- OFL was initially rejected as unrecognised. It is a free licence and permits
+  commercial use.
+
+**Result: 459 -> 446 items.** The 13 removed:
+- Eleven fair-use files, almost all memes: Rickrolling, Doge, Keyboard Cat,
+  Nyan Cat, Pepe the Frog, Trollface, Distracted boyfriend, Harambe, Marmite,
+  Slip 'N Slide, and the Eiffel Tower (its night-time illumination is
+  separately copyrighted).
+- Electric guitar — the article no longer has a lead image, so the local file's
+  provenance cannot be re-established.
+- Yawn — tagged "No restrictions" (a Flickr Commons statement, not a licence
+  grant). Kept out on the conservative reading; a manual review could restore
+  it.
+
+**Credits page** — `public/credits.html` now fetches `attribution.json` and
+renders a sortable-height, scrollable table of all 446 entries with author and
+licence, each linking to the Wikimedia file page. Protocol-relative Wikimedia
+user links are made absolute, and everything is escaped. `.legal-scroll` in
+`public/legal.css` keeps the table inside its own scroll box so the page body
+never scrolls sideways.
+
+**Auth** — `/assets/tierlist/attribution.json` added to `PUBLIC_PAGES` in
+`server/routes/auth.js`; the credits page is reachable without a login, so its
+data has to be too.
+
+**Thirteen images flagged but kept**, freely licensed yet carrying extra
+restrictions the API reports: personality rights (Beer, Swimming, Astronaut),
+trademarks (WD-40, Compact disc, Walkman, Lego, Goosebumps), design rights
+(Rubik's Cube), national insignia (Hawaii, Maldives, Iceland) and the Italian
+heritage code (Colosseum). The script lists them under "review manually" on
+every run. None are removed automatically because the licence itself is valid.
+
+## How to Verify
+- `node scripts/build-tierlist-credits.mjs` -> 446 usable, 13 unusable, with
+  the full per-item breakdown.
+- `npm test` -> 453 passed / 32 files, unchanged.
+- Catalogue integrity: 446 entries, 446 image files, 446 attribution records,
+  no missing files and no orphaned ones.
+- `getWeeklyItems('2026-W30')` returns 30 items and every image resolves.
+- Anonymous `curl` -> `/credits.html` and
+  `/assets/tierlist/attribution.json` both 200.
+- Headless Chromium on `/credits.html`: 446 rows render, first row
+  "3D printing / RepRapPro / CC BY 3.0", links absolute to commons.wikimedia.org,
+  no horizontal page scroll, no JS errors.
+
+## Open Risks / Next Steps
+- **Historic tierlist placements now point at different items.** The weekly
+  selection seeds a shuffle over the catalogue length, so 459 -> 446 changes
+  which items each week draws. Rows in `tierlist_placements` store the
+  within-week position, which now means something else. On a pre-launch site
+  with five users this is cosmetic; if the history matters, clear it:
+  `delete from tierlist_placements;`
+  The alternative — keeping the 13 as tombstones to hold the length stable —
+  was not taken, because it means shipping dead catalogue entries forever.
+- The tierlist game grid does not render in a headless sandbox, the same
+  pre-existing condition already noted for the stocks board. Verified through
+  the data layer instead.
+- `scripts/import-tierlist-items.mjs` still does not record licences when it
+  adds new items. Run `build-tierlist-credits.mjs --prune` after every import
+  until the two are merged.
+
+---
+
 # Handoff: Crypto prices move to CoinGecko (2026-07-28)
 
 ## Why

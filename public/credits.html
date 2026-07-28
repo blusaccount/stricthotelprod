@@ -44,17 +44,22 @@
     </table>
 
     <h2>Bilder in &bdquo;Thing of the Week&ldquo;</h2>
-    <div class="legal-note">
-        <p><strong>OFFEN &mdash; MUSS VOR DER VEROEFFENTLICHUNG ERLEDIGT WERDEN.</strong></p>
-        <p>Die 459 Bilder unter <code>/assets/tierlist/</code> stammen aus Artikeln der
-        englischsprachigen Wikipedia und wurden mit
-        <code>scripts/import-tierlist-items.mjs</code> heruntergeladen. Die meisten
-        dieser Dateien stehen unter Creative-Commons-Lizenzen, die
-        <strong>Urhebernennung und Lizenzangabe verpflichtend</strong> vorschreiben;
-        einzelne erlauben keine Bearbeitung oder keine kommerzielle Nutzung.</p>
-        <p>Diese Angaben liegen derzeit <strong>nicht</strong> vor. Bis der Importer
-        die Lizenzmetadaten der Wikimedia-Commons-API mitzieht und hier auflistet,
-        darf die Seite nicht kommerziell betrieben werden.</p>
+    <p>
+        Die Bilder unter <code>/assets/tierlist/</code> stammen aus Artikeln der
+        englischsprachigen Wikipedia und werden von diesem Server ausgeliefert.
+        Die Liste unten nennt zu jedem Bild Urheber und Lizenz, wie sie die
+        Wikimedia-API meldet, und verlinkt die Dateibeschreibungsseite.
+    </p>
+    <p>
+        Aufgenommen ist ausschliesslich Material, dessen Lizenz die kommerzielle
+        Weiterverwendung erlaubt. Dateien unter Fair Use, mit
+        Nicht-kommerziell- oder Keine-Bearbeitung-Klausel sowie alles, dessen
+        Lizenz sich nicht eindeutig bestimmen liess, wurde entfernt. Erzeugt mit
+        <code>scripts/build-tierlist-credits.mjs</code>.
+    </p>
+
+    <div id="tierlist-credits">
+        <p class="legal-loading">Lade Bildnachweise&hellip;</p>
     </div>
 
     <h2>Bilder in &bdquo;Food Guessr&ldquo;</h2>
@@ -111,5 +116,64 @@
     </div>
 
 </div>
+
+<script>
+(function () {
+    'use strict';
+
+    var box = document.getElementById('tierlist-credits');
+    if (!box) return;
+
+    function esc(v) {
+        return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+
+    // Protocol-relative Wikimedia user links would otherwise resolve against
+    // this origin.
+    function absolute(url) {
+        if (!url) return null;
+        return url.indexOf('//') === 0 ? 'https:' + url : url;
+    }
+
+    function link(url, text) {
+        var href = absolute(url);
+        if (!href) return esc(text);
+        return '<a href="' + esc(href) + '" target="_blank" rel="noopener">' + esc(text) + '</a>';
+    }
+
+    fetch('/assets/tierlist/attribution.json')
+        .then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
+        .then(function (data) {
+            var items = (data && data.items) || [];
+            if (!items.length) throw new Error('leer');
+
+            var rows = items.map(function (it) {
+                var name = it.source ? link(it.source, it.name) : esc(it.name);
+                var artist = it.artist
+                    ? (it.artistUrl ? link(it.artistUrl, it.artist) : esc(it.artist))
+                    : '<span class="legal-unknown">Urheber nicht angegeben</span>';
+                var licence = it.licenceUrl ? link(it.licenceUrl, it.licence) : esc(it.licence);
+                return '<tr><td>' + name + '</td><td>' + artist + '</td><td>' + licence + '</td></tr>';
+            }).join('');
+
+            box.innerHTML =
+                '<p><strong>' + items.length + ' Bilder</strong>, Quelle: ' +
+                esc(data.source || 'Wikimedia') + '</p>' +
+                '<div class="legal-scroll"><table>' +
+                '<tr><th>Motiv</th><th>Urheber</th><th>Lizenz</th></tr>' +
+                rows + '</table></div>';
+        })
+        .catch(function (err) {
+            box.innerHTML = '<p class="legal-todo">Bildnachweise konnten nicht geladen ' +
+                'werden (' + esc(err.message) + '). Ohne sie darf die Seite nicht ' +
+                'kommerziell betrieben werden.</p>';
+        });
+})();
+</script>
 </body>
 </html>

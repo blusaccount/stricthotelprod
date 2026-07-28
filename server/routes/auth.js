@@ -69,7 +69,10 @@ const PUBLIC_PAGES = new Set([
     '/impressum.html',
     '/datenschutz.html',
     '/credits.html',
-    '/legal.css'
+    '/legal.css',
+    // The credits page renders its image attributions from this file, so it
+    // has to be readable wherever the credits page is.
+    '/assets/tierlist/attribution.json'
 ]);
 
 // Auth middleware - protect all routes except login

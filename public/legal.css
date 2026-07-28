@@ -128,3 +128,23 @@ body.legal-body {
 .legal-wrap .consent-btn:hover {
     background: rgba(62, 255, 225, 0.14);
 }
+
+/* Long attribution tables scroll inside their own box so the page body never
+   scrolls sideways. */
+.legal-scroll {
+    max-height: 60vh;
+    overflow: auto;
+    border: 1px solid var(--arcade-border);
+}
+
+.legal-scroll table { margin: 0; }
+
+.legal-scroll th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.legal-unknown { color: var(--arcade-dim); }
+
+.legal-loading { color: var(--arcade-dim); }
