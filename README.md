@@ -19,7 +19,7 @@ StrictHotel is an experimental minigame collection: fast, visual web experiences
 - **Public UI**: [public](public) - Landing page/lobby, login, contacts, shop, achievements, nostalgiabait
 - **Games**: [games](games) - 16 game frontends (casino hub + blackjack, crash, food-guessr, lol-betting, loop-machine, maexchen, plinko, roulette, stocks, strictbrain, strictly7s, tierlist, turkish, watchparty, shopping)
 - **Shared**: [shared](shared) - Reusable client modules (chat, lobby, avatars, creator, CSS, audio)
-- **Tests**: [server/__tests__](server/__tests__) - 359 Vitest tests across 22 files
+- **Tests**: [server/__tests__](server/__tests__) - 478 Vitest tests across 34 files
 
 ## LLM Agent Notes
 When LLM agents work in this repo, use these files:

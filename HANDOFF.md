@@ -4,6 +4,63 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Repo identity — stricthotelprod (2026-07-28)
+
+## Why
+This repo is a clone of `blusaccount/stricthotelweb`, taken as the starting
+point for the production build. The clone carried a stale HEAD commit
+(`467822e`, "Rename package to strictlyprivate") describing a rename plan that
+was abandoned. Left in place it would keep pointing future readers — human and
+agent — at a package name and a repo split that no longer exist.
+
+## What Changed
+- Reverted the effect of `467822e`. It touched only `package.json` (name +
+  description); no code was affected by the revert. The commit itself is kept
+  in history rather than dropped: it is already published on `origin/master`,
+  so removing it would mean rewriting a shared branch. The resulting tree is
+  the same either way.
+- `package.json`: name is now `stricthotelprod`. Description restored to the
+  pre-rename wording, which describes the stack accurately and makes no claim
+  about which repo this is or what it excludes.
+- `docs/review-2026-07/REVIEW_REPORT.md`: title `— stricthotelweb` →
+  `— StrictHotel`. The July review was run against this exact tree, so the
+  findings carry over unchanged; only the repo-specific label was wrong.
+- Test-count baseline corrected in the three docs that agents check before
+  committing (`README.md`, `LLM_AGENT_GUIDE.md`,
+  `.github/copilot-instructions.md`): 359 tests / 22 files → 478 / 34. The old
+  figure predates the reentrancy, tierlist, turkish-streak and crash-queue test
+  files. Historical entries further down this log keep their original numbers —
+  they were correct when written.
+
+## How to Verify
+- `npx vitest run` → **478 passed / 34 files**, matching the new baseline.
+- `grep -n '"name"' package.json` → `stricthotelprod`; no `strictlyprivate`
+  remains in the working tree.
+- `grep -rn "strictlyprivate\|stricthotelweb" --include=*.md --include=*.json .`
+  matches only this handoff entry, which documents the change deliberately.
+  No occurrence remains in `package.json`, the README, the agent guides or the
+  review docs.
+
+## Open Risks / Notes
+- **`.github/workflows/keep-alive.yml` needs a `RENDER_URL` repo secret.**
+  Secrets do not follow a clone. Until it is set, the workflow runs every 12
+  minutes and fails every time with `::error::RENDER_URL secret not set`.
+  Either add the secret for this deployment or disable the workflow here.
+- **The feature split is undecided.** The reverted commit asserted that a
+  commercial build cannot carry LoL Betting, the Yahoo Finance scraper, the
+  hidden YouTube ambience player and the AdSense tag. That claim is unverified
+  and nothing acts on it — all four are still present and wired in
+  (`socket-handlers.js:148`, `index.js` match checker, `public/ambience.js`,
+  `games/shopping/index.html:14`). Decide deliberately before removing
+  anything; none of it was touched here.
+- Deployment hardening carried over from the July review and still open:
+  `SITE_PASSWORD` falls back to `'ADMIN'` without a production fail-fast
+  (`routes/auth.js:8`), `handlers/watchparty.js` never checks `room.hostId`,
+  and `addBalance`/`buyDiamonds` skip `withBalanceLock` in the memory-only path
+  (`currency.js:95,238`).
+
+---
+
 # Handoff: Crash — cancel a queued bet + next-round roster (2026-07-27)
 
 ## Why

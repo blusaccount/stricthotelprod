@@ -1,4 +1,4 @@
-# Review Report — stricthotelweb
+# Review Report — StrictHotel
 
 *Verifikations- und Konsolidierungs-Pass, Stand 2026-07-20. Grundlage: `REVIEW_FINDINGS.md` (Datei-für-Datei-Review) plus unabhängige Nachprüfung der Wallet- und Casino-Handler. Alle kritisch/hoch eingestuften Findings wurden gegen den tatsächlichen Code verifiziert. Ergänzend wurden am 2026-07-20 die drei „Nachtrag Stichprobe"-Findings (brain-versus Rate-Limit-Lücke, roulette Disconnect-Handling, roulette toter Code) gegen den Code verifiziert und eingearbeitet.*
 
