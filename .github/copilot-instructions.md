@@ -2,7 +2,7 @@
 
 ## Project overview
 
-StrictHotel is a multiplayer minigame collection powered by Node.js, Express, and Socket.IO with a vanilla JavaScript frontend. It features 15+ games/experiences including a casino suite (Mäxchen dice bluffing, Strictly7s slots, Blackjack, Roulette, Plinko, Crash), Watch Party, Stock Market, Loop Machine (step sequencer), LoL Betting, Strict Brain, Food Guessr, Thing of the Week (tierlist), Türkçe (Turkish quiz), Nostalgiabait, and more, plus achievements, daily streaks, and an activity feed. Data is persisted in PostgreSQL with in-memory fallback for local dev.
+StrictHotel is a multiplayer minigame collection powered by Node.js, Express, and Socket.IO with a vanilla JavaScript frontend. It features 15+ games/experiences including a casino suite (Mäxchen dice bluffing, Strictly7s slots, Blackjack, Roulette, Plinko, Crash), Watch Party, Stock Market, Loop Machine (step sequencer), Strict Brain, Food Guessr, Thing of the Week (tierlist), Türkçe (Turkish quiz), Nostalgiabait, and more, plus achievements, daily streaks, and an activity feed. Data is persisted in PostgreSQL with in-memory fallback for local dev.
 
 ## Tech stack
 

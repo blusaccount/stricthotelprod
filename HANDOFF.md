@@ -4,6 +4,80 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Remove LoL Betting (2026-07-28)
+
+## Why
+Riot's developer terms rule out betting and gambling applications, and a
+production API key would never be granted for one. The feature also made the
+site transmit a user-supplied Riot ID to a third party, which the new privacy
+notice had to disclose. Operator decided to drop it rather than rebuild it as
+a stake-free tipping game.
+
+## What Changed
+- Deleted `games/lol-betting/`, `server/handlers/lol-betting.js`,
+  `server/lol-betting.js`, `server/lol-match-checker.js`, `server/riot-api.js`
+  and the three matching test files.
+- `server/socket-handlers.js`: dropped the import and the
+  `registerLolBettingHandlers` call.
+- `server/index.js`: dropped the `lol-match-checker` import, the
+  `startMatchChecker(io)` block in the listen callback, and `stopMatchChecker()`
+  in `gracefulShutdown`.
+- `server/socket-utils.js`: `lol-betting` removed from the `validateGameType`
+  allow-list; two comments that used LoL as their example were repointed.
+- `server/achievements.js`: the two LoL achievements (`lol_first`,
+  `lol_5_wins`) are gone. **59 achievements -> 57.** Rows already unlocked stay
+  in the database; they simply no longer appear in the catalogue.
+- `server/sql/persistence.sql`: the `lol_bets` DDL, its three indexes and the
+  five backfill `alter table` statements are removed, so fresh databases never
+  create the table. **Existing tables are deliberately NOT dropped** — that
+  would destroy data.
+- `.env.example`: `RIOT_API_KEY`, `RIOT_REGION` and `LOL_BET_TIMEOUT_MS`
+  removed; the `ADMIN_PASSWORD` comment no longer references bet resolution.
+- `public/index.html`: sidebar entry removed (13 nav items left).
+- `public/datenschutz.html`: the Riot Games section is gone — there is no
+  longer a third party to disclose there.
+- `public/credits.html`: trademark notice reduced to YouTube.
+- Docs updated: `README.md`, `LLM_AGENT_GUIDE.md`,
+  `.github/copilot-instructions.md`, and the LoL Betting section of
+  `docs/EVENTS.md`.
+- `server/__tests__/currency.test.js` used `'lol_bet'` as an arbitrary ledger
+  reason string; renamed to `'test_bet'` so nothing implies the feature exists.
+
+## How to Verify
+- `npm test` -> **423 passed / 31 files** (was 478 / 34; the three deleted test
+  files held 55 tests).
+- Server boots without the `[LoL Match Checker]` line.
+- `GET /games/lol-betting/` -> **404** when logged in; `GET /` -> 200 with 13
+  sidebar items and zero occurrences of "lol".
+- Headless Chromium over the eleven remaining pages: no JS errors, no external
+  requests.
+- `grep -rn "lol|riot" -i` over the source tree matches only the tierlist item
+  "LOLcat".
+
+## Open Risks / Next Steps
+- **Pending bets on the live database are now stranded.** Their stake was
+  deducted when the bet was placed and nothing will ever resolve or refund it.
+  Before dropping the table, refund them:
+  ```sql
+  -- inspect first
+  select player_name, sum(bet_amount) from lol_bets where status = 'pending'
+    group by player_name;
+
+  -- refund
+  update players p set balance = balance + x.total
+    from (select player_id, sum(bet_amount) as total from lol_bets
+          where status = 'pending' group by player_id) x
+   where p.id = x.player_id;
+
+  -- only then, optionally
+  drop table lol_bets;
+  ```
+- `ADMIN_PASSWORD` no longer has a consumer. Left in place because it is
+  documented as covering privileged socket actions generally; drop it once
+  that is confirmed.
+
+---
+
 # Handoff: Legal groundwork for a public launch (2026-07-28)
 
 ## Why

@@ -10,7 +10,6 @@ import { registerLobbyHandlers } from './handlers/lobby.js';
 import { registerMaexchenHandlers } from './handlers/maexchen.js';
 import { registerBrainVersusHandlers, cleanupBrainVersusOnDisconnect } from './handlers/brain-versus.js';
 import { registerStocksHandlers, cleanupStockQuoteCache } from './handlers/stocks.js';
-import { registerLolBettingHandlers } from './handlers/lol-betting.js';
 import { registerPictochatHandlers, cleanupPictochatOnDisconnect } from './handlers/pictochat.js';
 import { registerSoundboardHandlers } from './handlers/soundboard.js';
 import { registerLoopMachineHandlers, cleanupLoopOnDisconnect } from './handlers/loop-machine.js';
@@ -145,7 +144,6 @@ export function registerSocketHandlers(io, { fetchTickerQuotes, getYahooFinance,
         registerMaexchenHandlers(socket, io, deps);
         registerBrainVersusHandlers(socket, io, deps);
         registerStocksHandlers(socket, io, deps);
-        registerLolBettingHandlers(socket, io, deps);
         registerPictochatHandlers(socket, io, deps);
         registerSoundboardHandlers(socket, io, deps);
         registerLoopMachineHandlers(socket, io, deps);

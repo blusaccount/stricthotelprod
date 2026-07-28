@@ -43,7 +43,7 @@ export function validateRoomCode(code) {
 
 export function validateGameType(gameType) {
     if (typeof gameType !== 'string') return 'maexchen';
-    const allowed = ['maexchen', 'lobby', 'watchparty', 'stocks', 'strictbrain', 'lol-betting', 'loop-machine', 'shop', 'strictly7s', 'tierlist', 'casino', 'plinko', 'crash', 'achievements', 'blackjack', 'roulette'];
+    const allowed = ['maexchen', 'lobby', 'watchparty', 'stocks', 'strictbrain', 'loop-machine', 'shop', 'strictly7s', 'tierlist', 'casino', 'plinko', 'crash', 'achievements', 'blackjack', 'roulette'];
     const clean = gameType.replace(/[^a-z-]/g, '').slice(0, 20);
     return allowed.includes(clean) ? clean : 'maexchen';
 }
@@ -109,7 +109,7 @@ export function emitToUser(io, playerName, event, data) {
     io.to(room).emit(event, data);
 }
 
-// Legacy signature — still used by maexchen/lol-betting/brain-versus where
+// Legacy signature — still used by maexchen/brain-versus where
 // the caller has only the socketId. Now also fans out to the user room when
 // possible: pass an optional `playerName` (preferred) or fall back to the
 // raw socketId.
@@ -130,7 +130,7 @@ export function emitBalanceUpdate(io, socketIdOrName, balance, opts) {
  * that every game handler used to reinvent inconsistently.
  *
  * Usage:
- *   const player = requirePlayer(socket, onlinePlayers, 'lol-bet-error');
+ *   const player = requirePlayer(socket, onlinePlayers, 'mae-error');
  *   if (!player) return;
  */
 export function requirePlayer(socket, onlinePlayers, errorEvent = 'error') {

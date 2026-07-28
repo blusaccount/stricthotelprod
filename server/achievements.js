@@ -95,9 +95,6 @@ export const ACHIEVEMENTS = [
     // ===== Watch Party =====
     { id: 'wp_first',         title: 'Co-Viewer',          description: 'Watch a video together.',               icon: '📺', tier: 'bronze',   counter: 'watchparty_plays',     threshold: 1,    reward: { coins: 50 } },
 
-    // ===== LoL Betting =====
-    { id: 'lol_first',        title: 'Riot Roulette',      description: 'Place a LoL bet.',                      icon: '⚔️', tier: 'bronze',   counter: 'lol_bets',             threshold: 1,    reward: { coins: 50 } },
-    { id: 'lol_5_wins',       title: 'Worlds Bound',       description: 'Win 5 LoL bets.',                       icon: '🏅', tier: 'silver',   counter: 'lol_wins',             threshold: 5,    reward: { coins: 500 } },
 
     // ===== Türkçe =====
     { id: 'turkish_first',    title: 'Merhaba',            description: 'Complete your first Turkish lesson.',   icon: '🇹🇷', tier: 'bronze',  counter: 'turkish_lessons',      threshold: 1,    reward: { coins: 50 } },

@@ -71,29 +71,6 @@ create table if not exists brain_game_leaderboards (
 create index if not exists brain_game_leaderboards_game_idx
   on brain_game_leaderboards (game_id, best_score, updated_at desc);
 
-create table if not exists lol_bets (
-  id bigserial primary key,
-  player_id bigint not null references players(id) on delete cascade,
-  player_name text not null,
-  lol_username text not null,
-  bet_amount numeric(14,2) not null check (bet_amount > 0),
-  bet_on_win boolean not null,
-  status text not null default 'pending',
-  puuid text,
-  last_match_id text,
-  game_id text,
-  result boolean,
-  created_at timestamptz not null default now(),
-  resolved_at timestamptz
-);
-
--- backfill columns that may be missing on databases created before these were added
-alter table lol_bets add column if not exists puuid text;
-alter table lol_bets add column if not exists last_match_id text;
-alter table lol_bets add column if not exists game_id text;
-alter table lol_bets add column if not exists result boolean;
-alter table lol_bets add column if not exists resolved_at timestamptz;
-
 -- add diamonds column for diamond shop feature
 alter table players add column if not exists diamonds integer not null default 0;
 
@@ -102,15 +79,6 @@ alter table players add column if not exists character_data jsonb;
 
 -- TOFU owner token for player names (claimed on first register-player)
 alter table players add column if not exists owner_token text;
-
-create index if not exists lol_bets_status_idx
-  on lol_bets (status, created_at desc);
-
-create index if not exists lol_bets_player_idx
-  on lol_bets (player_id, created_at desc);
-
-create index if not exists lol_bets_player_name_idx
-  on lol_bets (player_name);
 
 create index if not exists wallet_ledger_player_created_idx
   on wallet_ledger (player_id, created_at desc);

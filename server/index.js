@@ -22,7 +22,6 @@ import { rooms, onlinePlayers } from './room-manager.js';
 import { registerSocketHandlers } from './socket-handlers.js';
 import { initSchema } from './db.js';
 import { loadCacheFromDb as loadStockPriceCache } from './stock-price-cache.js';
-import { startMatchChecker, stopMatchChecker } from './lol-match-checker.js';
 
 import { createAuthRouter, authMiddleware } from './routes/auth.js';
 import turkishRouter from './routes/turkish.js';
@@ -223,13 +222,6 @@ server.listen(PORT, async () => {
         console.log('⚠ GAME_ENABLED=false: stock game APIs and socket trades are disabled');
     }
 
-    // Start LoL match checker
-    try {
-        startMatchChecker(io);
-    } catch (err) {
-        console.error('LoL Match Checker error:', err.message);
-    }
-
     // Background-refresh the ticker every 5 min so the cache stays warm
     // even when no user has the Stocks tab open.
     if (GAME_ENABLED && stocksRouter.fetchTickerQuotes) {
@@ -249,7 +241,6 @@ server.listen(PORT, async () => {
 // Graceful shutdown
 function gracefulShutdown(signal) {
     console.log(`${signal} received, shutting down gracefully...`);
-    stopMatchChecker();
     stopKeepAlive();
     server.close(() => {
         console.log('Server closed');

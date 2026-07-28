@@ -279,29 +279,6 @@ S->C:
 - `loop-bass-updated` - Bass params changed
 - `loop-master-volume-updated` - Master volume changed
 
-## LoL Betting
-**Handler:** [server/handlers/lol-betting.js](../server/handlers/lol-betting.js)
-
-C->S:
-- `lol-validate-username` - Check if LoL username exists
-- `lol-place-bet` - Place bet on player outcome
-- `lol-get-bets` - Fetch active bets
-- `lol-get-history` - Fetch bet history
-- `lol-check-bet-status` - Check bet resolution status
-- `lol-admin-resolve-bet` - Admin manual resolution (requires ADMIN_PASSWORD)
-
-S->C:
-- `lol-username-result` - Username validation result
-- `lol-bet-placed` - Bet confirmed (PUUID is resolved server-side via the Riot API)
-- `lol-bets-update` - Active bets list
-- `lol-history-update` - Bet history
-- `lol-bet-check-result` - Bet status response
-- `lol-bet-resolved` - Bet resolved notification (also from the background match checker)
-- `lol-bet-resolved-confirm` - Admin resolution confirmed
-- `lol-bet-refunded` - Bet refunded (auto-timeout, default 50 min via `LOL_BET_TIMEOUT_MS`)
-- `lol-bet-warning` - Non-fatal warning
-- `lol-bet-error` - Error response
-
 ## Strict Brain (Brain Training)
 **Handler:** [server/handlers/brain-versus.js](../server/handlers/brain-versus.js)
 
