@@ -28,6 +28,7 @@ import turkishRouter from './routes/turkish.js';
 import nostalgiaRouter from './routes/nostalgiabait.js';
 import { createStocksRouter } from './routes/stocks.js';
 import { createFoodGuessrRouter } from './routes/food-guessr.js';
+import { startRetentionJob, stopRetentionJob } from './retention.js';
 import { getAllHeldSymbols } from './stock-game.js';
 import { startPeriodicCleanup } from './cleanup.js';
 import { startKeepAlive, stopKeepAlive } from './keep-alive.js';
@@ -236,6 +237,9 @@ server.listen(PORT, async () => {
         stocksRouter.fetchTickerQuotes().catch(() => {});
     }
 
+    // Delete dormant accounts, if the operator configured a period.
+    startRetentionJob();
+
     // Self-ping to keep Render free-tier instance awake during 10:00–02:00 Berlin
     startKeepAlive();
 });
@@ -243,6 +247,7 @@ server.listen(PORT, async () => {
 // Graceful shutdown
 function gracefulShutdown(signal) {
     console.log(`${signal} received, shutting down gracefully...`);
+    stopRetentionJob();
     stopKeepAlive();
     server.close(() => {
         console.log('Server closed');

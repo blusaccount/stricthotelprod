@@ -4,6 +4,87 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Soundboard provenance documented, account retention built (2026-07-28)
+
+## Why
+Two remaining items from the legal groundwork: nine soundboard clips with no
+recorded origin, and a privacy notice that promised a deletion period for
+dormant accounts without any mechanism behind it.
+
+## Soundboard — documented, not resolved
+
+Inspected every file. **There is no usable metadata in any of them**, so the
+provenance cannot be established from the repository alone:
+
+- The four MP3s (`vineboom`, `elgato`, `reverbfart`, `anatolia`) are LAME-encoded
+  with no ID3 tag. They look like downloaded meme audio; "Vine Boom" in
+  particular has an identifiable rights holder.
+- The five Opus files (`fahh`, `massenhausen`, `plug`, `rizz`, `seyuh`) have
+  their vendor string blanked, which is what Discord produces when exporting
+  from its soundboard or a voice recording. Names like `massenhausen` read like
+  private in-jokes, so these may well be self-recorded — but that has to be
+  stated by someone who knows, not assumed.
+
+`shared/audio/soundboard/PROVENANCE.md` records the findings and the three
+possible outcomes per clip (self-recorded / licensed / delete).
+`public/credits.html` now lists all nine by name with an explicit "ungeklaert"
+status rather than one vague paragraph. **This still blocks commercial
+operation** and needs the operator's answer.
+
+## Account retention — implemented, off by default
+
+**`last_seen_at`** added to `players` (`server/sql/persistence.sql`), stamped by
+`server/identity.js` on every successful name claim, not only the first. This
+is deliberately distinct from `updated_at`, which only moves when the balance
+changes — someone can play Watch Party or Food Guessr for months without a
+single coin transaction, and would otherwise look dormant.
+
+**`server/retention.js`** deletes accounts whose last activity
+(`coalesce(last_seen_at, updated_at, created_at)`) is older than
+`ACCOUNT_RETENTION_MONTHS`, checked daily.
+
+Design decisions worth keeping:
+- **Off unless configured.** Deleting player data is irreversible and the
+  period is the operator's call, not an inherited default.
+- **Six-month floor.** A shorter period would delete players who took a summer
+  off; a lower value is rejected with a warning rather than honoured.
+- **Not on boot.** A crash-restart loop would otherwise re-run the purge every
+  few seconds. First pass is one interval in.
+- **One transaction.** Four tables key by `player_name` rather than
+  `player_id` — `tierlist_placements`, `food_ratings`, `food_scrandle_streaks`,
+  `food_classic_scores` — so they do not cascade and are deleted explicitly,
+  before the player row. A half-purged player is worse than an un-purged one.
+- `findDormantPlayers()` is exported so the list can be inspected before any
+  deletion happens.
+
+The privacy notice now describes the mechanism, with the number itself marked
+red: it has to match `ACCOUNT_RETENTION_MONTHS`, and while that is unset the
+sentence would be untrue.
+
+## How to Verify
+- `npm test` -> **477 passed / 34 files** (+14 in
+  `server/__tests__/retention.test.js`).
+- Boot messages match the configuration:
+  - unset -> `[retention] disabled (ACCOUNT_RETENTION_MONTHS not set)`
+  - `=3` -> floor warning, then
+    `disabled (ACCOUNT_RETENTION_MONTHS rejected — see the warning above)`
+  - `=24` without a database -> `disabled (no database)`
+- Tests cover the transaction order (name-keyed tables before `players`),
+  rollback on failure, and that nothing runs on boot.
+
+## Open Risks / Next Steps
+- **The soundboard question is open and blocking.** Which of the nine clips
+  were recorded by the operator or their friends? Everything else has to go or
+  be licensed.
+- Retention has not been exercised against a real Postgres instance — there is
+  no database in this environment. The SQL is straightforward and unit-tested
+  at the call level, but the first real run should be preceded by
+  `findDormantPlayers()` to see what it would take.
+- `ACCOUNT_RETENTION_MONTHS` and the number in the privacy notice are two
+  places holding one fact. They will drift unless changed together.
+
+---
+
 # Handoff: Food Guessr goes through a server-side Wikimedia proxy (2026-07-28)
 
 ## Why

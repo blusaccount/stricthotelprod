@@ -47,7 +47,7 @@ async function setOwnerInDb(playerName, ownerToken) {
         // update prevents a TOCTOU race where two registers see "null" at the
         // same time — only one update will actually set the token.
         await query(
-            `insert into players (name, balance) values ($1, 1000)
+            `insert into players (name, balance, last_seen_at) values ($1, 1000, now())
              on conflict (name) do nothing`,
             [playerName]
         );
@@ -65,6 +65,21 @@ async function setOwnerInDb(playerName, ownerToken) {
 }
 
 /**
+ * Stamp the player's last visit. Called on every successful claim, not just
+ * the first, so the retention job in server/retention.js sees returning
+ * players as active even when they never touch their balance.
+ */
+async function touchLastSeen(playerName) {
+    if (!isDatabaseEnabled()) return;
+    try {
+        await query('update players set last_seen_at = now() where name = $1', [playerName]);
+    } catch (err) {
+        // Never let a bookkeeping write block a login.
+        console.error('touchLastSeen error:', err.message);
+    }
+}
+
+/**
  * Attempt to claim a player name with the given owner token.
  *
  * Returns one of:
@@ -78,14 +93,20 @@ export async function claimName(playerName, ownerToken) {
 
     const existing = await getOwnerFromDb(playerName);
     if (existing) {
-        if (existing === ownerToken) return { ok: true, firstClaim: false };
+        if (existing === ownerToken) {
+            await touchLastSeen(playerName);
+            return { ok: true, firstClaim: false };
+        }
         return { ok: false, reason: 'taken' };
     }
     const claimed = await setOwnerInDb(playerName, ownerToken);
     if (!claimed) {
         // Lost the race — re-read and check who actually got it
         const after = await getOwnerFromDb(playerName);
-        if (after === ownerToken) return { ok: true, firstClaim: true };
+        if (after === ownerToken) {
+            await touchLastSeen(playerName);
+            return { ok: true, firstClaim: true };
+        }
         return { ok: false, reason: 'taken' };
     }
     return { ok: true, firstClaim: true };

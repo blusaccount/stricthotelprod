@@ -110,8 +110,14 @@
             (Erfuellung des Nutzungsvertrags &mdash; ohne diese Daten laesst sich der
             Spielstand nicht fuehren).</li>
         <li><strong>Speicherdauer:</strong> bis zur Loeschung des Spielkontos auf
-            Anfrage. <span class="legal-todo">TODO: automatische Loeschung inaktiver
-            Konten festlegen, z. B. nach 24 Monaten ohne Login.</span></li>
+            Anfrage. Zusaetzlich werden Konten automatisch geloescht, die
+            laenger als <span class="legal-todo">ZAHL EINTRAGEN, z. B. 24</span>
+            Monate nicht mehr genutzt wurden. Maßgeblich ist der letzte
+            Login. <span class="legal-todo">Die Zahl hier muss mit
+            ACCOUNT_RETENTION_MONTHS in der Serverkonfiguration
+            uebereinstimmen; solange dort nichts gesetzt ist, findet keine
+            automatische Loeschung statt und dieser Satz waere
+            unzutreffend.</span></li>
     </ul>
     <p>
         Die selbst gewaehlten Namen sind fuer andere Teilnehmende sichtbar. Wer

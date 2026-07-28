@@ -80,6 +80,15 @@ alter table players add column if not exists character_data jsonb;
 -- TOFU owner token for player names (claimed on first register-player)
 alter table players add column if not exists owner_token text;
 
+-- Last time this player registered from a browser. Distinct from updated_at,
+-- which only moves when the balance changes: someone can play Watch Party or
+-- Food Guessr for months without a single coin transaction. Drives the
+-- inactive-account retention job in server/retention.js.
+alter table players add column if not exists last_seen_at timestamptz;
+
+create index if not exists players_last_seen_idx
+  on players (last_seen_at);
+
 create index if not exists wallet_ledger_player_created_idx
   on wallet_ledger (player_id, created_at desc);
 
