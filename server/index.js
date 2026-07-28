@@ -27,6 +27,7 @@ import { createAuthRouter, authMiddleware } from './routes/auth.js';
 import turkishRouter from './routes/turkish.js';
 import nostalgiaRouter from './routes/nostalgiabait.js';
 import { createStocksRouter } from './routes/stocks.js';
+import { createFoodGuessrRouter } from './routes/food-guessr.js';
 import { getAllHeldSymbols } from './stock-game.js';
 import { startPeriodicCleanup } from './cleanup.js';
 import { startKeepAlive, stopKeepAlive } from './keep-alive.js';
@@ -185,6 +186,7 @@ const stocksRouter = createStocksRouter({
 app.use(stocksRouter);
 app.use(turkishRouter);
 app.use(nostalgiaRouter);
+app.use(createFoodGuessrRouter());
 
 // ============== SOCKET HANDLERS ==============
 

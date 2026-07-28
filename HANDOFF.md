@@ -4,6 +4,94 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Food Guessr goes through a server-side Wikimedia proxy (2026-07-28)
+
+## Why
+Food Guessr called `en.wikipedia.org` and `wikimedia.org` straight from the
+browser and then loaded each photo from `upload.wikimedia.org`. Every round
+therefore sent the player's IP address to the Wikimedia Foundation, three times
+over, with no legal basis and no way to opt out. It also meant the Wikimedia
+user-agent policy could not be met, because each browser sent whatever agent it
+liked.
+
+## What Changed
+
+**New route** — `server/routes/food-guessr.js`, mounted in `server/index.js`
+- `GET /api/fg/dish?title=X` -> `{ image, artist, artistUrl, licence,
+  licenceUrl, source }`
+- `GET /api/fg/image?title=X` -> the photo bytes, proxied and cached
+- `GET /api/fg/views?title=X` -> average monthly pageviews over the last six
+  full months
+
+**Photo size.** The first cut used the REST summary endpoint, which returns the
+full-resolution original — 2.49 MB for the Pizza article, held in memory and
+paid for in egress, to fill a 16:10 panel. Switched to `pageimages` with
+`pithumbsize=1024`, which also returns the source file name in the same call.
+**2.49 MB -> 385 KB**, and one fewer request per dish.
+
+**Cache.** Dish metadata 24h, pageviews 7d, images 24h. The image cache is
+bounded by entry count *and* by total bytes (80 entries / 48 MB, oldest first),
+because a few large photos would otherwise blow the memory budget on their own.
+
+**Title validation.** Titles come from the client, so `cleanTitle` allows only
+letters, digits, spaces, underscores, parentheses, hyphens, apostrophes,
+periods, commas, ampersands and exclamation marks. Slashes and colons are
+deliberately excluded so nothing resembling a path or a URL can reach an
+outbound request — verified against all 183 catalogue titles, none of which
+need either.
+
+**Attribution is now visible in-game.** Most dish photos are CC BY-SA, where
+naming the author and the licence is a condition of use. `renderPhotoCredit`
+in `games/food-guessr/js/game.js` draws a credit bar over the bottom of every
+photo in every mode, linking the author, the licence and the Wikimedia file
+page. `.fg-credit` in `games/food-guessr/index.html` pins it at 10px.
+
+**Rate limiter extracted.** `server/rate-limit.js` now holds the per-IP limiter
+that was private to `server/routes/stocks.js`; both routes import it rather
+than duplicating a security-relevant helper. Behaviour is unchanged.
+
+**Client** — `games/food-guessr/js/dishes.js` has no Wikimedia URL left.
+`FG_fetchDishImage` returns `{ src, artist, artistUrl, licence, licenceUrl,
+source }` instead of a bare string; all four `attachDishImage` call sites get
+credits for free because the credit is rendered from inside that helper.
+
+**Legal pages.** The Wikipedia third-party section is gone from
+`public/datenschutz.html` — there is no browser-side transfer left to
+disclose — replaced by a note that the server fetches and caches instead. The
+Food Guessr section of `public/credits.html` now points at the per-photo credit
+rather than promising a list, since each round draws a different image.
+
+## How to Verify
+- `npm test` -> **463 passed / 33 files** (+10 in
+  `server/__tests__/food-guessr-route.test.js` covering title validation, HTML
+  stripping and UTC date formatting).
+- `GET /api/fg/dish?title=Pizza` -> artist `igorovsyannykov`, licence `CC0`,
+  image `/api/fg/image?title=Pizza`.
+- `GET /api/fg/image?title=Pizza` -> 200 `image/jpeg` 385 KB in ~0.7s cold,
+  ~3ms warm.
+- `GET /api/fg/views?title=Pizza` -> `{"views":79625}`.
+- Title validation over the wire: empty, `../../etc/passwd`,
+  `https://evil.example`, `Pizza<script>` and a 130-character title all return
+  400; `Fish_and_chips`, `Bánh mì` and `Shepherd's pie` return 200.
+- Headless Chromium through Classic, Rate and Scrandle-Wiki: photos load from
+  `/api/fg/image`, a credit renders on every one (e.g. "Nanahuatl · CC BY-SA
+  4.0 · Wikimedia") at computed 10px with working links, and **no request goes
+  to any host other than localhost**. Scrandle-Community correctly shows "Not
+  enough data for this mode yet" on an empty ratings database — that is its
+  designed behaviour, not a regression.
+
+## Open Risks / Next Steps
+- The image cache is per-process and in memory, so it empties on every deploy
+  and is not shared if the app is ever run on more than one instance.
+- Attribution lookup is best-effort: if the second Wikimedia call fails, the
+  photo is still served without a credit. Rare, but it means the credit is not
+  a hard guarantee. A stricter reading would withhold the photo instead.
+- With Wikimedia proxied and the fonts and libraries self-hosted, **YouTube is
+  the only third party a visitor's browser still reaches**, and it is behind
+  the consent gate. The site currently needs no cookie banner.
+
+---
+
 # Handoff: Tierlist image attribution and licence pruning (2026-07-28)
 
 ## Why

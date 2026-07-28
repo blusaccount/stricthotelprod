@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { upsertQuotes, getAllCached } from '../stock-price-cache.js';
+import { rateLimiter } from '../rate-limit.js';
 import { fetchQuotesViaChart, fetchSingleQuoteViaChart, fetchHistoryViaChart, HISTORY_RANGE_KEYS } from '../stock-providers/yahoo-chart.js';
 import { fetchQuotesViaStooq, fetchSingleQuoteViaStooq } from '../stock-providers/stooq.js';
 import {
@@ -100,30 +101,6 @@ const HISTORY_CACHE_MS = 10 * 60 * 1000; // 10 minutes
 
 const profileCache = new Map(); // symbol -> { data, ts }
 const PROFILE_CACHE_MS = 24 * 60 * 60 * 1000; // company profiles barely change
-
-// Per-IP sliding window rate limiter, mirroring the login limiter in
-// routes/auth.js. Protects the provider-backed routes from a single logged-in
-// user hammering Yahoo/Stooq from the server's IP (see issue #159).
-const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-
-function rateLimiter(maxPerWindow) {
-    const hits = new Map(); // ip -> { count, resetAt }
-    return (req, res, next) => {
-        const now = Date.now();
-        const ip = req.ip || 'unknown';
-        const entry = hits.get(ip);
-        if (entry && now < entry.resetAt) {
-            entry.count += 1;
-            if (entry.count > maxPerWindow) {
-                res.set('Retry-After', Math.ceil((entry.resetAt - now) / 1000));
-                return res.status(429).json({ error: 'Too many requests. Try again soon.' });
-            }
-        } else {
-            hits.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-        }
-        next();
-    };
-}
 
 const stockSearchRateLimiter = rateLimiter(30);
 const stockQuoteRateLimiter = rateLimiter(30);

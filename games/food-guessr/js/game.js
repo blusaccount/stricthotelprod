@@ -47,18 +47,53 @@
     }
 
     // ─── Shared dish loader (used by every mode) ───
+
+    // Most dish photos are Creative Commons, where naming the author and the
+    // licence is a condition of use, so the credit rides along with the photo
+    // in every mode rather than living only on the credits page.
+    function renderPhotoCredit(imgEl, info) {
+        var wrap = imgEl.parentElement;
+        if (!wrap) return;
+        var el = wrap.querySelector('.fg-credit');
+        if (!info || (!info.artist && !info.licence)) {
+            if (el) el.remove();
+            return;
+        }
+        if (!el) {
+            el = document.createElement('div');
+            el.className = 'fg-credit';
+            wrap.appendChild(el);
+        }
+        var who = info.artist
+            ? (info.artistUrl
+                ? '<a href="' + escapeHtml(info.artistUrl) + '" target="_blank" rel="noopener">' + escapeHtml(info.artist) + '</a>'
+                : escapeHtml(info.artist))
+            : 'Unknown';
+        var lic = info.licence
+            ? (info.licenceUrl
+                ? ' · <a href="' + escapeHtml(info.licenceUrl) + '" target="_blank" rel="noopener">' + escapeHtml(info.licence) + '</a>'
+                : ' · ' + escapeHtml(info.licence))
+            : '';
+        var src = info.source
+            ? ' · <a href="' + escapeHtml(info.source) + '" target="_blank" rel="noopener">Wikimedia</a>'
+            : '';
+        el.innerHTML = '📷 ' + who + lic + src;
+    }
+
     async function attachDishImage(dish, imgEl, fallbackEl, loadingText) {
         imgEl.style.display = 'none';
         imgEl.removeAttribute('src');
+        renderPhotoCredit(imgEl, null);
         fallbackEl.style.display = 'flex';
         fallbackEl.innerHTML = '<div class="fg-fallback-emoji">' + dish.emoji + '</div>' +
                                '<div class="fg-fallback-loading">' + escapeHtml(loadingText || 'Loading…') + '</div>';
-        var src = await window.FG_fetchDishImage(dish.wikiTitle);
-        if (src) {
+        var info = await window.FG_fetchDishImage(dish.wikiTitle);
+        if (info && info.src) {
             return new Promise(function (resolve) {
                 imgEl.onload = function () {
                     imgEl.style.display = 'block';
                     fallbackEl.style.display = 'none';
+                    renderPhotoCredit(imgEl, info);
                     resolve(true);
                 };
                 imgEl.onerror = function () {
@@ -66,7 +101,7 @@
                                            '<div class="fg-fallback-loading">Photo unavailable</div>';
                     resolve(false);
                 };
-                imgEl.src = src;
+                imgEl.src = info.src;
             });
         } else {
             fallbackEl.innerHTML = '<div class="fg-fallback-emoji">' + dish.emoji + '</div>' +
@@ -413,7 +448,7 @@
             $('fg-input').focus();
 
             var ok = await attachDishImage(currentDish, $('fg-dish-image'), $('fg-dish-fallback'),
-                                           'Loading photo from Wikipedia…');
+                                           'Loading photo…');
             if (!ok) {
                 hintsRevealed = Math.max(hintsRevealed, 1);
                 renderHints();
