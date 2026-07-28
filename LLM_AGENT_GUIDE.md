@@ -23,7 +23,7 @@ This guide helps LLM agents work effectively in this repo. Keep it short, stay i
 - Shared styles: [shared/css/theme.css](shared/css/theme.css)
 
 **Tests:**
-- [server/__tests__/](server/__tests__/) - Vitest tests for all server modules (22 test files)
+- [server/__tests__/](server/__tests__/) - Vitest tests for all server modules (34 test files)
 
 ## Core flows (mental model)
 
@@ -78,7 +78,7 @@ This guide helps LLM agents work effectively in this repo. Keep it short, stay i
 - Check [docs/EVENTS.md](docs/EVENTS.md) for socket event contracts
 - Prefer existing helpers and patterns before adding new ones
 - Keep changes minimal, additive, and reversible
-- Run `npm test` before committing changes (359 tests across 22 files should pass)
+- Run `npm test` before committing changes (478 tests across 34 files should pass)
 - Validate behavior manually if you touch sockets, auth, or game logic
 - Update HANDOFF.md with your changes and verification notes
 

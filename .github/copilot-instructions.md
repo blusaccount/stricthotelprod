@@ -61,6 +61,6 @@ There is no build step; the project serves vanilla JS directly.
 - Read `HANDOFF.md` before starting work to understand recent changes and open risks.
 - Check `docs/EVENTS.md` for socket event contracts.
 - Read `LLM_AGENT_GUIDE.md` for detailed repo structure and common pitfalls.
-- Run `npm test` before committing (359 tests across 22 files should pass).
+- Run `npm test` before committing (478 tests across 34 files should pass).
 - Record what you changed, why, and how to verify it in `HANDOFF.md` when done.
 - For large or risky changes, create an execution plan in `PLANS.md`.
