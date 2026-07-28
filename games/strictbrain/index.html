@@ -42,7 +42,7 @@
                 <span class="menu-btn-icon">🧠</span>
                 <div class="menu-btn-info">
                     <div class="menu-btn-title">TÄGLICHER TEST</div>
-                    <div class="menu-btn-desc">3 zufällige Spiele → Dein Gehirnalter</div>
+                    <div class="menu-btn-desc" id="daily-desc">Für alle die gleichen 3 Spiele. Ein Versuch pro Tag.</div>
                 </div>
             </button>
             <button class="menu-btn" id="btn-free-training">
@@ -306,6 +306,23 @@
             <div class="coins-earned" id="results-coins">
                 <span class="coin-icon">🪙</span>
                 <span id="results-coins-amount">+0 StrictCoins</span>
+            </div>
+
+            <div class="pixel-divider"></div>
+
+            <!-- Shareable result. The one mechanic that makes a daily spread:
+                 a small block of text a player can paste into a chat. -->
+            <div class="daily-share" id="daily-share" hidden>
+                <div class="daily-share-title">DEIN ERGEBNIS TEILEN</div>
+                <pre class="daily-share-text" id="daily-share-text"></pre>
+                <button class="menu-btn" id="btn-share-copy" style="justify-content:center;">
+                    <span id="btn-share-copy-label">📋 KOPIEREN</span>
+                </button>
+            </div>
+
+            <div class="daily-board" id="daily-board" hidden>
+                <div class="daily-share-title">HEUTE</div>
+                <ol class="daily-board-list" id="daily-board-list"></ol>
             </div>
 
             <div class="pixel-divider"></div>

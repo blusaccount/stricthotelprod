@@ -141,6 +141,11 @@ S->C:
 - `picto-clear` - Clear broadcast
 - `picto-message` - Message broadcast
 
+## Player registration
+
+S->C:
+- `player-registered` - `{ name, game }`, emitted when `register-player` has finished. Registration is asynchronous, so anything a client wants to ask *as this player* has to wait for this rather than guessing a delay
+
 ## Account (Discord sign-in)
 **Route:** [server/routes/discord-auth.js](../server/routes/discord-auth.js)
 
@@ -308,6 +313,9 @@ C->S:
 - `brain-versus-finished` - Submit final score
 
 S->C:
+- `brain-daily-info` - `{ day, games, played, result, leaderboard }`. The server picks the games; the client must not shuffle its own
+- `brain-daily-result` - `{ day, stored, brainAge, games, share }` after a submission. `stored: false` means the day was already played and the earlier result stands
+- `brain-daily-leaderboard` - `{ day, leaderboard }`, broadcast when anyone finishes
 - `brain-leaderboard` - Overall leaderboard data
 - `brain-game-leaderboards` - Per-game leaderboards data
 - `brain-daily-cooldown` - Daily test reward already claimed today

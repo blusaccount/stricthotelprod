@@ -1,0 +1,232 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+vi.mock('../db.js', () => ({
+    isDatabaseEnabled: vi.fn(() => false),
+    query: vi.fn(),
+}));
+
+import { isDatabaseEnabled, query } from '../db.js';
+import {
+    BRAIN_GAMES,
+    GAMES_PER_DAY,
+    utcDay,
+    gamesForDay,
+    getDailyResult,
+    saveDailyResult,
+    getDailyLeaderboard,
+    bandForScore,
+    buildShareText,
+    shareUrl,
+    SHARE_SQUARES,
+} from '../brain-daily.js';
+
+let seq = 0;
+const uniq = (p) => `${p}_${++seq}_${Math.floor(Math.random() * 1e6)}`;
+
+describe('daily brain challenge', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        isDatabaseEnabled.mockReturnValue(false);
+    });
+
+    describe('utcDay', () => {
+        it('formats as YYYY-MM-DD in UTC', () => {
+            expect(utcDay(new Date(Date.UTC(2026, 6, 28, 12)))).toBe('2026-07-28');
+        });
+
+        it('uses the UTC boundary, not the local one', () => {
+            // 23:30 UTC is still the 28th no matter where the server stands.
+            expect(utcDay(new Date(Date.UTC(2026, 6, 28, 23, 30)))).toBe('2026-07-28');
+            expect(utcDay(new Date(Date.UTC(2026, 6, 29, 0, 1)))).toBe('2026-07-29');
+        });
+    });
+
+    describe('gamesForDay', () => {
+        it('is deterministic — the whole point of a daily', () => {
+            expect(gamesForDay('2026-07-28')).toEqual(gamesForDay('2026-07-28'));
+        });
+
+        it('picks three distinct games from the pool', () => {
+            for (const day of ['2026-01-01', '2026-07-28', '2027-12-31']) {
+                const picked = gamesForDay(day);
+                expect(picked).toHaveLength(GAMES_PER_DAY);
+                expect(new Set(picked).size).toBe(GAMES_PER_DAY);
+                for (const g of picked) expect(BRAIN_GAMES).toContain(g);
+            }
+        });
+
+        it('varies from day to day', () => {
+            const days = [];
+            for (let i = 0; i < 30; i++) {
+                days.push(gamesForDay(new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10)).join(','));
+            }
+            expect(new Set(days).size).toBeGreaterThan(5);
+        });
+
+        it('uses every game roughly evenly over a year', () => {
+            const counts = Object.fromEntries(BRAIN_GAMES.map(g => [g, 0]));
+            for (let i = 0; i < 365; i++) {
+                const day = new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10);
+                for (const g of gamesForDay(day)) counts[g]++;
+            }
+            const total = Object.values(counts).reduce((a, b) => a + b, 0);
+            expect(total).toBe(365 * GAMES_PER_DAY);
+            // Perfectly even would be 219 each; allow generous drift but catch
+            // a game that is effectively never or always chosen.
+            for (const g of BRAIN_GAMES) {
+                expect(counts[g]).toBeGreaterThan(120);
+                expect(counts[g]).toBeLessThan(320);
+            }
+        });
+    });
+
+    describe('one attempt per day', () => {
+        it('stores the first result', async () => {
+            const name = uniq('P');
+            await expect(saveDailyResult(name, '2026-07-28', 30, [{ gameId: 'math', score: 50 }]))
+                .resolves.toMatchObject({ stored: true });
+        });
+
+        it('refuses the second and keeps the first, even when it is better', async () => {
+            const name = uniq('P');
+            await saveDailyResult(name, '2026-07-28', 40, [{ gameId: 'math', score: 10 }]);
+
+            const second = await saveDailyResult(name, '2026-07-28', 20, [{ gameId: 'math', score: 99 }]);
+
+            expect(second.stored).toBe(false);
+            expect(second.existing.brainAge).toBe(40);
+            const stored = await getDailyResult(name, '2026-07-28');
+            expect(stored.brainAge).toBe(40);
+        });
+
+        it('treats each day separately', async () => {
+            const name = uniq('P');
+            await saveDailyResult(name, '2026-07-28', 40, []);
+            await expect(saveDailyResult(name, '2026-07-29', 35, []))
+                .resolves.toMatchObject({ stored: true });
+        });
+
+        it('returns null for a day not played', async () => {
+            await expect(getDailyResult(uniq('P'), '2026-07-28')).resolves.toBeNull();
+        });
+
+        it('ignores a missing player name', async () => {
+            await expect(saveDailyResult('', '2026-07-28', 30, [])).resolves.toMatchObject({ stored: false });
+            await expect(getDailyResult('', '2026-07-28')).resolves.toBeNull();
+        });
+    });
+
+    describe('daily leaderboard', () => {
+        it('ranks lowest brain age first and scopes to the day', async () => {
+            const day = '2030-01-01';
+            const a = uniq('A'); const b = uniq('B'); const c = uniq('C');
+            await saveDailyResult(a, day, 40, []);
+            await saveDailyResult(b, day, 25, []);
+            await saveDailyResult(c, '2030-01-02', 10, []);
+
+            const board = await getDailyLeaderboard(day);
+            const names = board.map(r => r.name);
+
+            expect(names.indexOf(b)).toBeLessThan(names.indexOf(a));
+            expect(names).not.toContain(c);
+        });
+
+        it('honours the limit', async () => {
+            const day = '2030-02-01';
+            for (let i = 0; i < 5; i++) await saveDailyResult(uniq('L'), day, 30 + i, []);
+            await expect(getDailyLeaderboard(day, 2)).resolves.toHaveLength(2);
+        });
+    });
+
+    describe('share grid', () => {
+        it('bands reaction by milliseconds, lower being better', () => {
+            expect(bandForScore('reaction', 250)).toBe('great');
+            expect(bandForScore('reaction', 400)).toBe('ok');
+            expect(bandForScore('reaction', 900)).toBe('poor');
+        });
+
+        it('bands the other games by score, higher being better', () => {
+            expect(bandForScore('math', 95)).toBe('great');
+            expect(bandForScore('math', 60)).toBe('ok');
+            expect(bandForScore('math', 10)).toBe('poor');
+        });
+
+        it('treats a missing score as poor rather than throwing', () => {
+            expect(bandForScore('math', undefined)).toBe('poor');
+            expect(bandForScore('math', 'abc')).toBe('poor');
+        });
+
+        it('renders one square per game, in order', () => {
+            const text = buildShareText('2026-07-28', 27, [
+                { gameId: 'math', score: 90 },
+                { gameId: 'stroop', score: 60 },
+                { gameId: 'reaction', score: 900 },
+            ], 'https://example.test');
+
+            const lines = text.split('\n');
+            expect(lines[0]).toBe('StrictHotel Daily 2026-07-28');
+            expect(lines[1]).toContain('27');
+            expect(lines[2]).toBe(SHARE_SQUARES.great + SHARE_SQUARES.ok + SHARE_SQUARES.poor);
+            expect(lines[3]).toBe('https://example.test');
+        });
+
+        it('omits the URL line when the site has no address yet', () => {
+            const text = buildShareText('2026-07-28', 27, [{ gameId: 'math', score: 90 }], '');
+            expect(text.split('\n')).toHaveLength(3);
+        });
+
+        it('survives an empty game list', () => {
+            expect(() => buildShareText('2026-07-28', 30, [], '')).not.toThrow();
+            expect(() => buildShareText('2026-07-28', 30, null, '')).not.toThrow();
+        });
+
+        it('stays short enough to paste into a chat', () => {
+            const text = buildShareText('2026-07-28', 27, [
+                { gameId: 'math', score: 90 },
+                { gameId: 'stroop', score: 60 },
+                { gameId: 'reaction', score: 280 },
+            ], 'https://stricthotel.example');
+            expect(text.length).toBeLessThan(120);
+        });
+    });
+
+    describe('shareUrl', () => {
+        const saved = process.env.PUBLIC_URL;
+        afterEach(() => {
+            if (saved === undefined) delete process.env.PUBLIC_URL;
+            else process.env.PUBLIC_URL = saved;
+            delete process.env.RENDER_EXTERNAL_URL;
+        });
+
+        it('is empty until the site has an address', () => {
+            delete process.env.PUBLIC_URL;
+            delete process.env.RENDER_EXTERNAL_URL;
+            expect(shareUrl()).toBe('');
+        });
+
+        it('strips trailing slashes', () => {
+            process.env.PUBLIC_URL = 'https://example.test///';
+            expect(shareUrl()).toBe('https://example.test');
+        });
+
+        it('falls back to the hosting platform variable', () => {
+            delete process.env.PUBLIC_URL;
+            process.env.RENDER_EXTERNAL_URL = 'https://render.test';
+            expect(shareUrl()).toBe('https://render.test');
+        });
+    });
+
+    describe('database mode', () => {
+        it('refuses a duplicate through the primary key, not a read-then-write', async () => {
+            isDatabaseEnabled.mockReturnValue(true);
+            // rowCount 0 means the `on conflict do nothing` fired.
+            query.mockResolvedValue({ rowCount: 0, rows: [] });
+
+            const res = await saveDailyResult('Someone', '2026-07-28', 30, []);
+
+            expect(res.stored).toBe(false);
+            const insert = query.mock.calls[0][0];
+            expect(insert).toContain('on conflict (player_id, day) do nothing');
+        });
+    });
+});

@@ -18,6 +18,15 @@ import {
 } from '../room-manager.js';
 import { emitBalanceUpdate, emitToUser, sanitizeName, validateRoomCode } from '../socket-utils.js';
 import { isDatabaseEnabled, query } from '../db.js';
+import {
+    utcDay,
+    gamesForDay,
+    getDailyResult,
+    saveDailyResult,
+    getDailyLeaderboard,
+    buildShareText,
+    shareUrl
+} from '../brain-daily.js';
 
 const brainDailyCooldown = new Map(); // name -> dayNumber
 let brainLeaderboardBroadcastTimer = null;
@@ -175,6 +184,32 @@ export function registerBrainVersusHandlers(socket, io, deps) {
         socket.emit('brain-game-leaderboards', gameBoards);
     } catch (err) { console.error('brain-get-leaderboard error:', err.message); } });
 
+    // Which challenge is today, and has this player already taken it? The
+    // server decides the selection — handing that to the browser would let a
+    // client reroll until it liked the games.
+    socket.on('brain-daily-info', async () => { try {
+        if (!checkRateLimit(socket)) return;
+        const day = utcDay();
+        const name = resolveSelfName();
+        const [result, leaderboard] = await Promise.all([
+            name ? getDailyResult(name, day) : null,
+            getDailyLeaderboard(day),
+        ]);
+        socket.emit('brain-daily-info', {
+            day,
+            games: gamesForDay(day),
+            played: Boolean(result),
+            result: result
+                ? {
+                    brainAge: result.brainAge,
+                    games: result.games,
+                    share: buildShareText(day, result.brainAge, result.games, shareUrl()),
+                }
+                : null,
+            leaderboard,
+        });
+    } catch (err) { console.error('brain-daily-info error:', err.message); } });
+
     socket.on('brain-submit-score', async (data) => { try {
         if (!checkRateLimit(socket)) return;
         if (!data || typeof data !== 'object') return;
@@ -185,6 +220,31 @@ export function registerBrainVersusHandlers(socket, io, deps) {
 
         const brainAge = Number(data.brainAge);
         if (!Number.isFinite(brainAge) || brainAge < 20 || brainAge > 80) return;
+
+        // Record the daily result. First submission of the day wins; a second
+        // one is refused rather than overwriting, which is the whole point of
+        // calling it a daily.
+        const day = utcDay();
+        const submitted = Array.isArray(data.games)
+            ? data.games
+                .filter(g => g && VALID_BRAIN_GAME_IDS.includes(g.gameId) && Number.isFinite(Number(g.score)))
+                .map(g => ({ gameId: g.gameId, score: Number(g.score) }))
+            : [];
+        const daily = await saveDailyResult(name, day, Math.round(brainAge), submitted);
+        const effective = daily.stored
+            ? { brainAge: Math.round(brainAge), games: submitted }
+            : (daily.existing || { brainAge: Math.round(brainAge), games: submitted });
+
+        socket.emit('brain-daily-result', {
+            day,
+            stored: daily.stored,
+            brainAge: effective.brainAge,
+            games: effective.games,
+            share: buildShareText(day, effective.brainAge, effective.games, shareUrl()),
+        });
+        getDailyLeaderboard(day)
+            .then(board => _io?.emit('brain-daily-leaderboard', { day, leaderboard: board }))
+            .catch(() => {});
 
         // Server calculates coins (don't trust client)
         const coins = calculateBrainCoins(brainAge);

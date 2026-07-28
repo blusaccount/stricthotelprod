@@ -4,6 +4,97 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: The daily challenge becomes a real daily — Phase 2 part one (2026-07-28)
+
+## Why
+Strict Brain's "Daily Test" picked three of five games at random on *every*
+attempt, with nothing stopping a replay until the numbers looked good
+(`games/strictbrain/js/game.js`, old `startDailyTest`). Only the coin payout was
+gated per day. It was a three-game run wearing a daily label: nobody's score
+compared to anyone else's, there was nothing to come back for, and nothing worth
+sharing.
+
+A daily needs three things, and it had none of them: the same challenge for
+everyone, one attempt, and a result worth passing on.
+
+## What Changed
+
+**`server/brain-daily.js`** (new) — the whole mechanic in one place.
+- `gamesForDay(day)` seeds a Fisher-Yates shuffle from the UTC date, so the
+  selection is a pure function of the day. **The server decides**, and hands the
+  list to the client; letting the browser shuffle would let it reroll.
+- `saveDailyResult` relies on the primary key `(player_id, day)` and
+  `on conflict do nothing`, so "one attempt" is enforced by the database rather
+  than by a read-then-write that two sockets could race.
+- `getDailyLeaderboard(day)` — today only, lowest brain age first.
+- `buildShareText` — title, brain age, three squares, URL. Under 120 characters
+  so it pastes into a chat. The URL comes from `PUBLIC_URL` and is simply
+  omitted while the site has no address, rather than pointing at localhost.
+
+**Socket** — `brain-daily-info` (what is today, have I played), and
+`brain-daily-result` on submission carrying `stored`, the effective result and
+the share text. A second submission returns `stored: false` and the earlier
+result: the first attempt stands even when the second is better.
+
+**Client** — the menu tile now names the day and its three games, or says the
+day is done and offers the stored result. The results screen shows the share
+block with a copy button and today's ranking.
+
+**Schema** — `brain_daily_results (player_id, day, brain_age, games, created_at)`,
+keyed by `player_id` so it cascades on deletion, and added to the GDPR export.
+
+## The bug this surfaced
+
+`brain-daily-info` was first requested straight after `registerPlayer` in the
+socket's `connect` handler. Registration is an **async** handler, so the info
+request could be processed while it was still awaiting — the server then had no
+name for the socket and answered "not played yet" to a player who had.
+
+`register-player` now emits **`player-registered`** when it finishes, and the
+brain client waits for it. This is a general fix: any client wanting to ask
+something *as this player* previously had to guess a delay.
+
+While chasing it I also mistook test-data pollution for a second bug — a name
+claimed by an earlier run's owner token returned `NAME_TAKEN`, which silently
+prevented registration. Worth remembering when browser tests behave oddly:
+check for `register-player-error` before assuming the feature is broken.
+
+## How to Verify
+
+Against the local PostgreSQL:
+- Two different players see the identical menu line:
+  `2026-07-28 — Chimp · Reaktion · Rechnen. Ein Versuch.`
+- Submitting 31 stores it; submitting 21 afterwards returns `stored: false` and
+  **27/31 stands** — the better score does not overwrite.
+- After a reload the tile reads `Heute erledigt (Gehirnalter 31). Ergebnis
+  ansehen.` and the button opens the stored result instead of starting a game.
+- The share block renders and the copy button puts exactly this on the
+  clipboard:
+  ```
+  StrictHotel Daily 2026-07-28
+  🧠 Gehirnalter 31
+  🟩🟨🟥
+  https://stricthotel.example
+  ```
+- Today's board lists both players, sorted by brain age.
+- No JS errors anywhere in the flow.
+- `npm test` -> **538 passed / 37 files** (+24 in `brain-daily.test.js`,
+  including a 365-day distribution check that no game is effectively never or
+  always chosen).
+
+## Open Risks / Next Steps
+- **A guest's daily result is tied to a name, not an account.** Clearing site
+  data loses the streak and lets the same person play again under a new name.
+  Signing in fixes it; that is now a concrete reason to have an account.
+- Nothing yet *tells* a player the day has reset. A returning-player nudge is
+  the obvious follow-up.
+- The share text has no image and no OpenGraph preview, so a pasted link is
+  bare. Fine for Discord, weaker on other platforms.
+- Still missing from Phase 2: privacy-friendly analytics. Without numbers there
+  is no way to tell whether any of this moved retention — which was the point.
+
+---
+
 # Handoff: GDPR export and deletion — Phase 1 part two (2026-07-28)
 
 ## Why

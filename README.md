@@ -6,7 +6,7 @@ StrictHotel is an experimental minigame collection: fast, visual web experiences
 - **15+ Games & Experiences**: A full casino suite (Mäxchen, Strictly7s 2.0, Blackjack, Roulette, Plinko, Crash), Stock Market, Watch Party, Strict Brain, Food Guessr, Thing of the Week (tierlist), Loop Machine, Türkçe, Nostalgiabait, and more
 - **Multiplayer Rooms**: Lobby system with Socket.IO for real-time gameplay
 - **Virtual Economy**: StrictCoins + Diamonds with server-authoritative, transactional wallets
-- **Engagement Loop**: 59 achievements with unlock toasts, daily login streak, global activity feed
+- **Engagement Loop**: 57 achievements with unlock toasts, daily login streak, global activity feed, and a daily challenge with a shareable result
 - **Social Features**: Collaborative pixel doodle board, lobby watch-party mini-player with shared queue, contacts app, character creator, dormant soundboard (see `shared/audio/soundboard/README.md`)
 - **Persistent Data**: PostgreSQL database for player profiles, portfolios, and game history (in-memory fallback for local dev)
 - **Login Protection**: Session-based password gate plus trust-on-first-use name ownership (owner tokens)
@@ -92,7 +92,7 @@ See `.env.example` for all available options. Key variables:
 
 **Multiplayer & Social Games:**
 - 📺 **Watch Party** - Synchronized YouTube viewing in rooms, plus a lobby mini-player with a shared auto-advancing queue
-- 🧠 **Strict Brain** - Memory, math, and reaction challenges with daily test, leaderboards, and versus mode
+- 🧠 **Strict Brain** - Memory, math, and reaction challenges. The daily challenge is the same three games for everyone, one attempt, with a shareable result grid and a per-day leaderboard
 - 🏆 **Thing of the Week** - Shared persistent community tierlist
 - 🎹 **Loop Machine** - Collaborative 16-step sequencer with 14 instruments, persisted across restarts
 

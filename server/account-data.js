@@ -50,6 +50,7 @@ const EXPORT_QUERIES = [
     ['brain_leaderboards', 'select best_brain_age, updated_at from brain_leaderboards where player_id = $1'],
     ['brain_game_leaderboards', 'select game_id, best_score, updated_at from brain_game_leaderboards where player_id = $1'],
     ['daily_streaks', 'select * from daily_streaks where player_id = $1'],
+    ['brain_daily_results', 'select day, brain_age, games, created_at from brain_daily_results where player_id = $1 order by day'],
     ['achievements', 'select achievement_id, unlocked_at from achievements where player_id = $1 order by unlocked_at'],
     ['achievement_progress', 'select counter_id, value from achievement_progress where player_id = $1'],
 ];

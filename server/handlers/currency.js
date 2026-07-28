@@ -84,6 +84,12 @@ export function registerCurrencyHandlers(socket, io, { checkRateLimit, onlinePla
         // this user, so the shell + the iframe stay in sync).
         emitToUser(io, name, 'balance-update', { balance: await getBalance(name) });
 
+        // Registration is asynchronous, so anything a client wants to ask
+        // "as this player" has to wait for it. Without this ack the only
+        // options are a guessed delay or a wrong answer — the daily challenge
+        // hit exactly that and reported "not played yet" to a player who had.
+        socket.emit('player-registered', { name, game });
+
         if (firstTime) {
             pushActivity({
                 type: 'first_login', player: name,

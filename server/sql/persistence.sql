@@ -60,6 +60,21 @@ create table if not exists brain_leaderboards (
 create index if not exists brain_leaderboards_age_idx
   on brain_leaderboards (best_brain_age asc, updated_at desc);
 
+-- One row per player per day: the daily challenge result. The primary key is
+-- what enforces "one attempt" — a second submission conflicts and is refused
+-- rather than overwriting, which is what makes the score comparable.
+create table if not exists brain_daily_results (
+  player_id bigint not null references players(id) on delete cascade,
+  day date not null,
+  brain_age integer not null,
+  games jsonb not null,
+  created_at timestamptz not null default now(),
+  primary key (player_id, day)
+);
+
+create index if not exists brain_daily_results_day_idx
+  on brain_daily_results (day, brain_age asc);
+
 create table if not exists brain_game_leaderboards (
   player_id bigint not null references players(id) on delete cascade,
   game_id text not null,
