@@ -148,3 +148,13 @@ body.legal-body {
 .legal-unknown { color: var(--arcade-dim); }
 
 .legal-loading { color: var(--arcade-dim); }
+
+.legal-wrap .consent-btn.consent-btn-danger {
+    border-color: var(--arcade-loss);
+    color: var(--arcade-loss);
+    margin-left: 8px;
+}
+
+.legal-wrap .consent-btn.consent-btn-danger:hover {
+    background: rgba(255, 106, 122, 0.16);
+}

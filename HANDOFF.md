@@ -4,6 +4,92 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: GDPR export and deletion — Phase 1 part two (2026-07-28)
+
+## Why
+Accounts now hold a Discord id, which makes Art. 15 (access) and Art. 17
+(erasure) concrete rather than theoretical. Building them also forced the
+question "what exactly belongs to one player", and the honest answer exposed a
+bug I had shipped hours earlier.
+
+## The bug the retention job had
+
+`server/retention.js` carried its own list of tables to clean up and **missed
+`picto_strokes` and `picto_messages` entirely**. Both key by `author_name`, so
+neither cascades from `players.id`. A purged player left their chat messages and
+their drawings behind, still carrying their name — the precise opposite of what
+a retention job is for.
+
+`server/account-data.js` now owns the single map of what belongs to a player,
+and both the retention job and the erasure endpoint read from it. A table added
+to one is covered by the other by construction.
+
+## What Changed
+
+**`server/account-data.js`** (new)
+- `exportPlayerData(name)` — 15 categories across every table, keyed by
+  `players.id` or by name as each table requires.
+- `deletePlayerData(name)` / `deletePlayersData(names)` — one transaction,
+  dependants first, `players` last so the cascade fires with everything else
+  already handled.
+- **Strokes are anonymised, messages are deleted.** A stroke on the shared
+  canvas is a mark somebody else's drawing may be built on; the name is the
+  personal datum, the pixels are not. A chat message is the person speaking, so
+  it goes. The marker is `<deleted>`, which `sanitizeName` strips from any real
+  name, so it can never collide with a player.
+
+**Endpoints** in `server/routes/discord-auth.js`
+- `GET /api/account/export` — the full JSON, as a download. Signed-in only:
+  that is the only way this server can tell one player from another.
+- `POST /api/account/delete` — requires the player's own name echoed back in
+  `confirm`. Irreversible actions should not be one mis-click away.
+- Guests get 401 with a pointer to the owner-token route in the privacy notice.
+
+**`public/datenschutz.html`** gained a self-service section: download, and
+delete behind a typed confirmation. It renders differently for guests, for
+unconfigured servers and for signed-in players.
+
+## How to Verify
+
+**Against a real PostgreSQL 16**, not mocks — one was initialised locally for
+this (`initdb` must run as the `postgres` user, and `DATABASE_SSL=false` is
+needed for a local instance).
+
+Seeded one player with a row in all eleven dependent tables, plus a stroke
+belonging to a *different* player as a control:
+
+| | before | after |
+| --- | --- | --- |
+| players, stock_positions, wallet_ledger, achievements, achievement_progress | 1 each | **0 each** |
+| tierlist, food_ratings, food_scrandle, food_classic | 1 each | **0 each** |
+| picto_messages | 1 | **0** |
+| picto_strokes (theirs) | 2 | **0** |
+| picto_strokes (`<deleted>`) | 0 | **2** |
+| picto_strokes (other player) | 1 | **1** — untouched |
+
+- Export before deletion returned all 15 categories including the message text.
+- `purgeDormantPlayers(24)` on the same database: deleted the 30-month-dormant
+  player with its Pictochat rows, left the 3-month-old one alone, and logged
+  "anonymised 1 shared stroke".
+- Through the browser: guest sees the pointer, signed-in sees the tools, a
+  mismatched confirmation is refused, a correct one deletes and signs out.
+- `npm test` -> **514 passed / 36 files** (+15 in `account-data.test.js`).
+
+## Open Risks / Next Steps
+- Export is a single JSON response built in memory. Fine at this size; a player
+  with a very long wallet ledger would want streaming.
+- Deletion removes the player row, so the name becomes claimable again. That is
+  the correct reading of erasure, but it does mean a name can be re-registered
+  by someone else afterwards.
+- The site password gate still exists alongside accounts. Once sign-in is the
+  normal path, the shared password becomes the odd one out — worth deciding
+  before launch whether it stays as a private-beta gate or goes.
+- Phase 1 is now complete on the code side: accounts exist, guests still work,
+  the migration path is exercised, and both GDPR duties are served. What is
+  still untested is the real Discord application, which needs a domain.
+
+---
+
 # Handoff: Discord sign-in — accounts, Phase 1 part one (2026-07-28)
 
 ## Why

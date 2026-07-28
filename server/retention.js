@@ -15,18 +15,9 @@
 // to `updated_at` and `created_at` for rows that predate that column.
 
 import { isDatabaseEnabled, query } from './db.js';
+import { deletePlayersData } from './account-data.js';
 
 const RUN_INTERVAL_MS = 24 * 60 * 60 * 1000;
-
-// Tables keyed by player_name rather than by player_id. Everything keyed by
-// player_id disappears through `on delete cascade`; these do not, and would
-// otherwise be left behind pointing at a player that no longer exists.
-const NAME_KEYED_TABLES = [
-    'tierlist_placements',
-    'food_ratings',
-    'food_scrandle_streaks',
-    'food_classic_scores',
-];
 
 let timerId = null;
 
@@ -81,21 +72,15 @@ export async function purgeDormantPlayers(months) {
 
     const names = dormant.map(r => r.name);
 
-    // One transaction: a half-purged player is worse than an un-purged one,
-    // because the name-keyed rows would then be orphaned.
-    await query('begin');
-    try {
-        for (const table of NAME_KEYED_TABLES) {
-            await query(`delete from ${table} where player_name = any($1::text[])`, [names]);
-        }
-        await query('delete from players where name = any($1::text[])', [names]);
-        await query('commit');
-    } catch (err) {
-        await query('rollback').catch(() => {});
-        throw err;
-    }
+    // account-data.js owns the full list of what belongs to a player, so this
+    // job and an Art. 17 request can never disagree about it. The first
+    // version of this function had its own list and missed the Pictochat
+    // tables entirely, leaving deleted players' strokes and messages behind
+    // with their names still on them.
+    const { anonymisedStrokes } = await deletePlayersData(names);
 
-    console.log(`[retention] deleted ${names.length} dormant player(s) after ${months} months`);
+    console.log(`[retention] deleted ${names.length} dormant player(s) after ${months} months` +
+        (anonymisedStrokes ? `, anonymised ${anonymisedStrokes} shared stroke(s)` : ''));
     return { deleted: names.length, names };
 }
 

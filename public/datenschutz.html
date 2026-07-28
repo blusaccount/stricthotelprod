@@ -224,7 +224,16 @@
         Art. 22 DSGVO findet nicht statt.
     </p>
 
-    <h2>9. Einwilligung verwalten</h2>
+    <h2>9. Deine Daten</h2>
+    <p>
+        Wer mit Discord angemeldet ist, kann seine Rechte nach Art. 15 und
+        Art. 17 DSGVO hier direkt ausueben &mdash; ohne Mail und ohne Wartezeit.
+    </p>
+    <div id="account-tools">
+        <p class="legal-loading">Pruefe Anmeldestatus&hellip;</p>
+    </div>
+
+    <h2>10. Einwilligung verwalten</h2>
     <p>
         <button type="button" class="consent-btn" id="revoke-yt" style="margin-top:10px;">
             YouTube-Einwilligung widerrufen
@@ -242,6 +251,94 @@
 </div>
 
 <script src="/shared/js/yt-consent.js"></script>
+<script>
+// ---- Art. 15 / Art. 17 self-service -------------------------------------
+(function () {
+    var box = document.getElementById('account-tools');
+    if (!box) return;
+
+    function esc(v) {
+        return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+
+    function renderGuest(why) {
+        box.innerHTML = '<p>' + esc(why) + ' Ohne Anmeldung koennen wir dich nicht ' +
+            'von anderen unterscheiden &mdash; wende dich in dem Fall mit dem im Browser ' +
+            'gespeicherten Besitz-Token an die im <a href="/impressum.html">Impressum</a> ' +
+            'genannte Adresse.</p>';
+    }
+
+    function renderSignedIn(name) {
+        box.innerHTML =
+            '<p>Angemeldet als <strong>' + esc(name) + '</strong>.</p>' +
+            '<p>' +
+            '  <a class="consent-btn" href="/api/account/export">DATEN HERUNTERLADEN (JSON)</a>' +
+            '</p>' +
+            '<p style="margin-top:18px;">Konto und alle Spieldaten unwiderruflich loeschen. ' +
+            'Tippe zur Bestaetigung <strong>' + esc(name) + '</strong> ein:</p>' +
+            '<p>' +
+            '  <input id="delete-confirm" type="text" autocomplete="off" ' +
+            '         style="font-family:inherit;font-size:9px;padding:9px;background:#0d0716;' +
+            'color:#e8e8f0;border:2px solid #2c2240;">' +
+            '  <button class="consent-btn consent-btn-danger" id="delete-account" type="button">' +
+            'KONTO LOESCHEN</button>' +
+            '</p>' +
+            '<p id="delete-status"></p>';
+
+        document.getElementById('delete-account').addEventListener('click', function () {
+            var status = document.getElementById('delete-status');
+            var confirm = document.getElementById('delete-confirm').value;
+            if (confirm !== name) {
+                status.className = 'legal-todo';
+                status.textContent = 'Der eingetippte Name stimmt nicht.';
+                return;
+            }
+            status.className = '';
+            status.textContent = 'Loesche\u2026';
+            fetch('/api/account/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ confirm: confirm })
+            })
+                .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+                .then(function (r) {
+                    if (!r.ok) throw new Error(r.body.error || 'unbekannt');
+                    box.innerHTML = '<p>Konto und alle zugehoerigen Daten wurden geloescht. ' +
+                        'Du bist abgemeldet.</p>';
+                })
+                .catch(function (err) {
+                    status.className = 'legal-todo';
+                    status.textContent = 'Loeschung fehlgeschlagen: ' + esc(err.message);
+                });
+        });
+    }
+
+    fetch('/api/account', { headers: { Accept: 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+            if (!data) return renderGuest('Status unbekannt.');
+            if (!data.configured) {
+                return renderGuest('Auf diesem Server ist keine Anmeldung eingerichtet.');
+            }
+            if (!data.discord) {
+                return renderGuest('Du bist nicht angemeldet.');
+            }
+            // The player name lives behind the export endpoint, not on
+            // /api/account — ask for it once so the confirmation can require it.
+            return fetch('/api/account/export')
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (exported) {
+                    var name = exported && exported.player && exported.player.name;
+                    if (!name) return renderGuest('Zu deinem Konto gibt es noch keinen Spielstand.');
+                    renderSignedIn(name);
+                });
+        })
+        .catch(function () { renderGuest('Status konnte nicht geladen werden.'); });
+})();
+</script>
+
 <script>
 (function () {
     var btn = document.getElementById('revoke-yt');

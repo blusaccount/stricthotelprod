@@ -16,6 +16,8 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
 import { rateLimiter } from '../rate-limit.js';
+import { nameForDiscordId, unbindDiscordId } from '../identity.js';
+import { exportPlayerData, deletePlayerData } from '../account-data.js';
 
 // Overridable so the flow can be exercised against a stand-in server in
 // tests. Never point this anywhere but discord.com in production.
@@ -177,6 +179,58 @@ export function createDiscordAuthRouter() {
         } catch (err) {
             console.error('[discord-auth] callback failed:', err.message);
             fail('exchange_failed');
+        }
+    });
+
+    // --- GDPR Art. 15: everything we hold ------------------------------------
+    // Only reachable while signed in, because that is the only way this server
+    // can tell one player from another. Guests have no identity to prove and
+    // are pointed at the privacy notice instead.
+    router.get('/api/account/export', limit, async (req, res) => {
+        const discord = sessionDiscord(req.session);
+        if (!discord) return res.status(401).json({ error: 'not_signed_in' });
+
+        try {
+            const name = await nameForDiscordId(discord.id);
+            if (!name) return res.status(404).json({ error: 'no_player' });
+
+            const data = await exportPlayerData(name);
+            if (!data) return res.status(404).json({ error: 'no_player' });
+
+            data.discord = { id: discord.id, username: discord.username };
+            res.set('Content-Disposition',
+                `attachment; filename="stricthotel-${name.replace(/[^A-Za-z0-9_-]/g, '')}.json"`);
+            res.json(data);
+        } catch (err) {
+            console.error('[account] export failed:', err.message);
+            res.status(500).json({ error: 'export_failed' });
+        }
+    });
+
+    // --- GDPR Art. 17: delete everything -------------------------------------
+    // POST, and the player name has to be typed back, because this is
+    // irreversible and a mis-click must not be able to trigger it.
+    router.post('/api/account/delete', limit, async (req, res) => {
+        const discord = sessionDiscord(req.session);
+        if (!discord) return res.status(401).json({ error: 'not_signed_in' });
+
+        try {
+            const name = await nameForDiscordId(discord.id);
+            if (!name) return res.status(404).json({ error: 'no_player' });
+
+            if (req.body?.confirm !== name) {
+                return res.status(400).json({ error: 'confirm_mismatch', expected: name });
+            }
+
+            const result = await deletePlayerData(name);
+            await unbindDiscordId(discord.id);
+            delete req.session.discord;
+
+            console.log(`[account] deleted "${name}" on request`);
+            req.session.save(() => res.json({ ok: true, ...result }));
+        } catch (err) {
+            console.error('[account] delete failed:', err.message);
+            res.status(500).json({ error: 'delete_failed' });
         }
     });
 
