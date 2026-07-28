@@ -4,6 +4,104 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Crypto prices move to CoinGecko (2026-07-28)
+
+## Why
+Every provider checked (Alpha Vantage, Finnhub, Twelve Data, Tiingo, Polygon,
+FMP) restricts its free tier to internal or non-commercial use, and separates
+"internal use" from "display to end users" even on paid plans. Exchange
+licensing is the reason: the venues own equity prices and every vendor passes
+their terms through.
+
+CoinGecko is the exception, because crypto has no exchange licensing regime.
+Their API Terms §4.1.6 say plainly: "You are entitled to charge for your
+services and products that incorporate or integrates our CoinGecko API." So
+the seven crypto symbols on the ticker can be served from a licensed source
+today, at no cost, while the equity side stays an open problem.
+
+## What Changed
+
+**New provider** — `server/stock-providers/coingecko.js`
+- `fetchQuotesViaCoinGecko`, `fetchSingleQuoteViaCoinGecko`,
+  `fetchHistoryViaCoinGecko`, plus `toCoinGeckoId` / `isCryptoSymbol`.
+  Quote shape matches the Stooq and Yahoo providers so callers treat them
+  interchangeably.
+- Symbol map is a fixed table of 20 pairs, not a `/coins/list` lookup:
+  `/api/stock-search` filters to EQUITY and ETF, so the crypto universe is
+  exactly what `TICKER_SYMBOLS` defines plus a few obvious neighbours.
+- CoinGecko reports the 24h move as a percentage only, so the absolute change
+  is derived from it. Guarded at -100% so a dead coin cannot divide by zero.
+- **Rate limiting.** The keyless public endpoint answers bursts with 429s
+  (sometimes rewritten to 503 upstream). Calls are serialised through one
+  chain with a minimum gap (`COINGECKO_MIN_INTERVAL_MS`, default 1500 ms) and
+  retried twice with growing backoff. Both values are read per call, not at
+  import time, so the environment is not frozen before it is wired up.
+- **Granularity.** CoinGecko has no interval parameter; it picks from the day
+  span. Raw, a 3-month chart arrives as ~2,200 hourly points where the Yahoo
+  path returns ~65 daily ones. `bucketPoints` collapses the series to the
+  interval each range already expects (1mo/3mo to daily, 1y to weekly),
+  always keeping the most recent point.
+
+**Cascade wiring** — `server/routes/stocks.js`
+- `fetchTickerQuotes` splits the symbol list: crypto goes to CoinGecko,
+  everything else to the existing yf.quote -> spark -> Stooq cascade. The two
+  results merge in `commit()`. Crypto therefore never touches Yahoo, and a
+  Yahoo ban no longer takes the crypto board down with it.
+- `/api/stock-quote` serves crypto from CoinGecko and **stops there** — no
+  fallthrough to the unlicensed providers, which would defeat the point.
+- `/api/stock-history` prefers CoinGecko for crypto on the ranges it covers.
+
+**Attribution** (mandatory, not cosmetic)
+- `games/stocks/index.html` gained a footer inside `.stock-page`:
+  "Powered by CoinGecko", linked, plus the entertainment-only disclaimer.
+  `.stock-attribution` in `games/stocks/stocks.css` pins it at 10px because
+  §4.4 requires font size 10 or larger. **Do not shrink or remove it.**
+- `public/credits.html` now separates crypto (licensed, CoinGecko) from
+  equities (still unlicensed Yahoo/Stooq).
+
+**Config** — `.env.example` documents `COINGECKO_API_KEY` (free Demo key,
+optional but recommended) and `COINGECKO_MIN_INTERVAL_MS`.
+
+## How to Verify
+- `npm test` -> **453 passed / 32 files** (was 423 / 31; +30 in
+  `server/__tests__/coingecko.test.js`). The suite still runs in ~5s because
+  the test file sets the pacing interval to 0.
+- Against the live API: batch of all seven ticker symbols returns seven
+  quotes; derived `change` reconciles with the reported `pct` to six decimals
+  on every one.
+- History ranges after bucketing: 1d 289 points at 5m, 5d 121 at 1h, 1mo 31 at
+  1d, 3mo 91 at 1d, 1y 53 at 1wk — all strictly ascending. `5y` is refused
+  with `unsupported range`; `AAPL` with `no CoinGecko mapping`.
+- Through the running server: `/api/ticker` returns 55 rows, the 7 crypto ones
+  carrying live CoinGecko prices and `marketState: REGULAR`;
+  `/api/stock-quote?symbol=BTC-USD` and
+  `/api/stock-history?symbol=ETH-USD&range=1mo` both answer from CoinGecko
+  (`meta.exchangeName: CoinGecko`).
+- In headless Chromium the attribution renders inside `.stock-page`, visible,
+  computed font-size 10px, no JS errors.
+
+## Open Risks / Next Steps
+- **The market grid does not populate in a headless sandbox.** Verified this
+  is NOT caused by this change: stashing the whole branch and re-running gives
+  the same empty grid on the baseline. The API layer is confirmed working via
+  curl and the browser network log (`/api/ticker` 200). Whatever gates the
+  grid client-side is pre-existing and unexamined.
+- **`5y` for crypto still falls through to Yahoo.** CoinGecko's free plan
+  stops at 365 days. The range is deliberately absent from
+  `COINGECKO_HISTORY_RANGES` rather than silently shortened.
+- **Equities, ETFs, indices and commodities are still on unlicensed Yahoo
+  endpoints** — 48 of the 55 ticker symbols, plus anything a player finds via
+  search. That is the remaining blocker for commercial operation and no free
+  provider solves it.
+- **CoinGecko API Terms §4.1.7(c)** forbids using their data "in any
+  advertisements or for targeting advertisements". Ads *beside* the data are
+  most likely a different thing, but the stocks page is exactly where ads are
+  planned. Worth a written clarification from CoinGecko before relying on it.
+- Without `COINGECKO_API_KEY`, clicking quickly through several chart ranges
+  can still queue behind the 1.5s spacing. The free Demo key removes this.
+
+---
+
 # Handoff: Remove LoL Betting (2026-07-28)
 
 ## Why

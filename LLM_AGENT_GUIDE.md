@@ -23,7 +23,7 @@ This guide helps LLM agents work effectively in this repo. Keep it short, stay i
 - Shared styles: [shared/css/theme.css](shared/css/theme.css)
 
 **Tests:**
-- [server/__tests__/](server/__tests__/) - Vitest tests for all server modules (31 test files)
+- [server/__tests__/](server/__tests__/) - Vitest tests for all server modules (32 test files)
 
 ## Core flows (mental model)
 
@@ -58,7 +58,8 @@ This guide helps LLM agents work effectively in this repo. Keep it short, stay i
 - `currency.withWallet()` wraps deduct + game RNG + payout in a single Postgres transaction (memory mode passes through); used by Strictly7s, Plinko, Roulette, and Mäxchen place-bet so a crash mid-round rolls back the bet
 
 **Stock Market:**
-- Real-time prices: cascading provider chain `yf.quote → v8 chart → v7 spark → Stooq` ([server/stock-providers/](server/stock-providers/))
+- Crypto: **CoinGecko only** ([server/stock-providers/coingecko.js](server/stock-providers/coingecko.js)) — the one licensed source. Never route crypto through Yahoo; the "Powered by CoinGecko" attribution on the stocks page is contractually required
+- Everything else: cascading provider chain `yf.quote → v8 chart → v7 spark → Stooq` ([server/stock-providers/](server/stock-providers/))
 - Persistent price cache: [server/stock-price-cache.js](server/stock-price-cache.js) (survives empty-Yahoo-response wipeouts)
 - Portfolio/trades: PostgreSQL via [server/stock-game.js](server/stock-game.js)
 - Socket events: [server/handlers/stocks.js](server/handlers/stocks.js)
@@ -78,7 +79,7 @@ This guide helps LLM agents work effectively in this repo. Keep it short, stay i
 - Check [docs/EVENTS.md](docs/EVENTS.md) for socket event contracts
 - Prefer existing helpers and patterns before adding new ones
 - Keep changes minimal, additive, and reversible
-- Run `npm test` before committing changes (all tests across 31 files should pass)
+- Run `npm test` before committing changes (all tests across 32 files should pass)
 - Validate behavior manually if you touch sockets, auth, or game logic
 - Update HANDOFF.md with your changes and verification notes
 
