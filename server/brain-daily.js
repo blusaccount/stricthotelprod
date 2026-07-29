@@ -109,6 +109,16 @@ export async function saveDailyResult(playerName, day, brainAge, games) {
     }
 
     try {
+        // Make sure the player row exists first. Without this a submit that
+        // races register-player selects no id, inserts nothing, and returns
+        // {stored:false} — which the client renders as "already played today"
+        // to somebody whose result was in fact dropped. daily-streak.js takes
+        // the same precaution.
+        await query(
+            `insert into players (name, balance, last_seen_at) values ($1, 1000, now())
+             on conflict (name) do nothing`,
+            [playerName]
+        );
         const r = await query(
             `insert into brain_daily_results (player_id, day, brain_age, games)
              select p.id, $2, $3, $4::jsonb from players p where p.name = $1

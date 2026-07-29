@@ -109,6 +109,7 @@ export async function claimName(playerName, ownerToken) {
         }
         return { ok: false, reason: 'taken' };
     }
+    await touchLastSeen(playerName);
     return { ok: true, firstClaim: true };
 }
 
@@ -207,6 +208,10 @@ export async function claimNameForDiscord(requestedName, discordId, discordUsern
         // Case 1. Refresh the display name in passing — people rename on
         // Discord and the contacts list should not show a stale handle.
         await setDiscordUsername(existing, discordUsername);
+        // Without this, a signed-in player's last_seen_at is stamped once at
+        // account creation and never again — and the 24-month retention job
+        // would eventually delete an account that was in daily use.
+        await touchLastSeen(existing);
         return { ok: true, name: existing, bound: false, adopted: existing !== requestedName };
     }
 
@@ -224,6 +229,7 @@ export async function claimNameForDiscord(requestedName, discordId, discordUsern
     // Keep the owner token bound too, so the same browser still works if the
     // player later signs out and continues as a guest.
     if (isValidOwnerToken(ownerToken)) await setOwnerInDb(requestedName, ownerToken);
+    await touchLastSeen(requestedName);
 
     return { ok: true, name: requestedName, bound: true, adopted: false };
 }

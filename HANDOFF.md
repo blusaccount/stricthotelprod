@@ -4,6 +4,86 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Five defects from the accounts/daily work, fixed (2026-07-29)
+
+## Why
+A read-only review pass over the code written during the accounts and daily
+work turned up five defects, four of them introduced by that work. Each one was
+reproduced against a real PostgreSQL 16 instance before being touched — none of
+these is a "looks wrong" finding.
+
+## What Changed
+
+**`server/identity.js` — a signed-in account could be deleted while in use.**
+`touchLastSeen` was called on some claim paths but not all: not on a first
+claim, and not on either Discord path. So an account created through Discord had
+`last_seen_at` stamped once and never again, and after 24 months the retention
+job would delete an account that was in daily use. `touchLastSeen` now runs on
+every successful claim.
+
+Reproduced: a Discord account aged 40 months, then signed in again, still came
+back from `findDormantPlayers(24)`. After the fix it does not.
+
+**`server/account-data.js` — exported dates were off by one.**
+node-postgres parses a `date` into a JS `Date` at **local** midnight, so on any
+positive UTC offset the day shifts backwards. A result stored on the 28th
+exported as the 27th in Berlin. The export now selects `day::text`.
+
+Reproduced: `TZ=Europe/Berlin` on a row stored as `2026-07-28` exported
+`2026-07-27`; it now exports `2026-07-28`. There is no `setTypeParser` anywhere
+in `server/db.js`, so **any** future `date` column has this trap — select
+`::text`.
+
+**`server/brain-daily.js` — a result could be silently dropped.**
+`saveDailyResult` inserted `select p.id from players where name = $1`. If the
+submission raced `register-player`, there was no player row, the insert matched
+nothing, and the function returned `{stored: false, existing: null}` — which the
+client renders as "already played today" to somebody whose result was in fact
+thrown away. It now ensures the player row exists first, as `daily-streak.js`
+already did.
+
+Reproduced: `saveDailyResult` for an unknown name returned
+`{"stored":false,"existing":null}`; it now returns `{"stored":true}` and the row
+is in the table.
+
+**`server/socket-utils.js` — four games were being logged as Mäxchen.**
+`validateGameType` had a hardcoded list that predates `food-guessr`, `turkish`,
+`nostalgiabait` and `contacts`, and silently rewrote each of them to
+`'maexchen'`. The list is now a named `KNOWN_GAME_TYPES` and the fallback is a
+parameter; presence in `server/handlers/currency.js` passes `'unknown'`, because
+a player whose game we cannot identify is not playing Mäxchen.
+
+**`games/food-guessr/js/game.js` — registration was always rejected.**
+It hand-rolled `socket.emit('register-player', {...})` without an `ownerToken`,
+which the server refuses. Replaced with the shared
+`window.StrictHotelSocket.registerPlayer`.
+
+## New tripwire
+`server/__tests__/account-data.test.js` now parses `server/sql/persistence.sql`,
+finds every table with a `player_id` / `player_name` / `author_name` column, and
+asserts each one is both exportable and deletable. Nothing checked this before:
+adding a table keyed to a person passed the whole suite while quietly making the
+Art. 15 export incomplete and the Art. 17 deletion partial. It currently finds
+15 tables, and a fourth test guards the parser itself so the assertions cannot
+go vacuous. Verified by appending a throwaway table to the schema — the tripwire
+fails, as intended.
+
+## How to Verify
+- `npm test` — 542 passing, 37 files.
+- Against a database: age an account past the retention window, sign in, and
+  check it is no longer in `findDormantPlayers(24)`.
+- `TZ=Europe/Berlin` on `exportPlayerData` for a player with a daily result —
+  the exported `day` must match the stored one.
+
+## Open
+- Phase 2 remainder: challenge streak (derive from `brain_daily_results`, no new
+  table) and the aggregate-only `/admin/stats` endpoint.
+- `public/lobby.js` keeps a duplicate hardcoded copy of `STREAK_REWARDS`, and
+  `DIAMOND_BONUS_DAYS` in `server/daily-streak.js` is dead code. Neither is a
+  bug today; both are traps for whoever changes the rewards.
+
+---
+
 # Handoff: The daily challenge becomes a real daily — Phase 2 part one (2026-07-28)
 
 ## Why

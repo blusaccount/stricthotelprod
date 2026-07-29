@@ -225,8 +225,26 @@ describe('daily brain challenge', () => {
             const res = await saveDailyResult('Someone', '2026-07-28', 30, []);
 
             expect(res.stored).toBe(false);
-            const insert = query.mock.calls[0][0];
+            const sqls = query.mock.calls.map(c => c[0]);
+            const insert = sqls.find(q => q.includes('insert into brain_daily_results'));
+            expect(insert).toBeDefined();
             expect(insert).toContain('on conflict (player_id, day) do nothing');
+        });
+
+        it('ensures the player row exists before inserting the result', async () => {
+            // A submit racing register-player would otherwise select no id,
+            // insert nothing, and report "already played today" for a result
+            // that was in fact dropped.
+            isDatabaseEnabled.mockReturnValue(true);
+            query.mockResolvedValue({ rowCount: 1, rows: [{ brain_age: 30 }] });
+
+            await saveDailyResult('Someone', '2026-07-28', 30, []);
+
+            const sqls = query.mock.calls.map(c => c[0]);
+            const playerInsert = sqls.findIndex(q => q.includes('insert into players'));
+            const resultInsert = sqls.findIndex(q => q.includes('insert into brain_daily_results'));
+            expect(playerInsert).toBeGreaterThan(-1);
+            expect(playerInsert).toBeLessThan(resultInsert);
         });
     });
 });

@@ -172,11 +172,10 @@
                     (localStorage.getItem('stricthotel-name') || '');
                 var hasName = Boolean(name);
                 if (hasName) {
-                    var character = null;
-                    if (window.StrictHotelSocket && window.StrictHotelSocket.getCharacterData) {
-                        try { character = window.StrictHotelSocket.getCharacterData(); } catch (e) {}
-                    }
-                    socket.emit('register-player', { name: name, character: character, game: 'food-guessr' });
+                    // Via the shared helper, which supplies the owner token.
+                    // Emitting by hand omitted it, and the server rejects a
+                    // guest without one — Food Guessr presence never worked.
+                    window.StrictHotelSocket.registerPlayer(socket, 'food-guessr');
                 }
                 // Defer the rating-state request slightly so register-player's
                 // async DB write finishes first (it sets onlinePlayers, which the

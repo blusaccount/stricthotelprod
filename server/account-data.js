@@ -42,7 +42,9 @@ export const AUTHORED_DELETE_TABLES = [
 export const ANONYMOUS_AUTHOR = '<deleted>';
 
 // Read for export. Keyed by players.id unless noted.
-const EXPORT_QUERIES = [
+// Exported so a test can hold the list against the schema: a new table keyed
+// to a person that nobody adds here would silently break Art. 15.
+export const EXPORT_QUERIES = [
     ['player', 'select name, balance, diamonds, created_at, updated_at, last_seen_at, discord_username from players where id = $1'],
     ['stock_positions', 'select symbol, shares, avg_cost from stock_positions where player_id = $1'],
     ['wallet_ledger', 'select delta, reason, metadata, created_at from wallet_ledger where player_id = $1 order by created_at'],
@@ -50,12 +52,15 @@ const EXPORT_QUERIES = [
     ['brain_leaderboards', 'select best_brain_age, updated_at from brain_leaderboards where player_id = $1'],
     ['brain_game_leaderboards', 'select game_id, best_score, updated_at from brain_game_leaderboards where player_id = $1'],
     ['daily_streaks', 'select * from daily_streaks where player_id = $1'],
-    ['brain_daily_results', 'select day, brain_age, games, created_at from brain_daily_results where player_id = $1 order by day'],
+    // day::text, not day: node-postgres parses a `date` into a JS Date at
+    // *local* midnight, which shifts the day backwards on any positive UTC
+    // offset — a result stored on the 28th exports as the 27th in Berlin.
+    ['brain_daily_results', "select day::text as day, brain_age, games, created_at from brain_daily_results where player_id = $1 order by day"],
     ['achievements', 'select achievement_id, unlocked_at from achievements where player_id = $1 order by unlocked_at'],
     ['achievement_progress', 'select counter_id, value from achievement_progress where player_id = $1'],
 ];
 
-const EXPORT_QUERIES_BY_NAME = [
+export const EXPORT_QUERIES_BY_NAME = [
     ['tierlist_placements', 'select week_key, item_index, tier from tierlist_placements where player_name = $1'],
     ['food_ratings', 'select dish_key, rating from food_ratings where player_name = $1'],
     ['food_scrandle_streaks', 'select variant, best_streak, total_runs from food_scrandle_streaks where player_name = $1'],

@@ -15,7 +15,9 @@ export function registerCurrencyHandlers(socket, io, { checkRateLimit, onlinePla
 
         const requested = sanitizeName(data.name);
         const character = validateCharacter(data.character);
-        const game = validateGameType(data.game);
+        // 'unknown' rather than the Maexchen default: this value is presence,
+        // and mislabelling is worse than admitting we do not know.
+        const game = validateGameType(data.game, 'unknown');
 
         // A signed-in Discord account outranks the browser's owner token: the
         // token lives in localStorage and dies with a cleared cache, the

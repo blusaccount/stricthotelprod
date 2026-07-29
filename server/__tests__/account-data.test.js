@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 vi.mock('../db.js', () => ({
     isDatabaseEnabled: vi.fn(() => true),
@@ -14,9 +16,39 @@ import {
     ANONYMISED_TABLES,
     AUTHORED_DELETE_TABLES,
     ANONYMOUS_AUTHOR,
+    EXPORT_QUERIES,
+    EXPORT_QUERIES_BY_NAME,
 } from '../account-data.js';
 
 const sqlsFrom = (mock) => mock.mock.calls.map(c => c[0]);
+
+// --- schema tripwire ---------------------------------------------------------
+// Read the real schema and work out, from the columns alone, which tables hold
+// something belonging to a person. Everything found this way has to be both
+// exportable (Art. 15) and deletable (Art. 17). Without this, adding a table
+// with a `player_name` column passes the entire suite while quietly making the
+// export incomplete and the deletion partial.
+
+const SCHEMA = readFileSync(
+    fileURLToPath(new URL('../sql/persistence.sql', import.meta.url)),
+    'utf8'
+);
+
+// Columns that tie a row to one identifiable person.
+const PERSONAL_COLUMNS = ['player_id', 'player_name', 'author_name'];
+
+function personalTables() {
+    const found = [];
+    const re = /create table if not exists (\w+)\s*\(([\s\S]*?)\n\);/g;
+    let m;
+    while ((m = re.exec(SCHEMA)) !== null) {
+        const [, table, body] = m;
+        if (table === 'players') continue; // the person themself, exported as `player`
+        const columns = PERSONAL_COLUMNS.filter(c => new RegExp(`^\\s*${c}\\s`, 'm').test(body));
+        if (columns.length > 0) found.push({ table, columns, body });
+    }
+    return found;
+}
 
 describe('account data', () => {
     beforeEach(() => {
@@ -41,6 +73,47 @@ describe('account data', () => {
             expect(ANONYMISED_TABLES).toEqual([
                 { table: 'picto_strokes', column: 'author_name' },
             ]);
+        });
+
+        it('finds the personal tables it is meant to check', () => {
+            // Guards the parser itself: a regex that silently matched nothing
+            // would make every assertion below vacuously true.
+            const names = personalTables().map(t => t.table);
+            expect(names).toContain('stock_positions');
+            expect(names).toContain('picto_strokes');
+            expect(names).toContain('food_classic_scores');
+            expect(names.length).toBeGreaterThanOrEqual(12);
+        });
+
+        it('exports every table in the schema that is keyed to a person', () => {
+            const exported = new Set([
+                ...EXPORT_QUERIES.map(([key]) => key),
+                ...EXPORT_QUERIES_BY_NAME.map(([key]) => key),
+            ]);
+            const missing = personalTables()
+                .map(t => t.table)
+                .filter(t => !exported.has(t));
+
+            // A new personal table needs a line in EXPORT_QUERIES (keyed by
+            // players.id) or EXPORT_QUERIES_BY_NAME. Art. 15 asks for
+            // *everything* held about the person, not most of it.
+            expect(missing).toEqual([]);
+        });
+
+        it('deletes every table in the schema that is keyed to a person', () => {
+            const handled = new Set([
+                ...NAME_KEYED_TABLES,
+                ...AUTHORED_DELETE_TABLES.map(t => t.table),
+                ...ANONYMISED_TABLES.map(t => t.table),
+            ]);
+            const missing = personalTables()
+                .filter(t => !handled.has(t.table))
+                // Anything referencing players(id) with a cascade is removed by
+                // the database when the player row goes.
+                .filter(t => !/references players\s*\(id\)\s*on delete cascade/.test(t.body))
+                .map(t => t.table);
+
+            expect(missing).toEqual([]);
         });
 
         it('uses a marker no player could ever register', () => {
