@@ -224,6 +224,30 @@
         desc.textContent = dailyInfo.played
             ? `Heute erledigt (Gehirnalter ${dailyInfo.result ? dailyInfo.result.brainAge : '—'}). Ergebnis ansehen.`
             : `${dailyInfo.day} — ${names}. Ein Versuch.`;
+        renderStreak(dailyInfo.streak);
+    }
+
+    /**
+     * The challenge streak, next to the daily itself. Deliberately *not* a
+     * second pill in the shell topbar: the 🔥 there is the login streak, and
+     * two fire icons showing different numbers would only confuse.
+     */
+    function renderStreak(streak) {
+        const el = $('daily-streak');
+        if (!el) return;
+        if (!streak || !streak.current) {
+            // No run yet — say nothing rather than announce a zero.
+            el.hidden = true;
+            el.textContent = '';
+            return;
+        }
+        const days = streak.current === 1 ? '1 Tag' : `${streak.current} Tage`;
+        // Not played today yet, but the run is still alive: that is the point
+        // worth making, because it is the day they could lose it.
+        const tail = streak.playedToday ? '' : ' — heute noch offen';
+        const best = streak.best > streak.current ? ` (Rekord ${streak.best})` : '';
+        el.textContent = `🧠 Serie: ${days}${best}${tail}`;
+        el.hidden = false;
     }
 
     function startDailyTest() {
@@ -358,6 +382,9 @@
         if (dailyInfo) {
             dailyInfo.played = true;
             dailyInfo.result = { brainAge: payload.brainAge, games: payload.games, share: payload.share };
+            // The submission just extended the run, so take the fresh count
+            // rather than leaving yesterday's on screen.
+            if (payload.streak) dailyInfo.streak = payload.streak;
             renderDailyMenu();
         }
         if (!payload.stored) {

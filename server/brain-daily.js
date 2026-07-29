@@ -164,6 +164,96 @@ export async function getDailyLeaderboard(day, limit = 20) {
     }
 }
 
+// ----------------------------------------------------------------- streak ---
+//
+// The challenge streak is **derived**, never stored. `brain_daily_results`
+// already has one row per player per day, enforced by its primary key — that
+// table *is* the record of who played when, so a second table tracking the same
+// thing could only ever disagree with it.
+//
+// Deriving also means a missed day needs no handling: the gap simply ends the
+// run. Contrast `daily_streaks`, whose stored `current_streak` stays wrong in
+// the database after a break and is only corrected when it is displayed.
+
+/** How far back a streak is counted. A run older than this is not worth a query. */
+const STREAK_HISTORY_DAYS = 400;
+
+function shiftDay(day, delta) {
+    const [y, m, d] = day.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d + delta)).toISOString().slice(0, 10);
+}
+
+/**
+ * Current and best run from a set of played days.
+ *
+ * The current run counts back from today, or from yesterday when today has not
+ * been played yet — otherwise a streak would read 0 all morning and look broken
+ * to somebody who is not late at all. Playing today ends the grace period the
+ * normal way; missing two days in a row ends the run.
+ *
+ * @param {string[]} days played days as `YYYY-MM-DD`, any order
+ * @param {string} today  the current UTC day
+ */
+export function streakFromDays(days, today) {
+    const played = new Set(days);
+    const playedToday = played.has(today);
+
+    let current = 0;
+    let cursor = playedToday ? today : shiftDay(today, -1);
+    while (played.has(cursor)) {
+        current++;
+        cursor = shiftDay(cursor, -1);
+    }
+
+    let best = 0;
+    let run = 0;
+    let previous = null;
+    for (const day of [...played].sort()) {
+        run = (previous !== null && shiftDay(previous, 1) === day) ? run + 1 : 1;
+        if (run > best) best = run;
+        previous = day;
+    }
+
+    return { current, best, playedToday };
+}
+
+/**
+ * The player's challenge streak as of `day`.
+ * @returns {Promise<{current: number, best: number, playedToday: boolean}>}
+ */
+export async function getChallengeStreak(playerName, day) {
+    const empty = { current: 0, best: 0, playedToday: false };
+    if (!playerName) return empty;
+
+    if (!isDatabaseEnabled()) {
+        // Keys are `${name}|${day}`; split at the *last* separator, because a
+        // player name may itself contain a pipe.
+        const days = [];
+        for (const key of memoryResults.keys()) {
+            const cut = key.lastIndexOf('|');
+            if (key.slice(0, cut) === playerName) days.push(key.slice(cut + 1));
+        }
+        return streakFromDays(days, day);
+    }
+
+    try {
+        // day::text — node-postgres parses a `date` at *local* midnight, which
+        // shifts the day backwards on any positive UTC offset.
+        const r = await query(
+            `select r.day::text as day
+               from brain_daily_results r
+               join players p on p.id = r.player_id
+              where p.name = $1 and r.day <= $2::date and r.day > $2::date - $3::int
+              order by r.day desc`,
+            [playerName, day, STREAK_HISTORY_DAYS]
+        );
+        return streakFromDays(r.rows.map(row => row.day), day);
+    } catch (err) {
+        console.error('getChallengeStreak error:', err.message);
+        return empty;
+    }
+}
+
 // ------------------------------------------------------------------ share ---
 
 // Performance bands per game, as the share grid renders them. The thresholds

@@ -43,6 +43,10 @@
                 <div class="menu-btn-info">
                     <div class="menu-btn-title">TÄGLICHER TEST</div>
                     <div class="menu-btn-desc" id="daily-desc">Für alle die gleichen 3 Spiele. Ein Versuch pro Tag.</div>
+                    <!-- Filled by renderDailyMenu once the streak arrives; empty
+                         until then, so nobody is shown a 0 that is only a
+                         not-loaded-yet. -->
+                    <div class="menu-btn-streak" id="daily-streak" hidden></div>
                 </div>
             </button>
             <button class="menu-btn" id="btn-free-training">

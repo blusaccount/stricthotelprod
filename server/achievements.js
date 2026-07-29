@@ -52,6 +52,13 @@ export const ACHIEVEMENTS = [
     // ===== Strict Brain =====
     { id: 'brain_first_test', title: 'Brain Boot',         description: 'Complete one Brain test.',              icon: '🧠', tier: 'bronze',   counter: 'brain_tests',          threshold: 1,    reward: { coins: 50 } },
     { id: 'brain_25_versus',  title: 'Mind Games',         description: 'Win 25 Brain Versus matches.',          icon: '⚡', tier: 'gold',     counter: 'brain_versus_wins',    threshold: 25,   reward: { coins: 750, diamonds: 1 } },
+    // The daily challenge streak. Milestones only — the daily itself already
+    // pays coins, and a second per-day faucet would undo the login streak's
+    // deliberate 150 SC/day ceiling. Taking the challenge costs three games,
+    // not one click, so these sit a tier above the login streak.
+    { id: 'brain_daily_3',    title: 'Warming Up',         description: 'Take the daily challenge 3 days in a row.',  icon: '🧠', tier: 'bronze',   counter: 'brain_daily_streak',   threshold: 3,    reward: { coins: 150 } },
+    { id: 'brain_daily_7',    title: 'Full Week',          description: 'Take the daily challenge 7 days in a row.',  icon: '🧠', tier: 'gold',     counter: 'brain_daily_streak',   threshold: 7,    reward: { coins: 750, diamonds: 1 } },
+    { id: 'brain_daily_30',   title: 'Month of Mondays',   description: 'Take the daily challenge 30 days in a row.', icon: '🧠', tier: 'platinum', counter: 'brain_daily_streak',   threshold: 30,   reward: { coins: 6000, diamonds: 5 } },
 
     // ===== Cross-game wealth (extended ladder up to 10 B SC) =====
     { id: 'wealth_5k',        title: 'Five-Figure Club',   description: 'Reach a balance of 5,000 SC.',         icon: '💰', tier: 'silver',   counter: 'max_balance',          threshold: 5_000,         reward: { coins: 250 } },

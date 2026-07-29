@@ -313,8 +313,8 @@ C->S:
 - `brain-versus-finished` - Submit final score
 
 S->C:
-- `brain-daily-info` - `{ day, games, played, result, leaderboard }`. The server picks the games; the client must not shuffle its own
-- `brain-daily-result` - `{ day, stored, brainAge, games, share }` after a submission. `stored: false` means the day was already played and the earlier result stands
+- `brain-daily-info` - `{ day, games, played, streak, leaderboard, result }`. The server picks the games; the client must not shuffle its own. `streak` is `{ current, best, playedToday }`, derived from `brain_daily_results` rather than stored
+- `brain-daily-result` - `{ day, stored, brainAge, games, streak, share }` after a submission. `stored: false` means the day was already played and the earlier result stands
 - `brain-daily-leaderboard` - `{ day, leaderboard }`, broadcast when anyone finishes
 - `brain-leaderboard` - Overall leaderboard data
 - `brain-game-leaderboards` - Per-game leaderboards data

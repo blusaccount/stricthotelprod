@@ -14,6 +14,8 @@ import {
     getDailyResult,
     saveDailyResult,
     getDailyLeaderboard,
+    getChallengeStreak,
+    streakFromDays,
     bandForScore,
     buildShareText,
     shareUrl,
@@ -135,6 +137,105 @@ describe('daily brain challenge', () => {
             const day = '2030-02-01';
             for (let i = 0; i < 5; i++) await saveDailyResult(uniq('L'), day, 30 + i, []);
             await expect(getDailyLeaderboard(day, 2)).resolves.toHaveLength(2);
+        });
+    });
+
+    describe('challenge streak', () => {
+        it('counts consecutive days up to today', () => {
+            expect(streakFromDays(['2026-07-26', '2026-07-27', '2026-07-28'], '2026-07-28'))
+                .toMatchObject({ current: 3, playedToday: true });
+        });
+
+        it('keeps the run alive on a day not yet played', () => {
+            // Otherwise a streak reads 0 all morning and looks broken to
+            // somebody who is not late at all.
+            expect(streakFromDays(['2026-07-26', '2026-07-27'], '2026-07-28'))
+                .toMatchObject({ current: 2, playedToday: false });
+        });
+
+        it('ends the run after a full day missed', () => {
+            // Played up to the 26th, nothing on the 27th, today is the 28th.
+            expect(streakFromDays(['2026-07-25', '2026-07-26'], '2026-07-28'))
+                .toMatchObject({ current: 0, playedToday: false });
+        });
+
+        it('starts the run over after a gap', () => {
+            const s = streakFromDays(
+                ['2026-07-01', '2026-07-02', '2026-07-03', '2026-07-27', '2026-07-28'],
+                '2026-07-28'
+            );
+            expect(s.current).toBe(2);
+            expect(s.best).toBe(3);
+        });
+
+        it('remembers a best run that is already over', () => {
+            const s = streakFromDays(['2026-06-01', '2026-06-02', '2026-06-03', '2026-07-28'], '2026-07-28');
+            expect(s).toMatchObject({ current: 1, best: 3 });
+        });
+
+        it('crosses month and year boundaries', () => {
+            expect(streakFromDays(['2025-12-30', '2025-12-31', '2026-01-01'], '2026-01-01').current).toBe(3);
+        });
+
+        it('is empty for a player who has never played', () => {
+            expect(streakFromDays([], '2026-07-28')).toEqual({ current: 0, best: 0, playedToday: false });
+        });
+
+        it('ignores duplicate days', () => {
+            expect(streakFromDays(['2026-07-28', '2026-07-28'], '2026-07-28').current).toBe(1);
+        });
+
+        it('is derived from stored results, so playing extends it', async () => {
+            const name = uniq('S');
+            await saveDailyResult(name, '2026-07-27', 30, []);
+            await expect(getChallengeStreak(name, '2026-07-28'))
+                .resolves.toMatchObject({ current: 1, playedToday: false });
+
+            await saveDailyResult(name, '2026-07-28', 30, []);
+            await expect(getChallengeStreak(name, '2026-07-28'))
+                .resolves.toMatchObject({ current: 2, playedToday: true });
+        });
+
+        it('does not count another player\'s days', async () => {
+            const mine = uniq('S'); const theirs = uniq('S');
+            await saveDailyResult(theirs, '2026-07-27', 30, []);
+            await saveDailyResult(theirs, '2026-07-28', 30, []);
+            await saveDailyResult(mine, '2026-07-28', 30, []);
+            await expect(getChallengeStreak(mine, '2026-07-28')).resolves.toMatchObject({ current: 1 });
+        });
+
+        it('splits memory keys at the last separator, since a name may contain one', async () => {
+            const name = `Pipe|Player_${++seq}`;
+            await saveDailyResult(name, '2026-07-28', 30, []);
+            await expect(getChallengeStreak(name, '2026-07-28'))
+                .resolves.toMatchObject({ current: 1, playedToday: true });
+        });
+
+        it('is empty without a player name', async () => {
+            await expect(getChallengeStreak('', '2026-07-28'))
+                .resolves.toEqual({ current: 0, best: 0, playedToday: false });
+        });
+
+        it('reads the day as text and bounds the history', async () => {
+            // A `date` comes back from pg as a JS Date at *local* midnight,
+            // which shifts the day backwards on any positive UTC offset.
+            isDatabaseEnabled.mockReturnValue(true);
+            query.mockResolvedValue({ rowCount: 1, rows: [{ day: '2026-07-28' }] });
+
+            await expect(getChallengeStreak('Someone', '2026-07-28'))
+                .resolves.toMatchObject({ current: 1, playedToday: true });
+
+            const [sql, params] = query.mock.calls[0];
+            expect(sql).toContain('day::text');
+            expect(sql).toContain('r.day > $2::date - $3::int');
+            expect(params[2]).toBeGreaterThan(0);
+        });
+
+        it('returns an empty streak rather than throwing when the query fails', async () => {
+            isDatabaseEnabled.mockReturnValue(true);
+            query.mockRejectedValue(new Error('boom'));
+            await expect(getChallengeStreak('Someone', '2026-07-28'))
+                .resolves.toEqual({ current: 0, best: 0, playedToday: false });
         });
     });
 

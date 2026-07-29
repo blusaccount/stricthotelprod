@@ -158,6 +158,17 @@ body {
     color: var(--ds-text-dim);
 }
 
+/* Challenge streak, under the daily's description. Lives here rather than in
+   the shell topbar, where the 🔥 pill is already the login streak. */
+.menu-btn-streak {
+    font-family: 'Patrick Hand', cursive;
+    font-size: 13px;
+    color: var(--ds-accent);
+    margin-top: 4px;
+}
+
+.menu-btn-streak[hidden] { display: none; }
+
 /* ===== Screens ===== */
 .screen { display: none; }
 .screen.active { display: block; }

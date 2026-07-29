@@ -24,6 +24,7 @@ import {
     getDailyResult,
     saveDailyResult,
     getDailyLeaderboard,
+    getChallengeStreak,
     buildShareText,
     shareUrl
 } from '../brain-daily.js';
@@ -191,14 +192,18 @@ export function registerBrainVersusHandlers(socket, io, deps) {
         if (!checkRateLimit(socket)) return;
         const day = utcDay();
         const name = resolveSelfName();
-        const [result, leaderboard] = await Promise.all([
+        const [result, leaderboard, streak] = await Promise.all([
             name ? getDailyResult(name, day) : null,
             getDailyLeaderboard(day),
+            // Rides along on the info the client already asks for — a streak is
+            // not worth a socket event of its own.
+            getChallengeStreak(name, day),
         ]);
         socket.emit('brain-daily-info', {
             day,
             games: gamesForDay(day),
             played: Boolean(result),
+            streak,
             result: result
                 ? {
                     brainAge: result.brainAge,
@@ -235,13 +240,25 @@ export function registerBrainVersusHandlers(socket, io, deps) {
             ? { brainAge: Math.round(brainAge), games: submitted }
             : (daily.existing || { brainAge: Math.round(brainAge), games: submitted });
 
+        // Read after the write, so the run includes today.
+        const streak = await getChallengeStreak(name, day);
+
         socket.emit('brain-daily-result', {
             day,
             stored: daily.stored,
             brainAge: effective.brainAge,
             games: effective.games,
+            streak,
             share: buildShareText(day, effective.brainAge, effective.games, shareUrl()),
         });
+
+        // Milestones only, and deliberately no coins per day: the daily already
+        // pays through `brain_daily` below, and the login streak's 150 SC/day
+        // ceiling was a considered rebalance that a second escalating faucet
+        // would quietly undo. A challenge streak is prestige, not income.
+        if (daily.stored && streak.current > 0) {
+            bump(name, 'brain_daily_streak', streak.current, 'max').catch(() => {});
+        }
         getDailyLeaderboard(day)
             .then(board => _io?.emit('brain-daily-leaderboard', { day, leaderboard: board }))
             .catch(() => {});
