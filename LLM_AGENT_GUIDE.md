@@ -12,8 +12,8 @@ This guide helps LLM agents work effectively in this repo. Keep it short, stay i
   - Games: `maexchen.js`, `watchparty.js`, `stocks.js`, `loop-machine.js`, `brain-versus.js`, `tierlist.js`, `food-guessr.js`
   - Casino: `strictly7s.js`, `plinko.js`, `crash.js`, `blackjack.js`, `roulette.js`
 - Express routes: [server/routes/](server/routes/) (`auth.js`, `discord-auth.js`, `stocks.js`, `turkish.js`, `nostalgiabait.js`, `food-guessr.js`)
-- Server modules (top level): `db.js`, `currency.js`, `identity.js`, `stock-game.js`, `stock-price-cache.js`, `stock-providers/`, `character-store.js`, `account-data.js`, `brain-daily.js`, `room-manager.js`, `game-logic.js`, `socket-utils.js`, `portfolio-history.js`, `pictochat-store.js`, `tierlist-store.js`, `food-leaderboards-store.js`, `food-ratings-store.js`, `turkish-lessons.js`, `turkish-streaks.js`, `brain-leaderboards.js`, `achievements.js`, `activity-feed.js`, `daily-streak.js`, `keep-alive.js`, `log-buffer.js`, `cleanup.js`, `retention.js`, `rate-limit.js`, `sql/`
-- Admin/observability: `/admin/logs` endpoint backed by in-memory ring buffer (`log-buffer.js`), `LOGS_TOKEN`-gated; keep-alive cron in `keep-alive.js` to keep Render free tier awake
+- Server modules (top level): `db.js`, `currency.js`, `identity.js`, `stock-game.js`, `stock-price-cache.js`, `stock-providers/`, `character-store.js`, `account-data.js`, `brain-daily.js`, `room-manager.js`, `game-logic.js`, `socket-utils.js`, `portfolio-history.js`, `pictochat-store.js`, `tierlist-store.js`, `food-leaderboards-store.js`, `food-ratings-store.js`, `turkish-lessons.js`, `turkish-streaks.js`, `brain-leaderboards.js`, `achievements.js`, `activity-feed.js`, `daily-streak.js`, `keep-alive.js`, `log-buffer.js`, `stats.js`, `cleanup.js`, `retention.js`, `rate-limit.js`, `sql/`
+- Admin/observability: `/admin/logs` endpoint backed by in-memory ring buffer (`log-buffer.js`) and `/admin/stats` aggregate usage figures (`stats.js`), both `LOGS_TOKEN`-gated; keep-alive cron in `keep-alive.js` to keep Render free tier awake
 
 **Client:**
 - Public pages: [public/](public/) (`index.html`, `login.html`, `contacts.html`, `shop.html`, `achievements.html`, `nostalgiabait/`)
@@ -30,7 +30,7 @@ This guide helps LLM agents work effectively in this repo. Keep it short, stay i
 **Authentication:**
 - Login gate: [server/routes/auth.js](server/routes/auth.js) protects all routes except `/login`
 - Session-based auth with `SITE_PASSWORD` env var (default: ADMIN)
-- `/admin/logs` is exempt from session auth — it uses `LOGS_TOKEN` instead
+- `/admin/logs` and `/admin/stats` are exempt from session auth — they use `LOGS_TOKEN` instead
 
 **Player Registration & Identity (Trust-On-First-Use):**
 - Players register via `register-player` socket event ([server/handlers/currency.js](server/handlers/currency.js))

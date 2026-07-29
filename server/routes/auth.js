@@ -84,6 +84,7 @@ export function authMiddleware(req, res, next) {
         req.path.startsWith('/auth/discord') ||
         req.path === '/api/account' ||
         req.path === '/admin/logs' ||
+        req.path === '/admin/stats' ||
         req.path === '/admin/release-name' ||
         PUBLIC_PAGES.has(req.path) ||
         req.path === '/shared/js/yt-consent.js' ||

@@ -34,6 +34,7 @@ import { getAllHeldSymbols } from './stock-game.js';
 import { startPeriodicCleanup } from './cleanup.js';
 import { startKeepAlive, stopKeepAlive } from './keep-alive.js';
 import { getLogs, getStats } from './log-buffer.js';
+import { getSiteStats } from './stats.js';
 import { releaseName } from './identity.js';
 import { sanitizeName } from './socket-utils.js';
 
@@ -162,6 +163,25 @@ app.get('/admin/logs', (req, res) => {
         stats: getStats(),
         logs: getLogs({ since, level, grep, limit })
     });
+});
+
+// Aggregate usage figures, for deciding what to build next without measuring
+// anybody. Every number is derived from tables the site already keeps for
+// gameplay — this endpoint writes nothing and returns no player names. Same
+// operator token as /admin/logs.
+app.get('/admin/stats', async (req, res) => {
+    const expected = process.env.LOGS_TOKEN;
+    if (!expected) return res.status(503).json({ error: 'LOGS_TOKEN not configured' });
+    const provided = req.query.token || req.headers['x-logs-token'] || '';
+    if (!tokensEqual(String(provided), expected)) {
+        return res.status(401).json({ error: 'unauthorized' });
+    }
+    try {
+        res.json(await getSiteStats({ days: req.query.days, onlineNow: onlinePlayers.size }));
+    } catch (err) {
+        console.error('admin/stats error:', err.message);
+        res.status(500).json({ error: 'stats unavailable' });
+    }
 });
 
 // Release the TOFU owner binding on a player name. Escape hatch for the

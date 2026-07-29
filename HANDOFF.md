@@ -4,6 +4,89 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Challenge streak and aggregate-only stats — Phase 2 part two (2026-07-29)
+
+## Why
+Two things were missing before the site could be shown to anyone: a reason to
+come back tomorrow, and a way for the operator to see what is actually used
+without measuring the people using it.
+
+## The challenge streak — derived, never stored
+
+`brain_daily_results` has `primary key (player_id, day)` and
+`saveDailyResult` refuses overwrites, so **that table already is the record of
+who played when**. A second table tracking the same thing could only ever
+disagree with it, so the streak is computed from it on read.
+
+The other reason to derive: a missed day needs no handling at all — the gap
+simply ends the run, no cron, no reset, no stale row. `daily_streaks` shows what
+storing costs: its `current_streak` stays wrong in the database after a break
+and is only corrected at display time (`daily-streak.js:120-123`).
+
+- `streakFromDays(days, today)` (`server/brain-daily.js`) is a **pure function**,
+  so the database path and the in-memory fallback agree by construction and the
+  rules can be tested without either.
+- `getChallengeStreak` selects `day::text` (a `date` comes back from pg at
+  *local* midnight) and bounds the history to 400 days.
+- **A day not yet played keeps the run alive.** Otherwise the streak reads 0 all
+  morning and looks broken to somebody who is not late at all. Missing a full
+  day ends it.
+- Rides along on the `brain-daily-info` and `brain-daily-result` payloads —
+  **no new socket event**.
+- Rendered next to the daily card in Strict Brain, **not** as a second topbar
+  pill: the 🔥 there is the login streak, and two fire icons showing different
+  numbers would only confuse.
+- Achievements at 3 / 7 / 30 days (`brain_daily_streak` counter, `max` mode) and
+  **no per-day coins**. The daily already pays through `brain_daily`, and a
+  second escalating faucet would quietly undo the login streak's deliberate
+  150 SC/day ceiling. Prestige, not income.
+
+## `/admin/stats` — a counter, not analytics
+
+The line this had to stay on: **an aggregate counter, computed on this server,
+from data the privacy notice already declares, that never leaves the origin and
+is never keyed to a person.** Concretely that meant **no new writes** — a
+tracking table would be collecting data for a purpose the notice does not name.
+
+`server/stats.js` therefore derives everything from tables the site already
+keeps for gameplay: account totals and Discord bindings from `players`, activity
+windows from `last_seen_at`, per-day distinct players and per-game usage from
+`wallet_ledger.reason`, and daily-challenge completion plus a repeat-play
+bucketing from `brain_daily_results`. Guarded by `LOGS_TOKEN` with a
+timing-safe compare, 503 when unconfigured, and whitelisted in `authMiddleware`
+— the same shape as `/admin/logs`.
+
+**What the numbers cannot tell you**, and this is a property of the design, not
+a bug: nothing records who was online when, so a player who browses without
+earning or spending a coin does not appear in the per-day series. That is the
+honest price of not tracking people, and it is written into the module header so
+nobody "fixes" it later by adding a beacon.
+
+Two tests exist specifically to hold the line: one asserts every query is a
+`select`, the other that no player name or per-person row can reach the output.
+
+The privacy notice gained a short *Nutzungsstatistik* section saying exactly
+this — sums only, no names, not stored, never leaves the server, no extra data
+collected.
+
+## How to Verify
+- `npm test` — 564 passing, 38 files.
+- `curl "localhost:PORT/admin/stats?days=7" -H "X-Logs-Token: …"` — verified
+  against the local PostgreSQL: 401 without a token and with a wrong one, real
+  aggregates with the right one.
+- Browser, end to end: four seeded days rendered
+  `🧠 Serie: 4 Tage — heute noch offen`, the submission extended it to 5, and
+  `brain_daily_3` unlocked. No console errors.
+
+## Open
+- Still the user's to do: fill the `.legal-todo` fields after registering the
+  business, send the market-data licence emails, decide on cosmetics for real
+  money.
+- `public/lobby.js` keeps a duplicate hardcoded copy of `STREAK_REWARDS`, and
+  `DIAMOND_BONUS_DAYS` in `server/daily-streak.js` is dead code.
+
+---
+
 # Handoff: Five defects from the accounts/daily work, fixed (2026-07-29)
 
 ## Why

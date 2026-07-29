@@ -77,7 +77,7 @@ See `.env.example` for all available options. Key variables:
 - `ADMIN_PASSWORD` - Required for privileged socket actions
 
 **Ops:**
-- `LOGS_TOKEN` - Grants access to the `/admin/logs` ring-buffer endpoint (session-auth exempt)
+- `LOGS_TOKEN` - Grants access to the `/admin/logs` ring-buffer and `/admin/stats` usage endpoints (session-auth exempt)
 - `KEEP_ALIVE_URL` / `RENDER_EXTERNAL_URL` - Self-ping target to keep free-tier hosting awake
 
 ## Games & Features
