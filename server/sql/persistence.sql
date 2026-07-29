@@ -60,6 +60,21 @@ create table if not exists brain_leaderboards (
 create index if not exists brain_leaderboards_age_idx
   on brain_leaderboards (best_brain_age asc, updated_at desc);
 
+-- One row per player per day: the daily challenge result. The primary key is
+-- what enforces "one attempt" — a second submission conflicts and is refused
+-- rather than overwriting, which is what makes the score comparable.
+create table if not exists brain_daily_results (
+  player_id bigint not null references players(id) on delete cascade,
+  day date not null,
+  brain_age integer not null,
+  games jsonb not null,
+  created_at timestamptz not null default now(),
+  primary key (player_id, day)
+);
+
+create index if not exists brain_daily_results_day_idx
+  on brain_daily_results (day, brain_age asc);
+
 create table if not exists brain_game_leaderboards (
   player_id bigint not null references players(id) on delete cascade,
   game_id text not null,
@@ -71,29 +86,6 @@ create table if not exists brain_game_leaderboards (
 create index if not exists brain_game_leaderboards_game_idx
   on brain_game_leaderboards (game_id, best_score, updated_at desc);
 
-create table if not exists lol_bets (
-  id bigserial primary key,
-  player_id bigint not null references players(id) on delete cascade,
-  player_name text not null,
-  lol_username text not null,
-  bet_amount numeric(14,2) not null check (bet_amount > 0),
-  bet_on_win boolean not null,
-  status text not null default 'pending',
-  puuid text,
-  last_match_id text,
-  game_id text,
-  result boolean,
-  created_at timestamptz not null default now(),
-  resolved_at timestamptz
-);
-
--- backfill columns that may be missing on databases created before these were added
-alter table lol_bets add column if not exists puuid text;
-alter table lol_bets add column if not exists last_match_id text;
-alter table lol_bets add column if not exists game_id text;
-alter table lol_bets add column if not exists result boolean;
-alter table lol_bets add column if not exists resolved_at timestamptz;
-
 -- add diamonds column for diamond shop feature
 alter table players add column if not exists diamonds integer not null default 0;
 
@@ -103,14 +95,22 @@ alter table players add column if not exists character_data jsonb;
 -- TOFU owner token for player names (claimed on first register-player)
 alter table players add column if not exists owner_token text;
 
-create index if not exists lol_bets_status_idx
-  on lol_bets (status, created_at desc);
+-- Discord account bound to this player name, once the player signs in. Null
+-- for guests, who keep the owner-token identity they always had.
+alter table players add column if not exists discord_id text;
+alter table players add column if not exists discord_username text;
 
-create index if not exists lol_bets_player_idx
-  on lol_bets (player_id, created_at desc);
+create unique index if not exists players_discord_id_idx
+  on players (discord_id) where discord_id is not null;
 
-create index if not exists lol_bets_player_name_idx
-  on lol_bets (player_name);
+-- Last time this player registered from a browser. Distinct from updated_at,
+-- which only moves when the balance changes: someone can play Watch Party or
+-- Food Guessr for months without a single coin transaction. Drives the
+-- inactive-account retention job in server/retention.js.
+alter table players add column if not exists last_seen_at timestamptz;
+
+create index if not exists players_last_seen_idx
+  on players (last_seen_at);
 
 create index if not exists wallet_ledger_player_created_idx
   on wallet_ledger (player_id, created_at desc);

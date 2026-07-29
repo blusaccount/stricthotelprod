@@ -61,13 +61,34 @@ export function createAuthRouter() {
     return router;
 }
 
+// Pages that must stay reachable without logging in. German law (§ 5 DDG)
+// requires the imprint to be accessible without any barrier, and the privacy
+// notice has to be readable before anyone enters data. Credits carry the
+// third-party attributions those two pages link to.
+const PUBLIC_PAGES = new Set([
+    '/impressum.html',
+    '/datenschutz.html',
+    '/credits.html',
+    '/legal.css',
+    // The credits page renders its image attributions from this file, so it
+    // has to be readable wherever the credits page is.
+    '/assets/tierlist/attribution.json'
+]);
+
 // Auth middleware - protect all routes except login
 export function authMiddleware(req, res, next) {
     // Allow access to login page, health check, and static assets needed for login
     if (req.path === '/login.html' ||
         req.path === '/health' ||
+        // Signing in with Discord is a way *through* this gate.
+        req.path.startsWith('/auth/discord') ||
+        req.path === '/api/account' ||
         req.path === '/admin/logs' ||
+        req.path === '/admin/stats' ||
         req.path === '/admin/release-name' ||
+        PUBLIC_PAGES.has(req.path) ||
+        req.path === '/shared/js/yt-consent.js' ||
+        req.path === '/shared/js/iframe-helper.js' ||
         req.path.startsWith('/shared/css/') ||
         req.path.startsWith('/shared/fonts/')) {
         return next();

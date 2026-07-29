@@ -22,16 +22,19 @@ import { rooms, onlinePlayers } from './room-manager.js';
 import { registerSocketHandlers } from './socket-handlers.js';
 import { initSchema } from './db.js';
 import { loadCacheFromDb as loadStockPriceCache } from './stock-price-cache.js';
-import { startMatchChecker, stopMatchChecker } from './lol-match-checker.js';
 
 import { createAuthRouter, authMiddleware } from './routes/auth.js';
 import turkishRouter from './routes/turkish.js';
 import nostalgiaRouter from './routes/nostalgiabait.js';
 import { createStocksRouter } from './routes/stocks.js';
+import { createFoodGuessrRouter } from './routes/food-guessr.js';
+import { createDiscordAuthRouter, isDiscordConfigured } from './routes/discord-auth.js';
+import { startRetentionJob, stopRetentionJob } from './retention.js';
 import { getAllHeldSymbols } from './stock-game.js';
 import { startPeriodicCleanup } from './cleanup.js';
 import { startKeepAlive, stopKeepAlive } from './keep-alive.js';
 import { getLogs, getStats } from './log-buffer.js';
+import { getSiteStats } from './stats.js';
 import { releaseName } from './identity.js';
 import { sanitizeName } from './socket-utils.js';
 
@@ -60,7 +63,7 @@ if (!process.env.SESSION_SECRET) {
 // Session middleware
 // Dev fallback is a stable string (not Math.random()) so sessions survive restarts in local dev.
 // Production is guarded above; this fallback is never used when NODE_ENV=production.
-app.use(session({
+const sessionMiddleware = session({
     secret: process.env.SESSION_SECRET || 'strict-hotel-dev-insecure-fallback',
     resave: false,
     saveUninitialized: false,
@@ -68,15 +71,27 @@ app.use(session({
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict'
+        // 'lax' rather than 'strict': the Discord OAuth callback is a
+        // cross-site navigation back into this origin, and a strict cookie is
+        // not sent on it, so the session that started the flow would be lost.
+        sameSite: 'lax'
     }
-}));
+});
+app.use(sessionMiddleware);
+
+// Socket.IO gets the same session. Until now the socket had no session at all,
+// so every game event bypassed the site password gate entirely — and there was
+// no way for a socket to know which Discord account was signed in.
+io.engine.use(sessionMiddleware);
 
 // Body parser for login
 app.use(express.json());
 
 // Auth routes (login must be before auth middleware)
 app.use(createAuthRouter());
+// Discord sign-in is itself a way through the gate, so its routes have to sit
+// in front of the gate — otherwise signing in would require being signed in.
+app.use(createDiscordAuthRouter());
 app.use(authMiddleware);
 
 // Shell deep-link middleware. The lobby is now an SPA-style shell and any
@@ -150,6 +165,25 @@ app.get('/admin/logs', (req, res) => {
     });
 });
 
+// Aggregate usage figures, for deciding what to build next without measuring
+// anybody. Every number is derived from tables the site already keeps for
+// gameplay — this endpoint writes nothing and returns no player names. Same
+// operator token as /admin/logs.
+app.get('/admin/stats', async (req, res) => {
+    const expected = process.env.LOGS_TOKEN;
+    if (!expected) return res.status(503).json({ error: 'LOGS_TOKEN not configured' });
+    const provided = req.query.token || req.headers['x-logs-token'] || '';
+    if (!tokensEqual(String(provided), expected)) {
+        return res.status(401).json({ error: 'unauthorized' });
+    }
+    try {
+        res.json(await getSiteStats({ days: req.query.days, onlineNow: onlinePlayers.size }));
+    } catch (err) {
+        console.error('admin/stats error:', err.message);
+        res.status(500).json({ error: 'stats unavailable' });
+    }
+});
+
 // Release the TOFU owner binding on a player name. Escape hatch for the
 // "my own name says taken" case: the owner token lives in localStorage, so
 // clearing site data or switching devices strands the name under a token
@@ -186,6 +220,7 @@ const stocksRouter = createStocksRouter({
 app.use(stocksRouter);
 app.use(turkishRouter);
 app.use(nostalgiaRouter);
+app.use(createFoodGuessrRouter());
 
 // ============== SOCKET HANDLERS ==============
 
@@ -223,13 +258,6 @@ server.listen(PORT, async () => {
         console.log('⚠ GAME_ENABLED=false: stock game APIs and socket trades are disabled');
     }
 
-    // Start LoL match checker
-    try {
-        startMatchChecker(io);
-    } catch (err) {
-        console.error('LoL Match Checker error:', err.message);
-    }
-
     // Background-refresh the ticker every 5 min so the cache stays warm
     // even when no user has the Stocks tab open.
     if (GAME_ENABLED && stocksRouter.fetchTickerQuotes) {
@@ -242,6 +270,13 @@ server.listen(PORT, async () => {
         stocksRouter.fetchTickerQuotes().catch(() => {});
     }
 
+    console.log(isDiscordConfigured()
+        ? '✓ Discord sign-in configured'
+        : 'Discord sign-in not configured (DISCORD_CLIENT_ID / DISCORD_CLIENT_SECRET unset) — guests only');
+
+    // Delete dormant accounts, if the operator configured a period.
+    startRetentionJob();
+
     // Self-ping to keep Render free-tier instance awake during 10:00–02:00 Berlin
     startKeepAlive();
 });
@@ -249,7 +284,7 @@ server.listen(PORT, async () => {
 // Graceful shutdown
 function gracefulShutdown(signal) {
     console.log(`${signal} received, shutting down gracefully...`);
-    stopMatchChecker();
+    stopRetentionJob();
     stopKeepAlive();
     server.close(() => {
         console.log('Server closed');

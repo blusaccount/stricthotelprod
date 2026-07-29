@@ -6,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StrictHotel – Food Guessr</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍽️</text></svg>">
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/shared/css/theme.css">
     <link rel="stylesheet" href="/shared/css/arcade-override.css">
     <style>
@@ -130,6 +129,25 @@
             margin-bottom: 14px; overflow: hidden;
         }
         .fg-photo-wrap img { display: block; width: 100%; height: 100%; object-fit: cover; }
+        /* Photo credit. Naming author and licence is a condition of the
+           Creative Commons licences most of these images carry, so this
+           must stay legible — do not shrink it away. */
+        .fg-credit {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            padding: 5px 8px;
+            background: rgba(0, 0, 0, 0.68);
+            color: #ddd;
+            font-size: 10px;
+            line-height: 1.4;
+            letter-spacing: 0.2px;
+            text-align: left;
+            pointer-events: auto;
+        }
+        .fg-credit a { color: #9fe8ff; text-decoration: none; }
+        .fg-credit a:hover { text-decoration: underline; }
         .fg-dish-fallback {
             position: absolute; inset: 0;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -489,6 +507,7 @@
             .fg-rate-btn-skip { grid-column: span 2; padding: 10px 8px; }
         }
     </style>
+    <link rel="stylesheet" href="/shared/fonts/press-start-2p.css">
 </head>
 <body>
 

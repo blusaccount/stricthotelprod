@@ -5,9 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - StrictHotel</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👽</text></svg>">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/shared/css/theme.css">
     <style>
         body {
@@ -138,6 +135,7 @@
             .login-input, .login-btn { font-size: 11px; }
         }
     </style>
+    <link rel="stylesheet" href="/shared/fonts/press-start-2p.css">
 </head>
 <body>
     <div class="login-container">
@@ -193,5 +191,28 @@
             }
         });
     </script>
+<div class="login-legal">
+    <a href="/impressum.html">Impressum</a>
+    <a href="/datenschutz.html">Datenschutz</a>
+</div>
+
+<style>
+    .login-legal {
+        position: fixed;
+        bottom: 14px;
+        left: 0;
+        right: 0;
+        text-align: center;
+    }
+    .login-legal a {
+        color: #888;
+        font-size: 8px;
+        letter-spacing: 1px;
+        text-decoration: none;
+        margin: 0 10px;
+    }
+    .login-legal a:hover { color: #3effe1; text-decoration: underline; }
+</style>
+
 </body>
 </html>

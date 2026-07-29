@@ -1,7 +1,15 @@
 import { Router } from 'express';
 import { upsertQuotes, getAllCached } from '../stock-price-cache.js';
+import { rateLimiter } from '../rate-limit.js';
 import { fetchQuotesViaChart, fetchSingleQuoteViaChart, fetchHistoryViaChart, HISTORY_RANGE_KEYS } from '../stock-providers/yahoo-chart.js';
 import { fetchQuotesViaStooq, fetchSingleQuoteViaStooq } from '../stock-providers/stooq.js';
+import {
+    fetchQuotesViaCoinGecko,
+    fetchSingleQuoteViaCoinGecko,
+    fetchHistoryViaCoinGecko,
+    isCryptoSymbol,
+    COINGECKO_HISTORY_RANGES,
+} from '../stock-providers/coingecko.js';
 
 const TICKER_SYMBOLS = [
     // ETFs / Indices
@@ -93,30 +101,6 @@ const HISTORY_CACHE_MS = 10 * 60 * 1000; // 10 minutes
 
 const profileCache = new Map(); // symbol -> { data, ts }
 const PROFILE_CACHE_MS = 24 * 60 * 60 * 1000; // company profiles barely change
-
-// Per-IP sliding window rate limiter, mirroring the login limiter in
-// routes/auth.js. Protects the provider-backed routes from a single logged-in
-// user hammering Yahoo/Stooq from the server's IP (see issue #159).
-const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-
-function rateLimiter(maxPerWindow) {
-    const hits = new Map(); // ip -> { count, resetAt }
-    return (req, res, next) => {
-        const now = Date.now();
-        const ip = req.ip || 'unknown';
-        const entry = hits.get(ip);
-        if (entry && now < entry.resetAt) {
-            entry.count += 1;
-            if (entry.count > maxPerWindow) {
-                res.set('Retry-After', Math.ceil((entry.resetAt - now) / 1000));
-                return res.status(429).json({ error: 'Too many requests. Try again soon.' });
-            }
-        } else {
-            hits.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-        }
-        next();
-    };
-}
 
 const stockSearchRateLimiter = rateLimiter(30);
 const stockQuoteRateLimiter = rateLimiter(30);
@@ -265,7 +249,19 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled, getExt
                 }
                 const symbols = tickerSyms.concat(extras);
 
+                // Crypto is served by CoinGecko, which is the only licensed
+                // source in the cascade. It never reaches the Yahoo endpoints,
+                // so a Yahoo outage or ban cannot take the crypto board down
+                // either.
+                const cryptoSyms = symbols.filter(isCryptoSymbol);
+                const providerSyms = symbols.filter(s => !isCryptoSymbol(s));
+
+                let cryptoRows = [];
+
                 const commit = (results) => {
+                    // Crypto rows are merged into whichever provider won the
+                    // cascade for the remaining symbols.
+                    results = cryptoRows.concat(results);
                     // Per-quote freshness stamp: fresh rows get "now", rows
                     // carried over from the previous cache keep their old
                     // asOf so the trade path can tell real live prices from
@@ -300,13 +296,33 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled, getExt
                     };
                 };
 
+                if (cryptoSyms.length > 0) {
+                    try {
+                        const { quotes, errors } = await fetchQuotesViaCoinGecko(cryptoSyms);
+                        cryptoRows = quotes.map(mapToTickerRow);
+                        if (errors.length > 0) {
+                            diag.lastError = `coingecko: ${errors.length} of ${cryptoSyms.length} failed (${errors[0].symbol}: ${errors[0].message})`;
+                            diag.lastErrorAt = Date.now();
+                        }
+                    } catch (err) {
+                        diag.lastError = `coingecko threw: ${err.message}`;
+                        diag.lastErrorAt = Date.now();
+                    }
+                }
+
+                // Nothing left for the unlicensed providers to fetch.
+                if (providerSyms.length === 0) {
+                    diag.lastResultCount = cryptoRows.length;
+                    return commit([]);
+                }
+
                 // Primary: yahoo-finance2 quote() — fastest when crumb is
                 // cached (single batch HTTP call vs N per-symbol fetches
                 // for stooq/spark). Fails fast (~100ms) when crumb is 429'd
                 // so the cascade can fall through quickly.
                 try {
                     const yf = await getYahooFinance();
-                    const yfQuotes = await yf.quote(symbols);
+                    const yfQuotes = await yf.quote(providerSyms);
                     const list = Array.isArray(yfQuotes) ? yfQuotes : [yfQuotes];
                     const yfResults = [];
                     for (const q of list) {
@@ -333,13 +349,13 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled, getExt
 
                 // Fallback 1: Yahoo v7 spark batch (no crumb).
                 try {
-                    const { quotes, errors } = await fetchQuotesViaChart(symbols);
+                    const { quotes, errors } = await fetchQuotesViaChart(providerSyms);
                     if (quotes.length > 0) {
                         diag.lastResultCount = quotes.length;
                         return commit(quotes.map(mapToTickerRow));
                     }
                     if (errors.length > 0) {
-                        diag.lastError = `yahoo spark: ${errors.length} of ${symbols.length} failed (${errors[0].symbol}: ${errors[0].message})`;
+                        diag.lastError = `yahoo spark: ${errors.length} of ${providerSyms.length} failed (${errors[0].symbol}: ${errors[0].message})`;
                         diag.lastErrorAt = Date.now();
                     }
                 } catch (err) {
@@ -350,13 +366,13 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled, getExt
                 // Fallback 2: Stooq (often unreachable from cloud egress IPs,
                 // 3s timeout per chunk keeps the slow case bounded).
                 try {
-                    const { quotes, errors } = await fetchQuotesViaStooq(symbols);
+                    const { quotes, errors } = await fetchQuotesViaStooq(providerSyms);
                     if (quotes.length > 0) {
                         diag.lastResultCount = quotes.length;
                         return commit(quotes.map(mapToTickerRow));
                     }
                     if (errors.length > 0) {
-                        diag.lastError = `stooq: ${errors.length} of ${symbols.length} symbols failed (${errors[0].symbol}: ${errors[0].message})`;
+                        diag.lastError = `stooq: ${errors.length} of ${providerSyms.length} symbols failed (${errors[0].symbol}: ${errors[0].message})`;
                         diag.lastErrorAt = Date.now();
                     }
                 } catch (err) {
@@ -365,7 +381,10 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled, getExt
                 }
 
                 diag.emptyCount++;
-                console.warn('[fetchTickerQuotes] all providers (yf.quote, spark, stooq) returned nothing; serving previous cache');
+                console.warn('[fetchTickerQuotes] all equity providers (yf.quote, spark, stooq) returned nothing; serving crypto + previous cache');
+                // commit() folds the previous cache back in for every symbol
+                // that did not refresh, so live crypto still gets through.
+                if (cryptoRows.length > 0) return commit([]);
                 return tickerCache.data || [];
             } finally {
                 tickerFetchPromise = null;
@@ -457,6 +476,30 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled, getExt
             }
 
             let data = null;
+            const toRow = (q) => ({
+                symbol: (q.symbol || symbol).replace('^', ''),
+                name: q.shortName || symbol,
+                price: parseFloat(q.price.toFixed(2)),
+                change: parseFloat(q.change.toFixed(2)),
+                pct: parseFloat(q.pct.toFixed(2)),
+                currency: q.currency || 'USD',
+            });
+
+            // Crypto goes to CoinGecko and stops there: falling through to the
+            // unlicensed providers would defeat the point of having a licensed
+            // source at all.
+            if (isCryptoSymbol(symbol)) {
+                try {
+                    data = toRow(await fetchSingleQuoteViaCoinGecko(symbol));
+                } catch (err) {
+                    console.error('[StockQuote] CoinGecko failed for', symbol, err.message);
+                    return res.status(502).json({ error: 'coingecko: ' + err.message });
+                }
+                singleQuoteCache.set(symbol, { data, ts: Date.now() });
+                upsertQuotes([{ symbol: data.symbol, name: data.name, price: data.price, currency: data.currency }]).catch(() => {});
+                return res.json(data);
+            }
+
             const tryProviders = [
                 async () => {
                     const q = await fetchSingleQuoteViaStooq(symbol);
@@ -558,6 +601,12 @@ export function createStocksRouter({ getYahooFinance, isStockGameEnabled, getExt
     }
 
     async function fetchHistoryAnyProvider(symbol, range) {
+        // CoinGecko's free plan only reaches back 365 days, so '5y' has no
+        // licensed source and still falls through to Yahoo. Flagged in
+        // HANDOFF.md as a known gap.
+        if (isCryptoSymbol(symbol) && COINGECKO_HISTORY_RANGES.includes(range)) {
+            return await fetchHistoryViaCoinGecko(symbol, range);
+        }
         try {
             return await fetchHistoryViaChart(symbol, range);
         } catch (rawErr) {

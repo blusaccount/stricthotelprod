@@ -516,12 +516,6 @@ function fgReadViewsCache() {
 function fgWriteViewsCache(cache) {
     try { localStorage.setItem('fg-wiki-views', JSON.stringify(cache)); } catch (e) {}
 }
-function fgYyyymmddhh(date) {
-    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
-    return date.getUTCFullYear() +
-        pad(date.getUTCMonth() + 1) +
-        pad(date.getUTCDate()) + '00';
-}
 
 window.FG_fetchDishViews = async function (wikiTitle) {
     var cache = fgReadViewsCache();
@@ -530,55 +524,50 @@ window.FG_fetchDishViews = async function (wikiTitle) {
         return entry.views;
     }
     try {
-        // 6 month window ending last full month
-        var end = new Date();
-        end.setUTCDate(1); // first of current month
-        end.setUTCHours(0, 0, 0, 0);
-        end.setUTCDate(end.getUTCDate() - 1); // last day of previous month
-        var start = new Date(end);
-        start.setUTCMonth(start.getUTCMonth() - 5); // 6 months back
-        start.setUTCDate(1);
-
-        var url = 'https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/' +
-            'en.wikipedia/all-access/all-agents/' +
-            encodeURIComponent(wikiTitle) +
-            '/monthly/' + fgYyyymmddhh(start) + '/' + fgYyyymmddhh(end);
-        var res = await fetch(url, { headers: { Accept: 'application/json' } });
+        var res = await fetch('/api/fg/views?title=' + encodeURIComponent(wikiTitle),
+                              { headers: { Accept: 'application/json' } });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         var data = await res.json();
-        var items = (data && data.items) || [];
-        if (!items.length) throw new Error('no data');
-        var sum = 0;
-        for (var i = 0; i < items.length; i++) sum += Number(items[i].views) || 0;
-        var avg = Math.round(sum / items.length);
+        var views = (data && typeof data.views === 'number') ? data.views : null;
 
-        cache[wikiTitle] = { views: avg, ts: Date.now() };
+        // A null answer means the server could not get stats; cache it briefly
+        // so a statless dish does not re-ask on every round.
+        cache[wikiTitle] = views === null
+            ? { views: null, ts: Date.now() - FG_VIEWS_TTL_MS + 60 * 60 * 1000 }
+            : { views: views, ts: Date.now() };
         fgWriteViewsCache(cache);
-        return avg;
+        return views;
     } catch (err) {
         console.warn('FoodGuessr views fetch failed for', wikiTitle, err.message || err);
-        // Soft-cache the failure so we don't hammer on every round (1h)
         cache[wikiTitle] = { views: null, ts: Date.now() - FG_VIEWS_TTL_MS + 60 * 60 * 1000 };
         fgWriteViewsCache(cache);
         return null;
     }
 };
 
-// Dish image cache — Wikipedia REST summary endpoint
+// Dish photos and their credits, both served by this origin. The browser
+// never contacts Wikimedia directly — see server/routes/food-guessr.js.
 window.FG_imageCache = {};
 
 window.FG_fetchDishImage = async function (wikiTitle) {
-    if (window.FG_imageCache[wikiTitle]) return window.FG_imageCache[wikiTitle];
+    if (Object.prototype.hasOwnProperty.call(window.FG_imageCache, wikiTitle)) {
+        return window.FG_imageCache[wikiTitle];
+    }
     try {
-        const url = 'https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(wikiTitle);
-        const res = await fetch(url, { headers: { Accept: 'application/json' } });
+        const res = await fetch('/api/fg/dish?title=' + encodeURIComponent(wikiTitle),
+                                { headers: { Accept: 'application/json' } });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
-        const src = (data.originalimage && data.originalimage.source) ||
-                    (data.thumbnail && data.thumbnail.source) ||
-                    null;
-        window.FG_imageCache[wikiTitle] = src;
-        return src;
+        const entry = data && data.image ? {
+            src: data.image,
+            artist: data.artist || null,
+            artistUrl: data.artistUrl || null,
+            licence: data.licence || null,
+            licenceUrl: data.licenceUrl || null,
+            source: data.source || null
+        } : null;
+        window.FG_imageCache[wikiTitle] = entry;
+        return entry;
     } catch (err) {
         console.warn('FoodGuessr image fetch failed for', wikiTitle, err);
         window.FG_imageCache[wikiTitle] = null;

@@ -20,7 +20,6 @@
     var videoId = null;
     var ytPlayer = null;
     var ytApiReady = false;
-    var pendingStart = false;
 
     // Fetch config from server
     fetch('/api/nostalgia-config')
@@ -35,20 +34,13 @@
             showError('Failed to load configuration');
         });
 
-    // Load YouTube IFrame API
-    var tag = document.createElement('script');
-    tag.src = 'https://www.youtube.com/iframe_api';
-    var firstScript = document.getElementsByTagName('script')[0];
-    firstScript.parentNode.insertBefore(tag, firstScript);
-
-    // YouTube API ready callback
-    window.onYouTubeIframeAPIReady = function () {
-        ytApiReady = true;
-        if (pendingStart) {
-            pendingStart = false;
-            createPlayer();
-        }
-    };
+    // The YouTube IFrame API is only loaded after the visitor consents, which
+    // happens on the click-to-start overlay (see startVideo below).
+    function ensureYouTubeApi() {
+        return window.StrictConsent.youtube().then(function () {
+            ytApiReady = true;
+        });
+    }
 
     // Click-to-start
     overlay.addEventListener('click', startVideo);
@@ -62,13 +54,15 @@
             showError('No YouTube video configured');
             return;
         }
-        overlay.classList.add('hidden');
-        playerContainer.classList.add('active');
-        if (ytApiReady) {
+        ensureYouTubeApi().then(function () {
+            overlay.classList.add('hidden');
+            playerContainer.classList.add('active');
             createPlayer();
-        } else {
-            pendingStart = true;
-        }
+        }).catch(function () {
+            // Consent declined — stay on the boot overlay.
+            overlay.classList.remove('hidden');
+            playerContainer.classList.remove('active');
+        });
     }
 
     function createPlayer() {

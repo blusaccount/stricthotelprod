@@ -4,6 +4,1081 @@ This file tracks recent changes, verification notes, and open risks. Each sessio
 
 ---
 
+# Handoff: Challenge streak and aggregate-only stats — Phase 2 part two (2026-07-29)
+
+## Why
+Two things were missing before the site could be shown to anyone: a reason to
+come back tomorrow, and a way for the operator to see what is actually used
+without measuring the people using it.
+
+## The challenge streak — derived, never stored
+
+`brain_daily_results` has `primary key (player_id, day)` and
+`saveDailyResult` refuses overwrites, so **that table already is the record of
+who played when**. A second table tracking the same thing could only ever
+disagree with it, so the streak is computed from it on read.
+
+The other reason to derive: a missed day needs no handling at all — the gap
+simply ends the run, no cron, no reset, no stale row. `daily_streaks` shows what
+storing costs: its `current_streak` stays wrong in the database after a break
+and is only corrected at display time (`daily-streak.js:120-123`).
+
+- `streakFromDays(days, today)` (`server/brain-daily.js`) is a **pure function**,
+  so the database path and the in-memory fallback agree by construction and the
+  rules can be tested without either.
+- `getChallengeStreak` selects `day::text` (a `date` comes back from pg at
+  *local* midnight) and bounds the history to 400 days.
+- **A day not yet played keeps the run alive.** Otherwise the streak reads 0 all
+  morning and looks broken to somebody who is not late at all. Missing a full
+  day ends it.
+- Rides along on the `brain-daily-info` and `brain-daily-result` payloads —
+  **no new socket event**.
+- Rendered next to the daily card in Strict Brain, **not** as a second topbar
+  pill: the 🔥 there is the login streak, and two fire icons showing different
+  numbers would only confuse.
+- Achievements at 3 / 7 / 30 days (`brain_daily_streak` counter, `max` mode) and
+  **no per-day coins**. The daily already pays through `brain_daily`, and a
+  second escalating faucet would quietly undo the login streak's deliberate
+  150 SC/day ceiling. Prestige, not income.
+
+## `/admin/stats` — a counter, not analytics
+
+The line this had to stay on: **an aggregate counter, computed on this server,
+from data the privacy notice already declares, that never leaves the origin and
+is never keyed to a person.** Concretely that meant **no new writes** — a
+tracking table would be collecting data for a purpose the notice does not name.
+
+`server/stats.js` therefore derives everything from tables the site already
+keeps for gameplay: account totals and Discord bindings from `players`, activity
+windows from `last_seen_at`, per-day distinct players and per-game usage from
+`wallet_ledger.reason`, and daily-challenge completion plus a repeat-play
+bucketing from `brain_daily_results`. Guarded by `LOGS_TOKEN` with a
+timing-safe compare, 503 when unconfigured, and whitelisted in `authMiddleware`
+— the same shape as `/admin/logs`.
+
+**What the numbers cannot tell you**, and this is a property of the design, not
+a bug: nothing records who was online when, so a player who browses without
+earning or spending a coin does not appear in the per-day series. That is the
+honest price of not tracking people, and it is written into the module header so
+nobody "fixes" it later by adding a beacon.
+
+Two tests exist specifically to hold the line: one asserts every query is a
+`select`, the other that no player name or per-person row can reach the output.
+
+The privacy notice gained a short *Nutzungsstatistik* section saying exactly
+this — sums only, no names, not stored, never leaves the server, no extra data
+collected.
+
+## How to Verify
+- `npm test` — 564 passing, 38 files.
+- `curl "localhost:PORT/admin/stats?days=7" -H "X-Logs-Token: …"` — verified
+  against the local PostgreSQL: 401 without a token and with a wrong one, real
+  aggregates with the right one.
+- Browser, end to end: four seeded days rendered
+  `🧠 Serie: 4 Tage — heute noch offen`, the submission extended it to 5, and
+  `brain_daily_3` unlocked. No console errors.
+
+## Open
+- Still the user's to do: fill the `.legal-todo` fields after registering the
+  business, send the market-data licence emails, decide on cosmetics for real
+  money.
+- `public/lobby.js` keeps a duplicate hardcoded copy of `STREAK_REWARDS`, and
+  `DIAMOND_BONUS_DAYS` in `server/daily-streak.js` is dead code.
+
+---
+
+# Handoff: Five defects from the accounts/daily work, fixed (2026-07-29)
+
+## Why
+A read-only review pass over the code written during the accounts and daily
+work turned up five defects, four of them introduced by that work. Each one was
+reproduced against a real PostgreSQL 16 instance before being touched — none of
+these is a "looks wrong" finding.
+
+## What Changed
+
+**`server/identity.js` — a signed-in account could be deleted while in use.**
+`touchLastSeen` was called on some claim paths but not all: not on a first
+claim, and not on either Discord path. So an account created through Discord had
+`last_seen_at` stamped once and never again, and after 24 months the retention
+job would delete an account that was in daily use. `touchLastSeen` now runs on
+every successful claim.
+
+Reproduced: a Discord account aged 40 months, then signed in again, still came
+back from `findDormantPlayers(24)`. After the fix it does not.
+
+**`server/account-data.js` — exported dates were off by one.**
+node-postgres parses a `date` into a JS `Date` at **local** midnight, so on any
+positive UTC offset the day shifts backwards. A result stored on the 28th
+exported as the 27th in Berlin. The export now selects `day::text`.
+
+Reproduced: `TZ=Europe/Berlin` on a row stored as `2026-07-28` exported
+`2026-07-27`; it now exports `2026-07-28`. There is no `setTypeParser` anywhere
+in `server/db.js`, so **any** future `date` column has this trap — select
+`::text`.
+
+**`server/brain-daily.js` — a result could be silently dropped.**
+`saveDailyResult` inserted `select p.id from players where name = $1`. If the
+submission raced `register-player`, there was no player row, the insert matched
+nothing, and the function returned `{stored: false, existing: null}` — which the
+client renders as "already played today" to somebody whose result was in fact
+thrown away. It now ensures the player row exists first, as `daily-streak.js`
+already did.
+
+Reproduced: `saveDailyResult` for an unknown name returned
+`{"stored":false,"existing":null}`; it now returns `{"stored":true}` and the row
+is in the table.
+
+**`server/socket-utils.js` — four games were being logged as Mäxchen.**
+`validateGameType` had a hardcoded list that predates `food-guessr`, `turkish`,
+`nostalgiabait` and `contacts`, and silently rewrote each of them to
+`'maexchen'`. The list is now a named `KNOWN_GAME_TYPES` and the fallback is a
+parameter; presence in `server/handlers/currency.js` passes `'unknown'`, because
+a player whose game we cannot identify is not playing Mäxchen.
+
+**`games/food-guessr/js/game.js` — registration was always rejected.**
+It hand-rolled `socket.emit('register-player', {...})` without an `ownerToken`,
+which the server refuses. Replaced with the shared
+`window.StrictHotelSocket.registerPlayer`.
+
+## New tripwire
+`server/__tests__/account-data.test.js` now parses `server/sql/persistence.sql`,
+finds every table with a `player_id` / `player_name` / `author_name` column, and
+asserts each one is both exportable and deletable. Nothing checked this before:
+adding a table keyed to a person passed the whole suite while quietly making the
+Art. 15 export incomplete and the Art. 17 deletion partial. It currently finds
+15 tables, and a fourth test guards the parser itself so the assertions cannot
+go vacuous. Verified by appending a throwaway table to the schema — the tripwire
+fails, as intended.
+
+## How to Verify
+- `npm test` — 542 passing, 37 files.
+- Against a database: age an account past the retention window, sign in, and
+  check it is no longer in `findDormantPlayers(24)`.
+- `TZ=Europe/Berlin` on `exportPlayerData` for a player with a daily result —
+  the exported `day` must match the stored one.
+
+## Open
+- Phase 2 remainder: challenge streak (derive from `brain_daily_results`, no new
+  table) and the aggregate-only `/admin/stats` endpoint.
+- `public/lobby.js` keeps a duplicate hardcoded copy of `STREAK_REWARDS`, and
+  `DIAMOND_BONUS_DAYS` in `server/daily-streak.js` is dead code. Neither is a
+  bug today; both are traps for whoever changes the rewards.
+
+---
+
+# Handoff: The daily challenge becomes a real daily — Phase 2 part one (2026-07-28)
+
+## Why
+Strict Brain's "Daily Test" picked three of five games at random on *every*
+attempt, with nothing stopping a replay until the numbers looked good
+(`games/strictbrain/js/game.js`, old `startDailyTest`). Only the coin payout was
+gated per day. It was a three-game run wearing a daily label: nobody's score
+compared to anyone else's, there was nothing to come back for, and nothing worth
+sharing.
+
+A daily needs three things, and it had none of them: the same challenge for
+everyone, one attempt, and a result worth passing on.
+
+## What Changed
+
+**`server/brain-daily.js`** (new) — the whole mechanic in one place.
+- `gamesForDay(day)` seeds a Fisher-Yates shuffle from the UTC date, so the
+  selection is a pure function of the day. **The server decides**, and hands the
+  list to the client; letting the browser shuffle would let it reroll.
+- `saveDailyResult` relies on the primary key `(player_id, day)` and
+  `on conflict do nothing`, so "one attempt" is enforced by the database rather
+  than by a read-then-write that two sockets could race.
+- `getDailyLeaderboard(day)` — today only, lowest brain age first.
+- `buildShareText` — title, brain age, three squares, URL. Under 120 characters
+  so it pastes into a chat. The URL comes from `PUBLIC_URL` and is simply
+  omitted while the site has no address, rather than pointing at localhost.
+
+**Socket** — `brain-daily-info` (what is today, have I played), and
+`brain-daily-result` on submission carrying `stored`, the effective result and
+the share text. A second submission returns `stored: false` and the earlier
+result: the first attempt stands even when the second is better.
+
+**Client** — the menu tile now names the day and its three games, or says the
+day is done and offers the stored result. The results screen shows the share
+block with a copy button and today's ranking.
+
+**Schema** — `brain_daily_results (player_id, day, brain_age, games, created_at)`,
+keyed by `player_id` so it cascades on deletion, and added to the GDPR export.
+
+## The bug this surfaced
+
+`brain-daily-info` was first requested straight after `registerPlayer` in the
+socket's `connect` handler. Registration is an **async** handler, so the info
+request could be processed while it was still awaiting — the server then had no
+name for the socket and answered "not played yet" to a player who had.
+
+`register-player` now emits **`player-registered`** when it finishes, and the
+brain client waits for it. This is a general fix: any client wanting to ask
+something *as this player* previously had to guess a delay.
+
+While chasing it I also mistook test-data pollution for a second bug — a name
+claimed by an earlier run's owner token returned `NAME_TAKEN`, which silently
+prevented registration. Worth remembering when browser tests behave oddly:
+check for `register-player-error` before assuming the feature is broken.
+
+## How to Verify
+
+Against the local PostgreSQL:
+- Two different players see the identical menu line:
+  `2026-07-28 — Chimp · Reaktion · Rechnen. Ein Versuch.`
+- Submitting 31 stores it; submitting 21 afterwards returns `stored: false` and
+  **27/31 stands** — the better score does not overwrite.
+- After a reload the tile reads `Heute erledigt (Gehirnalter 31). Ergebnis
+  ansehen.` and the button opens the stored result instead of starting a game.
+- The share block renders and the copy button puts exactly this on the
+  clipboard:
+  ```
+  StrictHotel Daily 2026-07-28
+  🧠 Gehirnalter 31
+  🟩🟨🟥
+  https://stricthotel.example
+  ```
+- Today's board lists both players, sorted by brain age.
+- No JS errors anywhere in the flow.
+- `npm test` -> **538 passed / 37 files** (+24 in `brain-daily.test.js`,
+  including a 365-day distribution check that no game is effectively never or
+  always chosen).
+
+## Open Risks / Next Steps
+- **A guest's daily result is tied to a name, not an account.** Clearing site
+  data loses the streak and lets the same person play again under a new name.
+  Signing in fixes it; that is now a concrete reason to have an account.
+- Nothing yet *tells* a player the day has reset. A returning-player nudge is
+  the obvious follow-up.
+- The share text has no image and no OpenGraph preview, so a pasted link is
+  bare. Fine for Discord, weaker on other platforms.
+- Still missing from Phase 2: privacy-friendly analytics. Without numbers there
+  is no way to tell whether any of this moved retention — which was the point.
+
+---
+
+# Handoff: GDPR export and deletion — Phase 1 part two (2026-07-28)
+
+## Why
+Accounts now hold a Discord id, which makes Art. 15 (access) and Art. 17
+(erasure) concrete rather than theoretical. Building them also forced the
+question "what exactly belongs to one player", and the honest answer exposed a
+bug I had shipped hours earlier.
+
+## The bug the retention job had
+
+`server/retention.js` carried its own list of tables to clean up and **missed
+`picto_strokes` and `picto_messages` entirely**. Both key by `author_name`, so
+neither cascades from `players.id`. A purged player left their chat messages and
+their drawings behind, still carrying their name — the precise opposite of what
+a retention job is for.
+
+`server/account-data.js` now owns the single map of what belongs to a player,
+and both the retention job and the erasure endpoint read from it. A table added
+to one is covered by the other by construction.
+
+## What Changed
+
+**`server/account-data.js`** (new)
+- `exportPlayerData(name)` — 15 categories across every table, keyed by
+  `players.id` or by name as each table requires.
+- `deletePlayerData(name)` / `deletePlayersData(names)` — one transaction,
+  dependants first, `players` last so the cascade fires with everything else
+  already handled.
+- **Strokes are anonymised, messages are deleted.** A stroke on the shared
+  canvas is a mark somebody else's drawing may be built on; the name is the
+  personal datum, the pixels are not. A chat message is the person speaking, so
+  it goes. The marker is `<deleted>`, which `sanitizeName` strips from any real
+  name, so it can never collide with a player.
+
+**Endpoints** in `server/routes/discord-auth.js`
+- `GET /api/account/export` — the full JSON, as a download. Signed-in only:
+  that is the only way this server can tell one player from another.
+- `POST /api/account/delete` — requires the player's own name echoed back in
+  `confirm`. Irreversible actions should not be one mis-click away.
+- Guests get 401 with a pointer to the owner-token route in the privacy notice.
+
+**`public/datenschutz.html`** gained a self-service section: download, and
+delete behind a typed confirmation. It renders differently for guests, for
+unconfigured servers and for signed-in players.
+
+## How to Verify
+
+**Against a real PostgreSQL 16**, not mocks — one was initialised locally for
+this (`initdb` must run as the `postgres` user, and `DATABASE_SSL=false` is
+needed for a local instance).
+
+Seeded one player with a row in all eleven dependent tables, plus a stroke
+belonging to a *different* player as a control:
+
+| | before | after |
+| --- | --- | --- |
+| players, stock_positions, wallet_ledger, achievements, achievement_progress | 1 each | **0 each** |
+| tierlist, food_ratings, food_scrandle, food_classic | 1 each | **0 each** |
+| picto_messages | 1 | **0** |
+| picto_strokes (theirs) | 2 | **0** |
+| picto_strokes (`<deleted>`) | 0 | **2** |
+| picto_strokes (other player) | 1 | **1** — untouched |
+
+- Export before deletion returned all 15 categories including the message text.
+- `purgeDormantPlayers(24)` on the same database: deleted the 30-month-dormant
+  player with its Pictochat rows, left the 3-month-old one alone, and logged
+  "anonymised 1 shared stroke".
+- Through the browser: guest sees the pointer, signed-in sees the tools, a
+  mismatched confirmation is refused, a correct one deletes and signs out.
+- `npm test` -> **514 passed / 36 files** (+15 in `account-data.test.js`).
+
+## Open Risks / Next Steps
+- Export is a single JSON response built in memory. Fine at this size; a player
+  with a very long wallet ledger would want streaming.
+- Deletion removes the player row, so the name becomes claimable again. That is
+  the correct reading of erasure, but it does mean a name can be re-registered
+  by someone else afterwards.
+- The site password gate still exists alongside accounts. Once sign-in is the
+  normal path, the shared password becomes the odd one out — worth deciding
+  before launch whether it stays as a private-beta gate or goes.
+- Phase 1 is now complete on the code side: accounts exist, guests still work,
+  the migration path is exercised, and both GDPR duties are served. What is
+  still untested is the real Discord application, which needs a domain.
+
+---
+
+# Handoff: Discord sign-in — accounts, Phase 1 part one (2026-07-28)
+
+## Why
+Identity was a name plus an owner token in localStorage. Clearing site data
+destroyed it, a second device was a second person, and nothing could ever be
+sold to it. Discord because the site is already used from inside a Discord call,
+so it is the account these players actually have — and it means no password
+handling here at all.
+
+**Signing in stays optional.** Guests keep the trust-on-first-use flow
+unchanged; every game works without an account.
+
+## What Changed
+
+**The socket had no session at all.** `io` was constructed without the express
+session, so every game event bypassed the site password gate, and a socket had
+no way to know who was signed in. `io.engine.use(sessionMiddleware)` fixes both.
+The session cookie also moves from `sameSite: 'strict'` to `'lax'` — the OAuth
+callback is a cross-site navigation back into this origin, and a strict cookie
+is not sent on it, so the session that started the flow would be lost.
+
+**`server/routes/discord-auth.js`** — `/auth/discord`, `/auth/discord/callback`,
+`POST /auth/discord/logout`, `GET /api/account`.
+- Scope is `identify` only: id, display name, avatar. **Not `email`** — nothing
+  here sends mail, and asking for data we have no use for is exactly what the
+  privacy notice promises not to do.
+- The access token is used once and never stored.
+- CSRF state in the session, compared in constant time, with a 10-minute TTL.
+- Mounted **before** `authMiddleware`, because signing in is a way through the
+  gate; a successful sign-in also sets `session.authenticated`, so a player
+  never needs the shared password.
+- Inert without `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET`: routes answer
+  503, `/api/account` reports `configured: false`, and the UI hides itself.
+- `DISCORD_API_BASE` exists so the flow can be driven against a stand-in server
+  in tests. It must never point anywhere but discord.com in production.
+
+**`server/identity.js`** gained `claimNameForDiscord`, `nameForDiscordId`,
+`unbindDiscordId`. Three cases:
+1. The account already owns a name -> **that name wins**, whatever the browser
+   asked for. Otherwise clearing localStorage would let one person start a
+   second life under a new name.
+2. The name is free, or this browser owns it through the owner token -> bind.
+   **This is the migration path**: an existing guest signs in and keeps their
+   balance, portfolio and achievements.
+3. Somebody else owns it -> refused, same as the guest path.
+
+The owner token is kept bound alongside the account, so signing out drops the
+player back to the same guest identity rather than a new one.
+
+**`server/handlers/currency.js`** prefers the session's Discord identity over
+the owner token, and emits `account-identity` so the client learns which name
+it actually got.
+
+**`public/account.js`** owns the top-bar control and the correction of
+localStorage when the account's name differs from the browser's.
+
+**Schema**: `players.discord_id` + `discord_username`, with a partial unique
+index on `discord_id` so one account cannot hold two names.
+
+## The bug worth remembering
+
+The first end-to-end run passed three of four cases and failed the important
+one: on a fresh device the account was bound to a *new* name instead of
+returning the one it already owned. The cause was not in the binding logic — it
+was that **the lobby only registers on a name change, on character creation, or
+on socket reconnect**. After the redirect back from Discord none of those
+happen, so no `register-player` was emitted and the binding never took place.
+Sign-in silently did nothing until the player retyped their name.
+`registerAsAccount()` in `public/account.js` now triggers a registration as soon
+as `/api/account` reports a signed-in user.
+
+## How to Verify
+- `npm test` -> **499 passed / 35 files** (+19 in
+  `server/__tests__/discord-identity.test.js`).
+- End to end against a stand-in Discord server
+  (`scratchpad/fake-discord.mjs`), in a real browser:
+  1. Guest: unchanged, sign-in button offered.
+  2. Sign-in binds the existing guest name — "Lukas" kept, toast confirms.
+  3. Fresh device asking for a different name: server returns "Lukas", input
+     and localStorage corrected, "welcome back" toast.
+  4. A second Discord account claiming "Lukas" -> `NAME_TAKEN`.
+  5. `/auth/discord` without the site password lands on the lobby signed in.
+  6. Sign-out returns to guest, name preserved, `/api/account` reports null.
+- Every callback failure path redirects with a reason: `no_state`, `bad_state`,
+  `no_code`, `access_denied`.
+- Unconfigured server: `/api/account` -> `configured: false`, `/auth/discord`
+  -> 503, account pill hidden, guest registration works, no JS errors.
+
+## Open Risks / Next Steps
+- **Never exercised against real Discord.** The flow is verified against a
+  stand-in that speaks the same three endpoints. Registering the application,
+  setting the redirect URI byte-for-byte and running it once for real is still
+  outstanding — and needs a domain, which does not exist yet.
+- **No GDPR export or deletion endpoint yet.** Accounts now hold a Discord id,
+  which makes Art. 15 and Art. 17 requests concrete. That is the next piece of
+  Phase 1.
+- Sign-out reloads the page. Honest, but crude — the socket is registered under
+  the account identity and every panel would otherwise keep showing it.
+- One test run failed once, transiently, under load and could not be
+  reproduced in six consecutive runs afterwards. Worth watching rather than
+  chasing.
+
+---
+
+# Handoff: Soundboard emptied, retention set to 24 months (2026-07-28)
+
+## Why
+Operator answered the two open questions from the legal groundwork: the
+soundboard clips are all meme audio pulled from the internet, and the retention
+period should be 24 months.
+
+## Soundboard — clips removed, feature left standing
+
+All nine files deleted from `shared/audio/soundboard/`. None had a licence
+behind it, which is unremarkable among friends and untenable for a public
+commercial site.
+
+Nothing else was torn out. `SOUNDS` in `public/soundboard.js` is now an empty
+array, and the module hides the lobby panel and returns early when it is empty —
+rather than rendering a grid with no buttons and a volume slider that controls
+silence. The socket handler, the panel markup and the "Drop the Beat"
+achievement are all still wired; refilling the array is the only step needed to
+bring it back. `shared/audio/soundboard/README.md` explains that, including the
+instruction to record source and licence **as files are added**, since doing it
+afterwards is exactly how the previous set became unattributable.
+
+`public/credits.html` now states plainly that no audio is served.
+
+**Known cosmetic consequence:** the `sound_first` achievement ("Drop the Beat")
+is currently unobtainable — 57 achievements, one of them unreachable until the
+soundboard is refilled. Left in place on the reading that this is dormant
+rather than deleted. Removing it is a two-line change if that turns out to be
+the wrong call.
+
+## Retention — 24 months is now the default, not just an option
+
+`ACCOUNT_RETENTION_MONTHS` used to be opt-in, so an unset value meant no
+deletion at all — which would have made the privacy notice a promise nothing
+kept. `DEFAULT_RETENTION_MONTHS = 24` now applies when the variable is unset or
+empty, matching the period stated in `public/datenschutz.html`.
+
+- `ACCOUNT_RETENTION_MONTHS=0` is the documented way to switch deletion off.
+- Junk, negatives and anything under the six-month floor fall back to 24 with a
+  warning, instead of being honoured against real data.
+- The privacy notice no longer carries a red placeholder here: it states 24
+  months, names the last login as the trigger, and lists what goes with the
+  account.
+
+## How to Verify
+- `npm test` -> **480 passed / 34 files** (retention tests 14 -> 17).
+- Boot messages: unset and `=36` both start the job; `=0` reports
+  `disabled (ACCOUNT_RETENTION_MONTHS=0)`; `=3` warns about the floor and falls
+  back to 24. (In this environment they then report `disabled (no database)`,
+  which is correct — there is no Postgres here.)
+- Headless Chromium on the lobby: soundboard panel is `display: none` and
+  `hidden`, **no 404s**, no JS errors, and the layout closes up cleanly with
+  Pictochat moving into the space.
+
+## Open Risks / Next Steps
+- Retention still has not run against a real Postgres. Call
+  `findDormantPlayers(24)` before the first live run to see what it would take.
+  On a fresh production database nothing is 24 months old yet, so there is time.
+- `DEFAULT_RETENTION_MONTHS` and the number in `public/datenschutz.html` are two
+  places holding one fact. They will drift unless changed together.
+- Imprint and privacy notice still carry their `.legal-todo` fields for the
+  operator's name, address, contact and VAT status. Deliberately deferred until
+  the business is registered — the site cannot go public before then anyway.
+
+---
+
+# Handoff: Soundboard provenance documented, account retention built (2026-07-28)
+
+## Why
+Two remaining items from the legal groundwork: nine soundboard clips with no
+recorded origin, and a privacy notice that promised a deletion period for
+dormant accounts without any mechanism behind it.
+
+## Soundboard — documented, not resolved
+
+Inspected every file. **There is no usable metadata in any of them**, so the
+provenance cannot be established from the repository alone:
+
+- The four MP3s (`vineboom`, `elgato`, `reverbfart`, `anatolia`) are LAME-encoded
+  with no ID3 tag. They look like downloaded meme audio; "Vine Boom" in
+  particular has an identifiable rights holder.
+- The five Opus files (`fahh`, `massenhausen`, `plug`, `rizz`, `seyuh`) have
+  their vendor string blanked, which is what Discord produces when exporting
+  from its soundboard or a voice recording. Names like `massenhausen` read like
+  private in-jokes, so these may well be self-recorded — but that has to be
+  stated by someone who knows, not assumed.
+
+`shared/audio/soundboard/PROVENANCE.md` records the findings and the three
+possible outcomes per clip (self-recorded / licensed / delete).
+`public/credits.html` now lists all nine by name with an explicit "ungeklaert"
+status rather than one vague paragraph. **This still blocks commercial
+operation** and needs the operator's answer.
+
+## Account retention — implemented, off by default
+
+**`last_seen_at`** added to `players` (`server/sql/persistence.sql`), stamped by
+`server/identity.js` on every successful name claim, not only the first. This
+is deliberately distinct from `updated_at`, which only moves when the balance
+changes — someone can play Watch Party or Food Guessr for months without a
+single coin transaction, and would otherwise look dormant.
+
+**`server/retention.js`** deletes accounts whose last activity
+(`coalesce(last_seen_at, updated_at, created_at)`) is older than
+`ACCOUNT_RETENTION_MONTHS`, checked daily.
+
+Design decisions worth keeping:
+- **Off unless configured.** Deleting player data is irreversible and the
+  period is the operator's call, not an inherited default.
+- **Six-month floor.** A shorter period would delete players who took a summer
+  off; a lower value is rejected with a warning rather than honoured.
+- **Not on boot.** A crash-restart loop would otherwise re-run the purge every
+  few seconds. First pass is one interval in.
+- **One transaction.** Four tables key by `player_name` rather than
+  `player_id` — `tierlist_placements`, `food_ratings`, `food_scrandle_streaks`,
+  `food_classic_scores` — so they do not cascade and are deleted explicitly,
+  before the player row. A half-purged player is worse than an un-purged one.
+- `findDormantPlayers()` is exported so the list can be inspected before any
+  deletion happens.
+
+The privacy notice now describes the mechanism, with the number itself marked
+red: it has to match `ACCOUNT_RETENTION_MONTHS`, and while that is unset the
+sentence would be untrue.
+
+## How to Verify
+- `npm test` -> **477 passed / 34 files** (+14 in
+  `server/__tests__/retention.test.js`).
+- Boot messages match the configuration:
+  - unset -> `[retention] disabled (ACCOUNT_RETENTION_MONTHS not set)`
+  - `=3` -> floor warning, then
+    `disabled (ACCOUNT_RETENTION_MONTHS rejected — see the warning above)`
+  - `=24` without a database -> `disabled (no database)`
+- Tests cover the transaction order (name-keyed tables before `players`),
+  rollback on failure, and that nothing runs on boot.
+
+## Open Risks / Next Steps
+- **The soundboard question is open and blocking.** Which of the nine clips
+  were recorded by the operator or their friends? Everything else has to go or
+  be licensed.
+- Retention has not been exercised against a real Postgres instance — there is
+  no database in this environment. The SQL is straightforward and unit-tested
+  at the call level, but the first real run should be preceded by
+  `findDormantPlayers()` to see what it would take.
+- `ACCOUNT_RETENTION_MONTHS` and the number in the privacy notice are two
+  places holding one fact. They will drift unless changed together.
+
+---
+
+# Handoff: Food Guessr goes through a server-side Wikimedia proxy (2026-07-28)
+
+## Why
+Food Guessr called `en.wikipedia.org` and `wikimedia.org` straight from the
+browser and then loaded each photo from `upload.wikimedia.org`. Every round
+therefore sent the player's IP address to the Wikimedia Foundation, three times
+over, with no legal basis and no way to opt out. It also meant the Wikimedia
+user-agent policy could not be met, because each browser sent whatever agent it
+liked.
+
+## What Changed
+
+**New route** — `server/routes/food-guessr.js`, mounted in `server/index.js`
+- `GET /api/fg/dish?title=X` -> `{ image, artist, artistUrl, licence,
+  licenceUrl, source }`
+- `GET /api/fg/image?title=X` -> the photo bytes, proxied and cached
+- `GET /api/fg/views?title=X` -> average monthly pageviews over the last six
+  full months
+
+**Photo size.** The first cut used the REST summary endpoint, which returns the
+full-resolution original — 2.49 MB for the Pizza article, held in memory and
+paid for in egress, to fill a 16:10 panel. Switched to `pageimages` with
+`pithumbsize=1024`, which also returns the source file name in the same call.
+**2.49 MB -> 385 KB**, and one fewer request per dish.
+
+**Cache.** Dish metadata 24h, pageviews 7d, images 24h. The image cache is
+bounded by entry count *and* by total bytes (80 entries / 48 MB, oldest first),
+because a few large photos would otherwise blow the memory budget on their own.
+
+**Title validation.** Titles come from the client, so `cleanTitle` allows only
+letters, digits, spaces, underscores, parentheses, hyphens, apostrophes,
+periods, commas, ampersands and exclamation marks. Slashes and colons are
+deliberately excluded so nothing resembling a path or a URL can reach an
+outbound request — verified against all 183 catalogue titles, none of which
+need either.
+
+**Attribution is now visible in-game.** Most dish photos are CC BY-SA, where
+naming the author and the licence is a condition of use. `renderPhotoCredit`
+in `games/food-guessr/js/game.js` draws a credit bar over the bottom of every
+photo in every mode, linking the author, the licence and the Wikimedia file
+page. `.fg-credit` in `games/food-guessr/index.html` pins it at 10px.
+
+**Rate limiter extracted.** `server/rate-limit.js` now holds the per-IP limiter
+that was private to `server/routes/stocks.js`; both routes import it rather
+than duplicating a security-relevant helper. Behaviour is unchanged.
+
+**Client** — `games/food-guessr/js/dishes.js` has no Wikimedia URL left.
+`FG_fetchDishImage` returns `{ src, artist, artistUrl, licence, licenceUrl,
+source }` instead of a bare string; all four `attachDishImage` call sites get
+credits for free because the credit is rendered from inside that helper.
+
+**Legal pages.** The Wikipedia third-party section is gone from
+`public/datenschutz.html` — there is no browser-side transfer left to
+disclose — replaced by a note that the server fetches and caches instead. The
+Food Guessr section of `public/credits.html` now points at the per-photo credit
+rather than promising a list, since each round draws a different image.
+
+## How to Verify
+- `npm test` -> **463 passed / 33 files** (+10 in
+  `server/__tests__/food-guessr-route.test.js` covering title validation, HTML
+  stripping and UTC date formatting).
+- `GET /api/fg/dish?title=Pizza` -> artist `igorovsyannykov`, licence `CC0`,
+  image `/api/fg/image?title=Pizza`.
+- `GET /api/fg/image?title=Pizza` -> 200 `image/jpeg` 385 KB in ~0.7s cold,
+  ~3ms warm.
+- `GET /api/fg/views?title=Pizza` -> `{"views":79625}`.
+- Title validation over the wire: empty, `../../etc/passwd`,
+  `https://evil.example`, `Pizza<script>` and a 130-character title all return
+  400; `Fish_and_chips`, `Bánh mì` and `Shepherd's pie` return 200.
+- Headless Chromium through Classic, Rate and Scrandle-Wiki: photos load from
+  `/api/fg/image`, a credit renders on every one (e.g. "Nanahuatl · CC BY-SA
+  4.0 · Wikimedia") at computed 10px with working links, and **no request goes
+  to any host other than localhost**. Scrandle-Community correctly shows "Not
+  enough data for this mode yet" on an empty ratings database — that is its
+  designed behaviour, not a regression.
+
+## Open Risks / Next Steps
+- The image cache is per-process and in memory, so it empties on every deploy
+  and is not shared if the app is ever run on more than one instance.
+- Attribution lookup is best-effort: if the second Wikimedia call fails, the
+  photo is still served without a credit. Rare, but it means the credit is not
+  a hard guarantee. A stricter reading would withhold the photo instead.
+- With Wikimedia proxied and the fonts and libraries self-hosted, **YouTube is
+  the only third party a visitor's browser still reaches**, and it is behind
+  the consent gate. The site currently needs no cookie banner.
+
+---
+
+# Handoff: Tierlist image attribution and licence pruning (2026-07-28)
+
+## Why
+459 images under `public/assets/tierlist/` were downloaded from Wikipedia
+articles by `scripts/import-tierlist-items.mjs` and re-hosted here with no
+attribution recorded anywhere. Most Wikimedia media is Creative Commons, where
+naming author and licence is mandatory, and a minority is non-free entirely.
+This was the largest outstanding legal item before a public launch.
+
+## What Changed
+
+**New script** — `scripts/build-tierlist-credits.mjs`
+- Resolves every catalogue entry back to its source file via the Wikipedia
+  `pageimages` API, then pulls `extmetadata` (licence, author, licence URL,
+  description page) for each file. Batched 50 at a time, ~20 requests total.
+- Classifies each licence. Commercial re-use permitted: CC0, CC BY, CC BY-SA,
+  public domain, GFDL, OFL, bare Attribution. Blocked: anything NC, ND, fair
+  use or non-free. **Anything it cannot classify counts as blocked** — silence
+  is not permission.
+- Writes `public/assets/tierlist/attribution.json` and prints a report grouped
+  by licence and by rejection reason.
+- `--prune` removes blocked items from `games/tierlist/js/items.js` and deletes
+  their image files.
+
+Three bugs surfaced while getting the join right, all worth knowing about:
+- **Unicode form.** File names round-trip through two APIs that disagree on NFC
+  vs NFD and on spaces vs underscores. `ML-Wächter_(cropped).JPG` silently fell
+  out of the join until keys were canonicalised (`fileKey`).
+- **Redirect collisions.** The catalogue holds both "Lawn gnome" and "Garden
+  gnome", and the first redirects to the second, so the API returns 49 pages
+  for 50 titles. Inverting the API's `normalized`/`redirects` lists loses all
+  but one requested title per page. Fixed by resolving **forward** instead
+  (`forwardResolver`) — requested title to final page, never the reverse.
+- OFL was initially rejected as unrecognised. It is a free licence and permits
+  commercial use.
+
+**Result: 459 -> 446 items.** The 13 removed:
+- Eleven fair-use files, almost all memes: Rickrolling, Doge, Keyboard Cat,
+  Nyan Cat, Pepe the Frog, Trollface, Distracted boyfriend, Harambe, Marmite,
+  Slip 'N Slide, and the Eiffel Tower (its night-time illumination is
+  separately copyrighted).
+- Electric guitar — the article no longer has a lead image, so the local file's
+  provenance cannot be re-established.
+- Yawn — tagged "No restrictions" (a Flickr Commons statement, not a licence
+  grant). Kept out on the conservative reading; a manual review could restore
+  it.
+
+**Credits page** — `public/credits.html` now fetches `attribution.json` and
+renders a sortable-height, scrollable table of all 446 entries with author and
+licence, each linking to the Wikimedia file page. Protocol-relative Wikimedia
+user links are made absolute, and everything is escaped. `.legal-scroll` in
+`public/legal.css` keeps the table inside its own scroll box so the page body
+never scrolls sideways.
+
+**Auth** — `/assets/tierlist/attribution.json` added to `PUBLIC_PAGES` in
+`server/routes/auth.js`; the credits page is reachable without a login, so its
+data has to be too.
+
+**Thirteen images flagged but kept**, freely licensed yet carrying extra
+restrictions the API reports: personality rights (Beer, Swimming, Astronaut),
+trademarks (WD-40, Compact disc, Walkman, Lego, Goosebumps), design rights
+(Rubik's Cube), national insignia (Hawaii, Maldives, Iceland) and the Italian
+heritage code (Colosseum). The script lists them under "review manually" on
+every run. None are removed automatically because the licence itself is valid.
+
+## How to Verify
+- `node scripts/build-tierlist-credits.mjs` -> 446 usable, 13 unusable, with
+  the full per-item breakdown.
+- `npm test` -> 453 passed / 32 files, unchanged.
+- Catalogue integrity: 446 entries, 446 image files, 446 attribution records,
+  no missing files and no orphaned ones.
+- `getWeeklyItems('2026-W30')` returns 30 items and every image resolves.
+- Anonymous `curl` -> `/credits.html` and
+  `/assets/tierlist/attribution.json` both 200.
+- Headless Chromium on `/credits.html`: 446 rows render, first row
+  "3D printing / RepRapPro / CC BY 3.0", links absolute to commons.wikimedia.org,
+  no horizontal page scroll, no JS errors.
+
+## Open Risks / Next Steps
+- **Historic tierlist placements now point at different items.** The weekly
+  selection seeds a shuffle over the catalogue length, so 459 -> 446 changes
+  which items each week draws. Rows in `tierlist_placements` store the
+  within-week position, which now means something else. On a pre-launch site
+  with five users this is cosmetic; if the history matters, clear it:
+  `delete from tierlist_placements;`
+  The alternative — keeping the 13 as tombstones to hold the length stable —
+  was not taken, because it means shipping dead catalogue entries forever.
+- The tierlist game grid does not render in a headless sandbox, the same
+  pre-existing condition already noted for the stocks board. Verified through
+  the data layer instead.
+- `scripts/import-tierlist-items.mjs` still does not record licences when it
+  adds new items. Run `build-tierlist-credits.mjs --prune` after every import
+  until the two are merged.
+
+---
+
+# Handoff: Crypto prices move to CoinGecko (2026-07-28)
+
+## Why
+Every provider checked (Alpha Vantage, Finnhub, Twelve Data, Tiingo, Polygon,
+FMP) restricts its free tier to internal or non-commercial use, and separates
+"internal use" from "display to end users" even on paid plans. Exchange
+licensing is the reason: the venues own equity prices and every vendor passes
+their terms through.
+
+CoinGecko is the exception, because crypto has no exchange licensing regime.
+Their API Terms §4.1.6 say plainly: "You are entitled to charge for your
+services and products that incorporate or integrates our CoinGecko API." So
+the seven crypto symbols on the ticker can be served from a licensed source
+today, at no cost, while the equity side stays an open problem.
+
+## What Changed
+
+**New provider** — `server/stock-providers/coingecko.js`
+- `fetchQuotesViaCoinGecko`, `fetchSingleQuoteViaCoinGecko`,
+  `fetchHistoryViaCoinGecko`, plus `toCoinGeckoId` / `isCryptoSymbol`.
+  Quote shape matches the Stooq and Yahoo providers so callers treat them
+  interchangeably.
+- Symbol map is a fixed table of 20 pairs, not a `/coins/list` lookup:
+  `/api/stock-search` filters to EQUITY and ETF, so the crypto universe is
+  exactly what `TICKER_SYMBOLS` defines plus a few obvious neighbours.
+- CoinGecko reports the 24h move as a percentage only, so the absolute change
+  is derived from it. Guarded at -100% so a dead coin cannot divide by zero.
+- **Rate limiting.** The keyless public endpoint answers bursts with 429s
+  (sometimes rewritten to 503 upstream). Calls are serialised through one
+  chain with a minimum gap (`COINGECKO_MIN_INTERVAL_MS`, default 1500 ms) and
+  retried twice with growing backoff. Both values are read per call, not at
+  import time, so the environment is not frozen before it is wired up.
+- **Granularity.** CoinGecko has no interval parameter; it picks from the day
+  span. Raw, a 3-month chart arrives as ~2,200 hourly points where the Yahoo
+  path returns ~65 daily ones. `bucketPoints` collapses the series to the
+  interval each range already expects (1mo/3mo to daily, 1y to weekly),
+  always keeping the most recent point.
+
+**Cascade wiring** — `server/routes/stocks.js`
+- `fetchTickerQuotes` splits the symbol list: crypto goes to CoinGecko,
+  everything else to the existing yf.quote -> spark -> Stooq cascade. The two
+  results merge in `commit()`. Crypto therefore never touches Yahoo, and a
+  Yahoo ban no longer takes the crypto board down with it.
+- `/api/stock-quote` serves crypto from CoinGecko and **stops there** — no
+  fallthrough to the unlicensed providers, which would defeat the point.
+- `/api/stock-history` prefers CoinGecko for crypto on the ranges it covers.
+
+**Attribution** (mandatory, not cosmetic)
+- `games/stocks/index.html` gained a footer inside `.stock-page`:
+  "Powered by CoinGecko", linked, plus the entertainment-only disclaimer.
+  `.stock-attribution` in `games/stocks/stocks.css` pins it at 10px because
+  §4.4 requires font size 10 or larger. **Do not shrink or remove it.**
+- `public/credits.html` now separates crypto (licensed, CoinGecko) from
+  equities (still unlicensed Yahoo/Stooq).
+
+**Config** — `.env.example` documents `COINGECKO_API_KEY` (free Demo key,
+optional but recommended) and `COINGECKO_MIN_INTERVAL_MS`.
+
+## How to Verify
+- `npm test` -> **453 passed / 32 files** (was 423 / 31; +30 in
+  `server/__tests__/coingecko.test.js`). The suite still runs in ~5s because
+  the test file sets the pacing interval to 0.
+- Against the live API: batch of all seven ticker symbols returns seven
+  quotes; derived `change` reconciles with the reported `pct` to six decimals
+  on every one.
+- History ranges after bucketing: 1d 289 points at 5m, 5d 121 at 1h, 1mo 31 at
+  1d, 3mo 91 at 1d, 1y 53 at 1wk — all strictly ascending. `5y` is refused
+  with `unsupported range`; `AAPL` with `no CoinGecko mapping`.
+- Through the running server: `/api/ticker` returns 55 rows, the 7 crypto ones
+  carrying live CoinGecko prices and `marketState: REGULAR`;
+  `/api/stock-quote?symbol=BTC-USD` and
+  `/api/stock-history?symbol=ETH-USD&range=1mo` both answer from CoinGecko
+  (`meta.exchangeName: CoinGecko`).
+- In headless Chromium the attribution renders inside `.stock-page`, visible,
+  computed font-size 10px, no JS errors.
+
+## Open Risks / Next Steps
+- **The market grid does not populate in a headless sandbox.** Verified this
+  is NOT caused by this change: stashing the whole branch and re-running gives
+  the same empty grid on the baseline. The API layer is confirmed working via
+  curl and the browser network log (`/api/ticker` 200). Whatever gates the
+  grid client-side is pre-existing and unexamined.
+- **`5y` for crypto still falls through to Yahoo.** CoinGecko's free plan
+  stops at 365 days. The range is deliberately absent from
+  `COINGECKO_HISTORY_RANGES` rather than silently shortened.
+- **Equities, ETFs, indices and commodities are still on unlicensed Yahoo
+  endpoints** — 48 of the 55 ticker symbols, plus anything a player finds via
+  search. That is the remaining blocker for commercial operation and no free
+  provider solves it.
+- **CoinGecko API Terms §4.1.7(c)** forbids using their data "in any
+  advertisements or for targeting advertisements". Ads *beside* the data are
+  most likely a different thing, but the stocks page is exactly where ads are
+  planned. Worth a written clarification from CoinGecko before relying on it.
+- Without `COINGECKO_API_KEY`, clicking quickly through several chart ranges
+  can still queue behind the 1.5s spacing. The free Demo key removes this.
+
+---
+
+# Handoff: Remove LoL Betting (2026-07-28)
+
+## Why
+Riot's developer terms rule out betting and gambling applications, and a
+production API key would never be granted for one. The feature also made the
+site transmit a user-supplied Riot ID to a third party, which the new privacy
+notice had to disclose. Operator decided to drop it rather than rebuild it as
+a stake-free tipping game.
+
+## What Changed
+- Deleted `games/lol-betting/`, `server/handlers/lol-betting.js`,
+  `server/lol-betting.js`, `server/lol-match-checker.js`, `server/riot-api.js`
+  and the three matching test files.
+- `server/socket-handlers.js`: dropped the import and the
+  `registerLolBettingHandlers` call.
+- `server/index.js`: dropped the `lol-match-checker` import, the
+  `startMatchChecker(io)` block in the listen callback, and `stopMatchChecker()`
+  in `gracefulShutdown`.
+- `server/socket-utils.js`: `lol-betting` removed from the `validateGameType`
+  allow-list; two comments that used LoL as their example were repointed.
+- `server/achievements.js`: the two LoL achievements (`lol_first`,
+  `lol_5_wins`) are gone. **59 achievements -> 57.** Rows already unlocked stay
+  in the database; they simply no longer appear in the catalogue.
+- `server/sql/persistence.sql`: the `lol_bets` DDL, its three indexes and the
+  five backfill `alter table` statements are removed, so fresh databases never
+  create the table. **Existing tables are deliberately NOT dropped** — that
+  would destroy data.
+- `.env.example`: `RIOT_API_KEY`, `RIOT_REGION` and `LOL_BET_TIMEOUT_MS`
+  removed; the `ADMIN_PASSWORD` comment no longer references bet resolution.
+- `public/index.html`: sidebar entry removed (13 nav items left).
+- `public/datenschutz.html`: the Riot Games section is gone — there is no
+  longer a third party to disclose there.
+- `public/credits.html`: trademark notice reduced to YouTube.
+- Docs updated: `README.md`, `LLM_AGENT_GUIDE.md`,
+  `.github/copilot-instructions.md`, and the LoL Betting section of
+  `docs/EVENTS.md`.
+- `server/__tests__/currency.test.js` used `'lol_bet'` as an arbitrary ledger
+  reason string; renamed to `'test_bet'` so nothing implies the feature exists.
+
+## How to Verify
+- `npm test` -> **423 passed / 31 files** (was 478 / 34; the three deleted test
+  files held 55 tests).
+- Server boots without the `[LoL Match Checker]` line.
+- `GET /games/lol-betting/` -> **404** when logged in; `GET /` -> 200 with 13
+  sidebar items and zero occurrences of "lol".
+- Headless Chromium over the eleven remaining pages: no JS errors, no external
+  requests.
+- `grep -rn "lol|riot" -i` over the source tree matches only the tierlist item
+  "LOLcat".
+
+## Open Risks / Next Steps
+- **Pending bets on the live database are now stranded.** Their stake was
+  deducted when the bet was placed and nothing will ever resolve or refund it.
+  Before dropping the table, refund them:
+  ```sql
+  -- inspect first
+  select player_name, sum(bet_amount) from lol_bets where status = 'pending'
+    group by player_name;
+
+  -- refund
+  update players p set balance = balance + x.total
+    from (select player_id, sum(bet_amount) as total from lol_bets
+          where status = 'pending' group by player_id) x
+   where p.id = x.player_id;
+
+  -- only then, optionally
+  drop table lol_bets;
+  ```
+- `ADMIN_PASSWORD` no longer has a consumer. Left in place because it is
+  documented as covering privileged socket actions generally; drop it once
+  that is confirmed.
+
+---
+
+# Handoff: Legal groundwork for a public launch (2026-07-28)
+
+## Why
+The site is being prepared for public, commercial operation (ad-funded,
+free-to-play). Everything below was verified in the code first — this entry
+records only what was actually found and changed, not what the docs claim.
+
+Four things made the site unpublishable as it stood:
+
+1. `games/shopping/index.html` shipped a **live Google AdSense publisher ID**
+   (`ca-pub-...`) inside a parody ad-spam game whose own copy invites the
+   visitor to close ads to spawn more. Real ad units surrounded by fake ones,
+   next to close buttons, is invalid traffic under AdSense policy — and an
+   AdSense ban is account-wide and permanent, not page-scoped.
+2. The lobby (`public/index.html`) and the stock game each ran a **hidden
+   YouTube player** for background music (`public/ambience.js`, plus an inline
+   copy in `games/stocks/index.html`). Audio-only playback in an invisible
+   player contradicts the YouTube API Services Terms regardless of
+   monetisation.
+3. Fonts came from `fonts.googleapis.com`/`fonts.gstatic.com` on 27 pages, and
+   Chart.js / canvas-confetti from jsDelivr — each one transmits the visitor
+   IP to a third party with no legal basis.
+4. There was no imprint, no privacy notice, and no consent step before the
+   YouTube embeds loaded.
+
+## What Changed
+
+**AdSense removed** (`games/shopping/index.html`)
+- The `adsbygoogle.js` script tag, the `<ins class="adsbygoogle">` unit and the
+  `adsbygoogle.push({})` call are gone. Ad popups now render `randomFakeAd()`,
+  eight parody placements using the existing `.ad-placeholder` style.
+- The intro screen gained a one-line disclaimer that the ads are satire and no
+  network is embedded, so the page does not contradict the privacy notice.
+
+**Hidden ambience players removed**
+- Deleted `public/ambience.js`; removed the player container, the mute button
+  and the volume slider from `public/index.html`, and the matching CSS from
+  `public/shell.css` and `public/lobby.css`.
+- Removed the inline duplicate (container, control, and the whole background
+  music `<script>` block) from `games/stocks/index.html` plus its CSS in
+  `games/stocks/stocks.css`.
+- `public/lobby-watchparty.js` lost `autoMuteAmbience()` and its call site;
+  it existed only to silence the player that no longer exists.
+
+**Third-party assets self-hosted**
+- `shared/fonts/` — Press Start 2P, Orbitron, DotGothic16, M PLUS Rounded 1c
+  and Patrick Hand as woff2, latin + latin-ext subsets only, 312 KB total,
+  with one `<family>.css` per family and `LICENSE.md` recording the OFL.
+  Orbitron is a variable font, so its three weights share one file.
+- `shared/vendor/` — Chart.js 4.4.7 and canvas-confetti 1.6.0, with a README
+  recording version, license and the pages that load them.
+- All 28 affected HTML files now link the local stylesheets; the
+  `preconnect` hints to Google were dropped with them.
+
+**YouTube consent gate** (`shared/js/yt-consent.js`, new)
+- `StrictConsent.youtube()` returns a promise that resolves once the IFrame API
+  is loaded, and rejects with `Error('consent-denied')` if the visitor says no.
+  The API script is injected only after consent. Decision is stored in
+  localStorage under `consent-youtube`, and only when the "remember" box is
+  ticked — nothing is written before a button is clicked.
+- All three injection sites now go through it: `public/lobby-watchparty.js`,
+  `games/watchparty/js/watchparty.js`,
+  `public/nostalgiabait/shared/player.js`. Each handles the rejection by
+  restoring its own placeholder or overlay.
+- Queue thumbnails from `i.ytimg.com` are also gated — without consent the
+  list renders a neutral glyph (`.lobby-wp-queue-thumb-blank`).
+- `StrictConsent.revokeYouTube()` backs the revoke button on the privacy page.
+
+**Legal pages** (`public/impressum.html`, `datenschutz.html`, `credits.html`,
+shared `public/legal.css`)
+- The privacy notice describes what the code actually does: the `connect.sid`
+  session cookie and its real settings, the localStorage keys, the exact
+  database tables from `server/sql/persistence.sql`, the volatile 500-line log
+  ring buffer, the 60-second login rate limiter, and the three third parties
+  that can be reached (YouTube on consent, Wikipedia/Wikimedia in Food Guessr,
+  Riot on user action).
+- Every value the operator still has to supply is wrapped in `.legal-todo` and
+  rendered in red. Searching a page for that class lists the open items.
+- `server/routes/auth.js` exempts the three pages plus `legal.css` and
+  `yt-consent.js` from the password gate — an imprint has to be reachable
+  without a barrier.
+- Links added to the sidebar (`.shell-legal-links`) and the login page.
+
+## How to Verify
+- `npm test` → **478 passed / 34 files**, unchanged.
+- Start with `PORT=3111 SITE_PASSWORD=STRICT SESSION_SECRET=test node server.js`.
+- Anonymous `curl` → `/impressum.html`, `/datenschutz.html`, `/credits.html`,
+  `/legal.css` all `200`; `/shop.html` still `302` to the login.
+- Headless Chromium over `/`, `/games/watchparty/`, `/nostalgiabait/`,
+  `/nostalgiabait/ps1/`, `/games/stocks/`, `/games/strictbrain/`,
+  `/games/shopping/`, `/games/casino/`, `/shop.html` and the three legal pages:
+  **zero JS errors and zero requests to any host other than localhost**.
+- Consent gate, driven against a stubbed `iframe_api`:
+  - decline → no player built, status reads "ohne Einwilligung kein Player",
+    nothing written to localStorage when "remember" is unticked;
+  - accept → player built once with the right video ID, `consent-youtube`
+    set to `granted`;
+  - reload with consent present → loads silently, no second prompt.
+
+## Open Risks / Next Steps
+- **The legal pages are drafts.** Every `.legal-todo` field (name, address,
+  e-mail, VAT status, hoster) must be filled and the text reviewed by someone
+  qualified before the site goes public. An incomplete imprint is actionable
+  under German law.
+- **`public/assets/tierlist/` — 459 images imported from Wikipedia by
+  `scripts/import-tierlist-items.mjs` with no attribution recorded.** Most
+  Wikipedia media is CC BY-SA, which makes crediting the author and naming the
+  licence mandatory; some files are ND or non-commercial. The importer needs to
+  pull licence metadata from the Wikimedia Commons API and emit it into
+  `credits.html`. Until then the site must not run commercially.
+- **`shared/audio/soundboard/` has undocumented provenance.** Several files are
+  meme sounds lifted from protected works. Clear or replace them.
+- **Stock prices still come from unofficial Yahoo endpoints** via
+  `yahoo-finance2` plus Stooq. Yahoo forbids commercial use of the data, and
+  `server/stock-providers/yahoo-chart.js` already documents 429s from cloud
+  IPs. A licensed 15-minute-delayed feed is the replacement.
+- **Food Guessr still calls `en.wikipedia.org` and `wikimedia.org` from the
+  browser.** Proxying those two through the server removes the last
+  third-party IP transfer and lets the Wikimedia user-agent policy be met.
+- **LoL Betting**: Riot's developer terms rule out betting applications.
+  Feature has to be rebuilt without stakes or dropped.
+- **Ads and YouTube cannot share a page.** The lobby and the watch party carry
+  the embedded player, so ad inventory has to live on the other games. Adding
+  AdSense back also means a certified CMP for EEA traffic, which the current
+  click-to-load gate deliberately avoids needing.
+
+---
+
 # Handoff: Repo identity — stricthotelprod (2026-07-28)
 
 ## Why

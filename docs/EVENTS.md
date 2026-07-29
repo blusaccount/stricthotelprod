@@ -141,6 +141,23 @@ S->C:
 - `picto-clear` - Clear broadcast
 - `picto-message` - Message broadcast
 
+## Player registration
+
+S->C:
+- `player-registered` - `{ name, game }`, emitted when `register-player` has finished. Registration is asynchronous, so anything a client wants to ask *as this player* has to wait for this rather than guessing a delay
+
+## Account (Discord sign-in)
+**Route:** [server/routes/discord-auth.js](../server/routes/discord-auth.js)
+
+S->C:
+- `account-identity` - Sent after `register-player` when a Discord account is signed in. `{ name, discordUsername, adopted, bound }`. `adopted` means the name came from the account rather than from what the browser asked for; `bound` means the account was just tied to this name.
+
+HTTP:
+- `GET /api/account` - `{ configured, discord }` (no auth required)
+- `GET /auth/discord` - start the OAuth flow
+- `GET /auth/discord/callback` - return from Discord
+- `POST /auth/discord/logout` - drop the binding, stay signed in to the site
+
 ## Soundboard (Lobby Audio)
 **Handler:** [server/handlers/soundboard.js](../server/handlers/soundboard.js)
 
@@ -279,29 +296,6 @@ S->C:
 - `loop-bass-updated` - Bass params changed
 - `loop-master-volume-updated` - Master volume changed
 
-## LoL Betting
-**Handler:** [server/handlers/lol-betting.js](../server/handlers/lol-betting.js)
-
-C->S:
-- `lol-validate-username` - Check if LoL username exists
-- `lol-place-bet` - Place bet on player outcome
-- `lol-get-bets` - Fetch active bets
-- `lol-get-history` - Fetch bet history
-- `lol-check-bet-status` - Check bet resolution status
-- `lol-admin-resolve-bet` - Admin manual resolution (requires ADMIN_PASSWORD)
-
-S->C:
-- `lol-username-result` - Username validation result
-- `lol-bet-placed` - Bet confirmed (PUUID is resolved server-side via the Riot API)
-- `lol-bets-update` - Active bets list
-- `lol-history-update` - Bet history
-- `lol-bet-check-result` - Bet status response
-- `lol-bet-resolved` - Bet resolved notification (also from the background match checker)
-- `lol-bet-resolved-confirm` - Admin resolution confirmed
-- `lol-bet-refunded` - Bet refunded (auto-timeout, default 50 min via `LOL_BET_TIMEOUT_MS`)
-- `lol-bet-warning` - Non-fatal warning
-- `lol-bet-error` - Error response
-
 ## Strict Brain (Brain Training)
 **Handler:** [server/handlers/brain-versus.js](../server/handlers/brain-versus.js)
 
@@ -319,6 +313,9 @@ C->S:
 - `brain-versus-finished` - Submit final score
 
 S->C:
+- `brain-daily-info` - `{ day, games, played, streak, leaderboard, result }`. The server picks the games; the client must not shuffle its own. `streak` is `{ current, best, playedToday }`, derived from `brain_daily_results` rather than stored
+- `brain-daily-result` - `{ day, stored, brainAge, games, streak, share }` after a submission. `stored: false` means the day was already played and the earlier result stands
+- `brain-daily-leaderboard` - `{ day, leaderboard }`, broadcast when anyone finishes
 - `brain-leaderboard` - Overall leaderboard data
 - `brain-game-leaderboards` - Per-game leaderboards data
 - `brain-daily-cooldown` - Daily test reward already claimed today

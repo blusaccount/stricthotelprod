@@ -9,28 +9,28 @@ This guide helps LLM agents work effectively in this repo. Keep it short, stay i
 - Socket wiring: [server/socket-handlers.js](server/socket-handlers.js) imports and registers every handler
 - Socket handlers: [server/handlers/](server/handlers/) (one file per game/feature)
   - Core: `lobby.js`, `currency.js`, `pictochat.js`, `soundboard.js`, `lobby-watchparty.js`, `activity-feed.js`, `daily-streak.js`, `achievements.js`
-  - Games: `maexchen.js`, `watchparty.js`, `stocks.js`, `loop-machine.js`, `lol-betting.js`, `brain-versus.js`, `tierlist.js`, `food-guessr.js`
+  - Games: `maexchen.js`, `watchparty.js`, `stocks.js`, `loop-machine.js`, `brain-versus.js`, `tierlist.js`, `food-guessr.js`
   - Casino: `strictly7s.js`, `plinko.js`, `crash.js`, `blackjack.js`, `roulette.js`
-- Express routes: [server/routes/](server/routes/) (`auth.js`, `stocks.js`, `turkish.js`, `nostalgiabait.js`)
-- Server modules (top level): `db.js`, `currency.js`, `identity.js`, `stock-game.js`, `stock-price-cache.js`, `stock-providers/`, `character-store.js`, `lol-betting.js`, `lol-match-checker.js`, `riot-api.js`, `room-manager.js`, `game-logic.js`, `socket-utils.js`, `portfolio-history.js`, `pictochat-store.js`, `tierlist-store.js`, `food-leaderboards-store.js`, `food-ratings-store.js`, `turkish-lessons.js`, `turkish-streaks.js`, `brain-leaderboards.js`, `achievements.js`, `activity-feed.js`, `daily-streak.js`, `keep-alive.js`, `log-buffer.js`, `cleanup.js`, `sql/`
-- Admin/observability: `/admin/logs` endpoint backed by in-memory ring buffer (`log-buffer.js`), `LOGS_TOKEN`-gated; keep-alive cron in `keep-alive.js` to keep Render free tier awake
+- Express routes: [server/routes/](server/routes/) (`auth.js`, `discord-auth.js`, `stocks.js`, `turkish.js`, `nostalgiabait.js`, `food-guessr.js`)
+- Server modules (top level): `db.js`, `currency.js`, `identity.js`, `stock-game.js`, `stock-price-cache.js`, `stock-providers/`, `character-store.js`, `account-data.js`, `brain-daily.js`, `room-manager.js`, `game-logic.js`, `socket-utils.js`, `portfolio-history.js`, `pictochat-store.js`, `tierlist-store.js`, `food-leaderboards-store.js`, `food-ratings-store.js`, `turkish-lessons.js`, `turkish-streaks.js`, `brain-leaderboards.js`, `achievements.js`, `activity-feed.js`, `daily-streak.js`, `keep-alive.js`, `log-buffer.js`, `stats.js`, `cleanup.js`, `retention.js`, `rate-limit.js`, `sql/`
+- Admin/observability: `/admin/logs` endpoint backed by in-memory ring buffer (`log-buffer.js`) and `/admin/stats` aggregate usage figures (`stats.js`), both `LOGS_TOKEN`-gated; keep-alive cron in `keep-alive.js` to keep Render free tier awake
 
 **Client:**
 - Public pages: [public/](public/) (`index.html`, `login.html`, `contacts.html`, `shop.html`, `achievements.html`, `nostalgiabait/`)
-- Public modules: `shell.js`, `lobby.js`, `lobby-watchparty.js`, `contacts.js`, `ambience.js`, `pictochat.js`, `soundboard.js`, `shop.js` + `shell.css`, `lobby.css`
-- Game frontends: [games/](games/) (16 directories: `maexchen`, `watchparty`, `stocks`, `strictly7s`, `loop-machine`, `lol-betting`, `strictbrain`, `turkish`, `shopping`, `casino` (hub), `blackjack`, `plinko`, `crash`, `roulette`, `tierlist`, `food-guessr`)
+- Public modules: `shell.js`, `account.js`, `lobby.js`, `lobby-watchparty.js`, `contacts.js`, `pictochat.js`, `soundboard.js` (dormant — empty sound list, panel hides itself), `shop.js` + `shell.css`, `lobby.css`
+- Game frontends: [games/](games/) (15 directories: `maexchen`, `watchparty`, `stocks`, `strictly7s`, `loop-machine`, `strictbrain`, `turkish`, `shopping`, `casino` (hub), `blackjack`, `plinko`, `crash`, `roulette`, `tierlist`, `food-guessr`)
 - Shared modules: [shared/js/](shared/js/) — `core.js`, `lobby.js`, `socket-init.js`, `chat.js`, `creator.js`, `avatars.js`, `emotes.js`, `reactions.js`, `iframe-helper.js`, `ambient.js`, `achievement-toast.js`, `starfield-parallax.js`, `stock-ticker.js`, `tts.js`
 - Shared styles: [shared/css/theme.css](shared/css/theme.css)
 
 **Tests:**
-- [server/__tests__/](server/__tests__/) - Vitest tests for all server modules (34 test files)
+- [server/__tests__/](server/__tests__/) - Vitest tests for all server modules (37 test files)
 
 ## Core flows (mental model)
 
 **Authentication:**
 - Login gate: [server/routes/auth.js](server/routes/auth.js) protects all routes except `/login`
 - Session-based auth with `SITE_PASSWORD` env var (default: ADMIN)
-- `/admin/logs` is exempt from session auth — it uses `LOGS_TOKEN` instead
+- `/admin/logs` and `/admin/stats` are exempt from session auth — they use `LOGS_TOKEN` instead
 
 **Player Registration & Identity (Trust-On-First-Use):**
 - Players register via `register-player` socket event ([server/handlers/currency.js](server/handlers/currency.js))
@@ -58,7 +58,8 @@ This guide helps LLM agents work effectively in this repo. Keep it short, stay i
 - `currency.withWallet()` wraps deduct + game RNG + payout in a single Postgres transaction (memory mode passes through); used by Strictly7s, Plinko, Roulette, and Mäxchen place-bet so a crash mid-round rolls back the bet
 
 **Stock Market:**
-- Real-time prices: cascading provider chain `yf.quote → v8 chart → v7 spark → Stooq` ([server/stock-providers/](server/stock-providers/))
+- Crypto: **CoinGecko only** ([server/stock-providers/coingecko.js](server/stock-providers/coingecko.js)) — the one licensed source. Never route crypto through Yahoo; the "Powered by CoinGecko" attribution on the stocks page is contractually required
+- Everything else: cascading provider chain `yf.quote → v8 chart → v7 spark → Stooq` ([server/stock-providers/](server/stock-providers/))
 - Persistent price cache: [server/stock-price-cache.js](server/stock-price-cache.js) (survives empty-Yahoo-response wipeouts)
 - Portfolio/trades: PostgreSQL via [server/stock-game.js](server/stock-game.js)
 - Socket events: [server/handlers/stocks.js](server/handlers/stocks.js)
@@ -70,7 +71,7 @@ This guide helps LLM agents work effectively in this repo. Keep it short, stay i
 
 **Engagement Loop:**
 - Daily Streak ([server/daily-streak.js](server/daily-streak.js)) — escalating reward, capped at 150 SC + 1 💎 on day 7
-- Achievements ([server/achievements.js](server/achievements.js)) — 59 achievements, gold/magenta toast on unlock, recursive bump for meta-achievements
+- Achievements ([server/achievements.js](server/achievements.js)) — 57 achievements, gold/magenta toast on unlock, recursive bump for meta-achievements
 - Activity Feed ([server/activity-feed.js](server/activity-feed.js)) — global ring buffer of lobby events, pushed to all clients
 
 ## Do this every task
@@ -78,7 +79,7 @@ This guide helps LLM agents work effectively in this repo. Keep it short, stay i
 - Check [docs/EVENTS.md](docs/EVENTS.md) for socket event contracts
 - Prefer existing helpers and patterns before adding new ones
 - Keep changes minimal, additive, and reversible
-- Run `npm test` before committing changes (478 tests across 34 files should pass)
+- Run `npm test` before committing changes (all tests across 37 files should pass)
 - Validate behavior manually if you touch sockets, auth, or game logic
 - Update HANDOFF.md with your changes and verification notes
 
@@ -101,7 +102,7 @@ Record changes and verification notes in [HANDOFF.md](HANDOFF.md).
 ## Safety and reliability
 - **Validate all inputs**: Server-side validation for all socket events and API endpoints
 - **Database transactions**: Use transactions for multi-step operations (e.g., stock buy/sell updates both balance and positions)
-- **Error handling**: Emit specific error events (e.g., `stock-error`, `lol-bet-error`, `bj-error`, `crash-error`, `plinko-error`, `roulette-error`, `register-player-error`) with error codes and messages
+- **Error handling**: Emit specific error events (e.g., `stock-error`, `bj-error`, `crash-error`, `plinko-error`, `roulette-error`, `register-player-error`) with error codes and messages
 - **Rate limiting**: Some handlers have cooldowns (Strictly7s spin, Plinko drop, Roulette spin, Lobby-WP load)
 - **Server-authoritative randomness**: All casino games use `crypto.randomInt` for outcome generation
 - **Logging**: Use `console.error` for failures, `console.log` for important state changes; logs are mirrored to the `/admin/logs` ring buffer
@@ -126,7 +127,6 @@ Record changes and verification notes in [HANDOFF.md](HANDOFF.md).
 - **Character data**: Must have both `pixels` and `dataURL` to be valid
 - **Stock prices**: Provider cascade is fail-open — every step has its own timeout; persistent cache covers empty responses to prevent UI wipeout
 - **Pictochat security**: Validate all drawing commands to prevent XSS/injection
-- **LoL betting**: Always pick the oldest match after bet placement (player's "next game"); auto-timeout via `setTimeout` (default 50 min, `LOL_BET_TIMEOUT_MS` env override)
 - **WatchParty**: Sync events carry `serverTime` so receivers can apply in-flight latency offset before deciding to seek; heartbeats prevent server spin-down
 - **Crash**: One shared round at a time — `crash-bet` is only valid in betting phase, `crash-cashout` only in running phase
 - **Strictly7s free spins**: Per-player in-memory `Map` — lost on server restart (intentional tradeoff); stale Blackjack hands and free-spin state are evicted after 24h by the periodic cleanup loop

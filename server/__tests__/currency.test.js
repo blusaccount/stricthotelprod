@@ -72,11 +72,11 @@ describe('currency (in-memory mode)', () => {
             expect(before).toBe(STARTING_BALANCE);
 
             // Simulate deducting for a bet
-            const afterDeduct = await deductBalance(player, 200, 'lol_bet');
+            const afterDeduct = await deductBalance(player, 200, 'test_bet');
             expect(afterDeduct).toBe(800);
 
             // Simulate bet placement failure — refund
-            const afterRefund = await addBalance(player, 200, 'lol_bet_refund');
+            const afterRefund = await addBalance(player, 200, 'test_refund');
             expect(afterRefund).toBe(STARTING_BALANCE);
         });
 

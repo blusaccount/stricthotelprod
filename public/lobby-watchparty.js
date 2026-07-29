@@ -174,29 +174,9 @@
         return '';
     }
 
-    // --- Load YouTube IFrame API once ---
+    // --- Load YouTube IFrame API once, behind the GDPR consent gate ---
     function loadYouTubeAPI() {
-        if (window.YT && window.YT.Player) return Promise.resolve();
-        return new Promise((resolve) => {
-            // If a previous loader is in-flight, chain onto it.
-            const existing = document.querySelector('script[src*="youtube.com/iframe_api"]');
-            if (existing) {
-                const prev = window.onYouTubeIframeAPIReady;
-                window.onYouTubeIframeAPIReady = function () {
-                    if (typeof prev === 'function') prev();
-                    resolve();
-                };
-                return;
-            }
-            const tag = document.createElement('script');
-            tag.src = 'https://www.youtube.com/iframe_api';
-            document.head.appendChild(tag);
-            const prev = window.onYouTubeIframeAPIReady;
-            window.onYouTubeIframeAPIReady = function () {
-                if (typeof prev === 'function') prev();
-                resolve();
-            };
-        });
+        return window.StrictConsent.youtube();
     }
 
     function ensurePlayer(videoId, callback) {
@@ -230,8 +210,6 @@
                 events: {
                     onReady: () => {
                         ytReady = true;
-                        // Mute the lobby ambience as soon as a video is loaded.
-                        autoMuteAmbience();
                         // Now that we have a video, the portal can become
                         // visible and snap to the active slot.
                         repositionPortal();
@@ -240,6 +218,13 @@
                     onStateChange: onPlayerStateChange
                 }
             });
+        }).catch((err) => {
+            // Consent declined: restore the placeholder instead of leaving an
+            // empty player box behind.
+            if (placeholder) placeholder.style.display = '';
+            if (err && err.message === 'consent-denied') {
+                setStatus('YouTube nicht geladen \u2014 ohne Einwilligung kein Player.', 'idle');
+            }
         });
     }
 
@@ -343,8 +328,13 @@
         queueList.innerHTML = items.map((e) => {
             const vid = escapeHtml(e.videoId);
             const removable = me && e.addedBy === me;
+            // Thumbnails come from a Google domain, so they are only requested
+            // once the visitor has consented to YouTube.
+            const thumb = window.StrictConsent.hasYouTubeConsent()
+                ? `<img class="lobby-wp-queue-thumb" src="https://i.ytimg.com/vi/${vid}/default.jpg" alt="" loading="lazy">`
+                : '<span class="lobby-wp-queue-thumb lobby-wp-queue-thumb-blank" aria-hidden="true">\u25B6</span>';
             return `<li class="lobby-wp-queue-item">
-                <img class="lobby-wp-queue-thumb" src="https://i.ytimg.com/vi/${vid}/default.jpg" alt="" loading="lazy">
+                ${thumb}
                 <span class="lobby-wp-queue-meta">added by <strong>${escapeHtml(e.addedBy)}</strong></span>
                 ${removable ? `<button type="button" class="lobby-wp-queue-remove" data-queue-id="${Number(e.queueId)}" title="Remove from queue">✕</button>` : ''}
             </li>`;
@@ -440,17 +430,6 @@
     }
     function stopHeartbeat() {
         if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
-    }
-
-    // --- Auto-mute the lobby ambience when video plays ---
-    function autoMuteAmbience() {
-        try {
-            // Ambience exposes localStorage key 'ambience-muted' + a button #ambience-mute.
-            // Click the mute button only if it's not already muted, so the visual UI stays in sync.
-            if (localStorage.getItem('ambience-muted') === 'true') return;
-            const btn = document.getElementById('ambience-mute');
-            if (btn) btn.click();
-        } catch (_) {}
     }
 
     // --- UI wiring ---

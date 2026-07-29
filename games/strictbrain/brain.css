@@ -158,6 +158,17 @@ body {
     color: var(--ds-text-dim);
 }
 
+/* Challenge streak, under the daily's description. Lives here rather than in
+   the shell topbar, where the 🔥 pill is already the login streak. */
+.menu-btn-streak {
+    font-family: 'Patrick Hand', cursive;
+    font-size: 13px;
+    color: var(--ds-accent);
+    margin-top: 4px;
+}
+
+.menu-btn-streak[hidden] { display: none; }
+
 /* ===== Screens ===== */
 .screen { display: none; }
 .screen.active { display: block; }
@@ -920,3 +931,37 @@ body {
         max-width: 900px;
     }
 }
+
+/* ============= DAILY: SHARE + TODAY'S BOARD ============= */
+.daily-share, .daily-board { margin: 16px 0; text-align: left; }
+
+.daily-share-title {
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--sb-accent, #ffcc33);
+    margin-bottom: 8px;
+}
+
+/* The share block is the thing people paste into a chat, so it is shown
+   exactly as it will be pasted — monospace, preserved line breaks. */
+.daily-share-text {
+    margin: 0 0 10px;
+    padding: 10px 12px;
+    background: rgba(0, 0, 0, 0.45);
+    border: 2px solid var(--sb-border, #2c2240);
+    font-family: inherit;
+    font-size: 11px;
+    line-height: 1.7;
+    white-space: pre;
+    overflow-x: auto;
+}
+
+.daily-board-list {
+    margin: 0;
+    padding-left: 22px;
+    font-size: 9px;
+    line-height: 2;
+}
+
+.daily-board-list .daily-board-me { color: var(--sb-accent, #ffcc33); }
+.daily-board-empty { font-size: 9px; opacity: 0.7; }

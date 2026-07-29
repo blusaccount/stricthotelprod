@@ -17,17 +17,16 @@
 
     // ============== SOUND DEFINITIONS ==============
 
-    const SOUNDS = [
-        { id: 'vineboom',     emoji: '\uD83D\uDCA5', label: 'Vine Boom',     file: 'vineboom.mp3' },
-        { id: 'rizz',         emoji: '\uD83D\uDE0F', label: 'Rizz',          file: 'rizz.ogg' },
-        { id: 'fahh',         emoji: '\uD83D\uDE29', label: 'FAHH',          file: 'fahh.ogg' },
-        { id: 'reverbfart',   emoji: '\uD83D\uDCA8', label: 'Reverb Fart',   file: 'reverbfart.mp3' },
-        { id: 'elgato',       emoji: '\uD83D\uDC31', label: 'El Gato',       file: 'elgato.mp3' },
-        { id: 'seyuh',        emoji: '\uD83D\uDE4C', label: 'Seyuh',         file: 'seyuh.ogg' },
-        { id: 'anatolia',     emoji: '\uD83C\uDDFA\uD83C\uDDF7', label: 'Anatolia', file: 'anatolia.mp3' },
-        { id: 'massenhausen', emoji: '\uD83C\uDFD8\uFE0F',  label: 'Massenhausen', file: 'massenhausen.ogg' },
-        { id: 'plug',         emoji: '\uD83D\uDD0C', label: 'Plug',          file: 'plug.ogg' }
-    ];
+    // Empty on purpose. The nine clips that used to live here were meme audio
+    // taken from the internet with no licence behind any of them, which is fine
+    // among friends and not fine for a public, commercial site. They were
+    // removed rather than left as a liability.
+    //
+    // To bring the soundboard back: drop licensed or self-recorded files into
+    // shared/audio/soundboard/ and add one entry each below. Everything else —
+    // the panel, the socket handler, the "Drop the Beat" achievement — is still
+    // wired up and starts working again the moment this list is non-empty.
+    const SOUNDS = [];
 
     const AUDIO_BASE = '/shared/audio/soundboard/';
 
@@ -173,6 +172,14 @@
     };
 
     // ============== INIT ==============
+
+    // Nothing to play — hide the panel rather than render an empty grid with
+    // a volume slider that controls silence.
+    if (SOUNDS.length === 0) {
+        panel.hidden = true;
+        panel.style.display = 'none';
+        return;
+    }
 
     restoreSettings();
     setupGrid();

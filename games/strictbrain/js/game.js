@@ -31,7 +31,16 @@
             window.StrictHotelSocket.registerPlayer(socket, 'strictbrain');
         }
         socket.emit('brain-get-leaderboard');
+        // The daily info is per-player, so it has to wait for the server to
+        // finish registering this socket — see 'player-registered' below.
+        if (!playerName) requestDailyInfo();
     });
+
+    // Registration finished: now the server can answer "has *this* player
+    // already taken today's challenge".
+    socket.on('player-registered', () => requestDailyInfo());
+
+    if (socket.connected && !playerName) requestDailyInfo();
 
     // ============== LEADERBOARD ==============
 
@@ -132,6 +141,24 @@
     // ============== NAVIGATION ==============
 
     $('btn-daily-test').addEventListener('click', () => startDailyTest());
+
+    $('btn-share-copy').addEventListener('click', () => {
+        const text = $('daily-share-text').textContent;
+        const label = $('btn-share-copy-label');
+        const done = (ok) => { label.textContent = ok ? '✅ KOPIERT' : '⚠️ MARKIEREN & KOPIEREN'; };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => done(true), () => done(false));
+        } else {
+            // Older browsers and non-secure origins have no clipboard API;
+            // select the text so a manual copy is one keystroke away.
+            const range = document.createRange();
+            range.selectNodeContents($('daily-share-text'));
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            done(false);
+        }
+    });
     $('btn-free-training').addEventListener('click', () => showScreen('training'));
     $('btn-back-training').addEventListener('click', () => showScreen('menu'));
     $('btn-back-results').addEventListener('click', () => {
@@ -155,26 +182,89 @@
         });
     });
 
-    // ============== DAILY TEST ==============
+    // ============== DAILY CHALLENGE ==============
+    //
+    // The server picks the three games and holds the one-attempt rule. The
+    // client used to shuffle them itself, which meant everyone got a different
+    // test and anyone could replay until the numbers looked good — so the
+    // score compared to nothing and was not worth sharing.
 
-    const ALL_GAMES = ['math', 'stroop', 'chimp', 'reaction', 'scramble'];
     let dailyGames = [];
     let dailyIndex = 0;
     let dailyResults = [];
     let isDailyTest = false;
+    let dailyInfo = null;      // { day, games, played, result, leaderboard }
 
-    function shuffleArray(arr) {
-        const a = arr.slice();
-        for (let i = a.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            const tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+    const GAME_LABELS = {
+        math: 'Rechnen', stroop: 'Stroop', chimp: 'Chimp',
+        reaction: 'Reaktion', scramble: 'Scramble'
+    };
+
+    function requestDailyInfo() {
+        socket.emit('brain-daily-info');
+    }
+
+    socket.on('brain-daily-info', (info) => {
+        if (!info || typeof info !== 'object') return;
+        dailyInfo = info;
+        renderDailyMenu();
+        renderDailyBoard(info.leaderboard);
+    });
+
+    socket.on('brain-daily-leaderboard', (payload) => {
+        if (!payload || !dailyInfo || payload.day !== dailyInfo.day) return;
+        dailyInfo.leaderboard = payload.leaderboard;
+        renderDailyBoard(payload.leaderboard);
+    });
+
+    function renderDailyMenu() {
+        const desc = $('daily-desc');
+        if (!desc || !dailyInfo) return;
+        const names = (dailyInfo.games || []).map(g => GAME_LABELS[g] || g).join(' · ');
+        desc.textContent = dailyInfo.played
+            ? `Heute erledigt (Gehirnalter ${dailyInfo.result ? dailyInfo.result.brainAge : '—'}). Ergebnis ansehen.`
+            : `${dailyInfo.day} — ${names}. Ein Versuch.`;
+        renderStreak(dailyInfo.streak);
+    }
+
+    /**
+     * The challenge streak, next to the daily itself. Deliberately *not* a
+     * second pill in the shell topbar: the 🔥 there is the login streak, and
+     * two fire icons showing different numbers would only confuse.
+     */
+    function renderStreak(streak) {
+        const el = $('daily-streak');
+        if (!el) return;
+        if (!streak || !streak.current) {
+            // No run yet — say nothing rather than announce a zero.
+            el.hidden = true;
+            el.textContent = '';
+            return;
         }
-        return a;
+        const days = streak.current === 1 ? '1 Tag' : `${streak.current} Tage`;
+        // Not played today yet, but the run is still alive: that is the point
+        // worth making, because it is the day they could lose it.
+        const tail = streak.playedToday ? '' : ' — heute noch offen';
+        const best = streak.best > streak.current ? ` (Rekord ${streak.best})` : '';
+        el.textContent = `🧠 Serie: ${days}${best}${tail}`;
+        el.hidden = false;
     }
 
     function startDailyTest() {
+        if (!dailyInfo) {
+            // Info has not arrived yet; ask again and let the player retry.
+            requestDailyInfo();
+            return;
+        }
+        if (dailyInfo.played) {
+            // Already taken today: show the stored result rather than letting
+            // them play a second time that would not count.
+            showStoredDailyResult();
+            return;
+        }
         isDailyTest = true;
-        dailyGames = shuffleArray(ALL_GAMES).slice(0, 3);
+        dailyGames = (dailyInfo.games || []).slice();
+        if (dailyGames.length === 0) return;
         dailyIndex = 0;
         dailyResults = [];
         startSingleGame(dailyGames[0], false);
@@ -279,6 +369,75 @@
             });
         }
 
+        // The share block arrives with brain-daily-result, because the server
+        // is the one that knows whether this attempt counted.
+        setShareBlock(null);
+        showScreen('results');
+    }
+
+    // ============== DAILY RESULT / SHARE ==============
+
+    socket.on('brain-daily-result', (payload) => {
+        if (!payload || typeof payload !== 'object') return;
+        if (dailyInfo) {
+            dailyInfo.played = true;
+            dailyInfo.result = { brainAge: payload.brainAge, games: payload.games, share: payload.share };
+            // The submission just extended the run, so take the fresh count
+            // rather than leaving yesterday's on screen.
+            if (payload.streak) dailyInfo.streak = payload.streak;
+            renderDailyMenu();
+        }
+        if (!payload.stored) {
+            // A second attempt today: the stored result stands.
+            $('results-speech').textContent =
+                'Der heutige Versuch zählt schon — dein Ergebnis von vorhin bleibt stehen.';
+            $('results-brain-age').textContent = payload.brainAge;
+        }
+        setShareBlock(payload.share);
+    });
+
+    function setShareBlock(text) {
+        const box = $('daily-share');
+        const pre = $('daily-share-text');
+        if (!box || !pre) return;
+        if (!text) { box.hidden = true; return; }
+        pre.textContent = text;
+        box.hidden = false;
+        const label = $('btn-share-copy-label');
+        if (label) label.textContent = '📋 KOPIEREN';
+    }
+
+    function renderDailyBoard(board) {
+        const box = $('daily-board');
+        const list = $('daily-board-list');
+        if (!box || !list) return;
+        const rows = Array.isArray(board) ? board : [];
+        if (rows.length === 0) {
+            list.innerHTML = '<li class="daily-board-empty">Heute noch niemand.</li>';
+        } else {
+            list.innerHTML = rows.map((r) =>
+                '<li class="' + (r.name === playerName ? 'daily-board-me' : '') + '">' +
+                escapeHtml(r.name) + ' — ' + Number(r.brainAge) + '</li>'
+            ).join('');
+        }
+        box.hidden = false;
+    }
+
+    function showStoredDailyResult() {
+        if (!dailyInfo || !dailyInfo.result) return;
+        const r = dailyInfo.result;
+        $('results-age-label').textContent = 'Dein Gehirnalter heute';
+        $('results-brain-age').textContent = r.brainAge;
+        $('results-speech').textContent = 'Heute schon gespielt. Morgen gibt es drei neue Spiele.';
+        $('results-breakdown').innerHTML = (r.games || []).map(g =>
+            '<div class="results-row">' +
+            '<span class="results-game-name">' + escapeHtml(GAME_LABELS[g.gameId] || g.gameId) + '</span>' +
+            '<span class="results-game-score">' + formatGameScore(g.gameId, g.score) + '</span>' +
+            '</div>'
+        ).join('');
+        $('results-coins-amount').textContent = 'Belohnung bereits erhalten';
+        setShareBlock(r.share);
+        renderDailyBoard(dailyInfo.leaderboard);
         showScreen('results');
     }
 

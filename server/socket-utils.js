@@ -41,11 +41,28 @@ export function validateRoomCode(code) {
     return code.replace(/[^A-Z0-9]/g, '').slice(0, 4);
 }
 
-export function validateGameType(gameType) {
-    if (typeof gameType !== 'string') return 'maexchen';
-    const allowed = ['maexchen', 'lobby', 'watchparty', 'stocks', 'strictbrain', 'lol-betting', 'loop-machine', 'shop', 'strictly7s', 'tierlist', 'casino', 'plinko', 'crash', 'achievements', 'blackjack', 'roulette'];
+// Every page a socket can register presence from. Kept wider than the set of
+// multiplayer *room* types on purpose: this doubles as the "where is this
+// player" label, and a page missing from the list used to be relabelled as
+// Maexchen — which quietly attributed Food Guessr and Tuerkce players to a
+// game they were not in.
+const KNOWN_GAME_TYPES = [
+    'maexchen', 'lobby', 'watchparty', 'stocks', 'strictbrain', 'loop-machine',
+    'shop', 'strictly7s', 'tierlist', 'casino', 'plinko', 'crash',
+    'achievements', 'blackjack', 'roulette',
+    'food-guessr', 'turkish', 'nostalgiabait', 'contacts',
+];
+
+/**
+ * @param {string} gameType
+ * @param {string} [fallback='maexchen'] What an unrecognised value becomes.
+ *   Room creation needs a real game type, so it keeps the Maexchen default.
+ *   Presence should pass 'unknown' rather than blame a game.
+ */
+export function validateGameType(gameType, fallback = 'maexchen') {
+    if (typeof gameType !== 'string') return fallback;
     const clean = gameType.replace(/[^a-z-]/g, '').slice(0, 20);
-    return allowed.includes(clean) ? clean : 'maexchen';
+    return KNOWN_GAME_TYPES.includes(clean) ? clean : fallback;
 }
 
 export function validateYouTubeId(videoId) {
@@ -109,7 +126,7 @@ export function emitToUser(io, playerName, event, data) {
     io.to(room).emit(event, data);
 }
 
-// Legacy signature — still used by maexchen/lol-betting/brain-versus where
+// Legacy signature — still used by maexchen/brain-versus where
 // the caller has only the socketId. Now also fans out to the user room when
 // possible: pass an optional `playerName` (preferred) or fall back to the
 // raw socketId.
@@ -130,7 +147,7 @@ export function emitBalanceUpdate(io, socketIdOrName, balance, opts) {
  * that every game handler used to reinvent inconsistently.
  *
  * Usage:
- *   const player = requirePlayer(socket, onlinePlayers, 'lol-bet-error');
+ *   const player = requirePlayer(socket, onlinePlayers, 'mae-error');
  *   if (!player) return;
  */
 export function requirePlayer(socket, onlinePlayers, errorEvent = 'error') {
