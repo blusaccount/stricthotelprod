@@ -65,17 +65,32 @@ export function createAuthRouter() {
 export function authMiddleware(req, res, next) {
     // Allow access to login page, health check, and static assets needed for login
     if (req.path === '/login.html' ||
+        req.path === '/discord.html' ||
+        req.path === '/discord-config.js' ||
+        req.path === '/api/discord/session' ||
         req.path === '/health' ||
         req.path === '/admin/logs' ||
         req.path === '/admin/release-name' ||
         req.path.startsWith('/shared/css/') ||
-        req.path.startsWith('/shared/fonts/')) {
+        req.path.startsWith('/shared/fonts/') ||
+        req.path.startsWith('/vendor/')) {
         return next();
     }
 
     // Check if user is authenticated
     if (req.session.authenticated) {
         return next();
+    }
+
+    // Discord launches the Activity at whatever URL is root-mapped, always
+    // appending ?frame_id=... (see the Embedded App SDK's ready() handshake).
+    // An unauthenticated request carrying it is a fresh Discord Activity
+    // load, not a browser visit — send it through Discord OAuth instead of
+    // the SITE_PASSWORD form, preserving the query string so the SDK on
+    // discord.html can read frame_id/instance_id/etc. from location.search.
+    if (req.query.frame_id) {
+        const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+        return res.redirect('/discord.html' + qs);
     }
 
     // Redirect to login page

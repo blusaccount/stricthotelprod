@@ -25,6 +25,7 @@ import { loadCacheFromDb as loadStockPriceCache } from './stock-price-cache.js';
 import { startMatchChecker, stopMatchChecker } from './lol-match-checker.js';
 
 import { createAuthRouter, authMiddleware } from './routes/auth.js';
+import { createDiscordRouter } from './routes/discord.js';
 import turkishRouter from './routes/turkish.js';
 import nostalgiaRouter from './routes/nostalgiabait.js';
 import { createStocksRouter } from './routes/stocks.js';
@@ -75,8 +76,29 @@ app.use(session({
 // Body parser for login
 app.use(express.json());
 
+// Allow the app to be embedded as a Discord Activity iframe. Discord serves
+// this page through a proxy at <client_id>.discordsays.com, so the framed
+// origin never matches ours — frame-ancestors is the only thing that needs
+// to allow it. No CSP existed before this, so nothing else is restricted.
+app.use((req, res, next) => {
+    res.setHeader(
+        'Content-Security-Policy',
+        "frame-ancestors 'self' https://discord.com https://*.discord.com https://*.discordsays.com"
+    );
+    next();
+});
+
+// Exposes the (public, non-secret) OAuth client ID to the browser so
+// discord.html can construct `new DiscordSDK(clientId)` without hardcoding
+// it into a static file.
+app.get('/discord-config.js', (req, res) => {
+    res.type('application/javascript');
+    res.send(`window.DISCORD_CLIENT_ID = ${JSON.stringify(process.env.DISCORD_CLIENT_ID || '')};`);
+});
+
 // Auth routes (login must be before auth middleware)
 app.use(createAuthRouter());
+app.use(createDiscordRouter());
 app.use(authMiddleware);
 
 // Shell deep-link middleware. The lobby is now an SPA-style shell and any
